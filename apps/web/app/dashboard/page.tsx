@@ -66,6 +66,8 @@ const platformCards: PlatformCard[] = [
   { key: "glowroad", name: "Glowroad", sub: "B2C", logo: "g", color: "bg-[#005b66] text-white", files: ["Sales report"], guide: "Upload Glowroad GST report" },
   { key: "limeroad", name: "Limeroad", sub: "B2C", logo: "LR", color: "bg-[#e00046] text-white", files: ["Sales report"], guide: "Upload Limeroad GST report" },
   { key: "jiomart", name: "JioMart", sub: "B2C", logo: "Jio", color: "bg-[#d51224] text-white", files: ["Sales report"], guide: "Upload JioMart GST report" },
+  { key: "gstr1-json", name: "GSTR1 JSON", sub: "B2C/B2B/B2CL/CDNR", logo: "JSON", color: "bg-slate-100 text-green-600", badge: "Beta", files: ["GST portal JSON"], guide: "Import an existing GSTR1 JSON for validation or conversion" },
+  { key: "gstr1-excel", name: "GSTR1 Excel", sub: "B2C/B2B/B2CL/Exempt/Exp", logo: "X", color: "bg-green-600 text-white", files: ["GST offline utility Excel"], guide: "Import an existing GSTR1 Excel file" },
   { key: "custom", name: "Custom Excel", sub: "B2C/B2B/Exempt", logo: "X", color: "bg-green-600 text-white", files: ["Custom Excel"], guide: "Upload a mapped custom Excel file" }
 ];
 
@@ -93,17 +95,17 @@ function TopNav({ setTool, setView }: { setTool: (tool: Tool) => void; setView: 
     setView(view);
   }
   return (
-    <header className="sticky top-0 z-40 h-[58px] border-b border-slate-100 bg-white">
-      <div className="mx-auto flex h-full max-w-[1280px] items-center justify-between px-6">
-        <button onClick={() => go("home", "dashboard")} className="text-left text-[26px] font-black leading-none text-[#10244d]">
-          GST<span className="block -mt-1 text-[15px] font-extrabold text-[#f59e0b]">BHARAT</span>
+    <header className="sticky top-0 z-40 h-[50px] border-b border-slate-100 bg-white">
+      <div className="mx-auto flex h-full max-w-[1080px] items-center justify-between px-5">
+        <button onClick={() => go("home", "dashboard")} className="text-left text-[23px] font-black leading-none text-[#10244d]">
+          GST<span className="block -mt-1 text-[13px] font-extrabold text-[#f59e0b]">BHARAT</span>
         </button>
-        <nav className="hidden items-center gap-8 text-sm md:flex">
+        <nav className="hidden items-center gap-7 text-[12px] md:flex">
           <button onClick={() => go("home", "dashboard")} className="font-semibold text-[#ef4d82]">Dashboard</button>
           <button onClick={() => go("gos", "upload")} className="flex items-center gap-1 text-slate-600">Our Tools <ChevronDown className="size-3" /></button>
           <button onClick={() => go("gos", "report")} className="text-slate-600">Screenshot</button>
           <button onClick={() => go("recon", "reconUpload")} className="text-slate-600">Support</button>
-          <span className="grid size-9 place-items-center rounded-full bg-[#ef4d82] font-bold text-white">P</span>
+          <span className="grid size-8 place-items-center rounded-full bg-[#ef4d82] font-bold text-white">P</span>
         </nav>
         <Menu className="size-5 text-slate-500 md:hidden" />
       </div>
@@ -129,11 +131,11 @@ function labelForView(view: View) {
 function Hero({ tool, view, profile }: { tool: Tool; view: View; profile: Profile | null }) {
   const title = tool === "e2t" ? "eCom to Tally" : tool === "recon" ? "2B/2A Reconcile" : tool === "home" ? "Dashboard" : "GST Online Seller Tool";
   return (
-    <section className="gst-pattern h-[190px] text-white">
-      <div className="mx-auto flex max-w-[1280px] justify-between px-6 pt-11">
+    <section className="gst-pattern h-[150px] text-white">
+      <div className="mx-auto flex max-w-[1080px] justify-between px-5 pt-8">
         <div>
-          <h1 className="text-2xl font-bold">{title}</h1>
-          <p className="mt-3 text-sm font-medium"><span>Home</span><span className="mx-2 text-white/70">/</span><span className="text-[#3b82f6]">Dashboard / {title} / {labelForView(view)}</span></p>
+          <h1 className="text-[22px] font-bold">{title}</h1>
+          <p className="mt-2 text-[12px] font-medium"><span>Home</span><span className="mx-2 text-white/70">/</span><span className="text-[#3b82f6]">Dashboard / {title} / {labelForView(view)}</span></p>
         </div>
         {profile && tool !== "home" && <div className="mt-1 hidden h-fit rounded bg-white/10 px-4 py-3 text-[11px] leading-5 lg:block"><p>GSTIN: {profile.gstin}</p><p>Period: {profile.return_period}</p></div>}
       </div>
@@ -147,14 +149,14 @@ function Sidebar({ tool, view, setView }: { tool: Tool; view: View; setView: (vi
   const recon = [["reconUpload", "2B/2A Reconcile", RotateCw], ["reconReport", "Reconcile Report", ReceiptText]] as const;
   const items = tool === "e2t" ? e2t : tool === "recon" ? recon : gos;
   return (
-    <aside className="gst-shadow min-h-[250px] w-[230px] shrink-0 rounded-md bg-white px-8 py-6">
-      <button onClick={() => setView("dashboard")} className="mb-5 w-full border-b border-slate-200 pb-5 text-center text-lg font-bold text-[#3478ff]">Dashboard</button>
-      <p className="mb-5 text-[11px] font-black uppercase text-slate-900">{tool === "e2t" ? "eCom to Tally" : tool === "recon" ? "Reconcile" : "GST Online Seller"}</p>
+    <aside className="gst-shadow min-h-[232px] w-[210px] shrink-0 rounded-md bg-white px-7 py-6">
+      <button onClick={() => setView("dashboard")} className="mb-5 w-full border-b border-slate-200 pb-5 text-center text-base font-bold text-[#3478ff]">Dashboard</button>
+      <p className="mb-5 text-[10px] font-black uppercase text-slate-900">{tool === "e2t" ? "eCom to Tally" : tool === "recon" ? "Reconcile" : "GST Online Seller"}</p>
       <div className="space-y-1">
         {items.map(([key, text, Icon]) => (
-          <button key={key} onClick={() => setView(key)} className={`relative flex w-full items-center gap-4 rounded py-2.5 pl-1 text-left text-sm ${view === key ? "font-bold text-[#3478ff]" : "text-[#1f335c]"}`}>
-            {view === key && <span className="absolute -left-8 top-1/2 h-9 w-1 -translate-y-1/2 bg-[#3478ff]" />}
-            <Icon className="size-4 text-slate-500" />{text}
+          <button key={key} onClick={() => setView(key)} className={`relative flex w-full items-center gap-4 rounded py-2.5 pl-1 text-left text-[13px] ${view === key ? "font-bold text-[#3478ff]" : "text-[#1f335c]"}`}>
+            {view === key && <span className="absolute -left-7 top-1/2 h-9 w-1 -translate-y-1/2 bg-[#3478ff]" />}
+            <Icon className="size-3.5 text-slate-500" />{text}
           </button>
         ))}
       </div>
@@ -166,8 +168,8 @@ function PageShell({ tool, view, setView, profile, children }: { tool: Tool; vie
   return (
     <>
       <Hero tool={tool} view={view} profile={profile} />
-      <main className="min-h-[calc(100vh-248px)] bg-[#f5f8fc] pb-20">
-        <div className="mx-auto -mt-8 flex max-w-[1120px] gap-6 px-6">
+      <main className="min-h-[calc(100vh-200px)] bg-[#f5f8fc] pb-20">
+        <div className="mx-auto -mt-7 flex max-w-[1020px] gap-5 px-5">
           {tool !== "home" && <Sidebar tool={tool} view={view} setView={setView} />}
           <section className={tool === "home" ? "mx-auto w-full max-w-[900px]" : "min-w-0 flex-1"}>{children}</section>
         </div>
@@ -177,11 +179,19 @@ function PageShell({ tool, view, setView, profile, children }: { tool: Tool; vie
 }
 
 function WhitePanel({ title, subtitle, children, className = "" }: { title: string; subtitle?: string; children?: React.ReactNode; className?: string }) {
-  return <div className={`gst-shadow rounded-md bg-white ${className}`}><div className="px-8 py-7 text-center"><h2 className="text-xl font-bold text-slate-950">{title}</h2>{subtitle && <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">{subtitle}</p>}</div>{children}</div>;
+  return (
+    <div className={`space-y-5 ${className}`}>
+      <div className="gst-shadow rounded-md bg-white px-8 py-7 text-center">
+        <h2 className="text-[20px] font-bold text-slate-950">{title}</h2>
+        {subtitle && <p className="mx-auto mt-2 max-w-xl text-[12px] leading-5 text-slate-500">{subtitle}</p>}
+      </div>
+      {children && <div className="gst-shadow rounded-md bg-white">{children}</div>}
+    </div>
+  );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded border border-slate-200 bg-white p-4"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-2 text-xl font-black text-[#10244d]">{value}</p></div>;
+  return <div className="rounded border border-slate-200 bg-white p-3"><p className="text-[10px] font-bold uppercase text-slate-500">{label}</p><p className="mt-2 text-base font-black text-[#10244d]">{value}</p></div>;
 }
 
 function HomeTools({ setTool, setView, summary }: { setTool: (tool: Tool) => void; setView: (view: View) => void; summary: DashboardSummary | null }) {
@@ -192,25 +202,23 @@ function HomeTools({ setTool, setView, summary }: { setTool: (tool: Tool) => voi
   ];
   return (
     <div className="space-y-6">
-      <WhitePanel title="Live Dashboard" subtitle="Connected to GST Bharat API and current selected GST profile.">
-        <div className="grid gap-4 px-7 pb-7 md:grid-cols-4">
+      <WhitePanel title="Our Tools" subtitle="Here is all tool click access now to use our tool.">
+        <div className="grid gap-4 px-6 py-6 md:grid-cols-3">
+          {cards.map((card) => (
+            <div key={card.title} className={`rounded-sm border ${card.red ? "border-red-500" : "border-slate-200"} bg-[#10244d] p-3 text-white`}>
+              <div className="mb-3 flex h-[106px] items-center justify-center rounded bg-[#3b78ff] text-xl font-bold">{card.tool === "recon" ? <FileSpreadsheet className="size-14" /> : "GST -> JSON"}</div>
+              <p className="text-xs uppercase text-slate-300">{card.tool === "e2t" ? "Account" : "GST"}</p>
+              <h3 className="mt-1 text-[14px] font-bold">{card.title}</h3>
+              <p className="mt-2 min-h-12 text-xs leading-5 text-slate-300">{card.text}</p>
+              <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3"><span className="text-[12px] text-[#05d7c5]">Active</span><button onClick={() => { setTool(card.tool); setView(card.view); }} className="rounded bg-[#3b78ff] px-3 py-2 text-[11px] font-semibold">Access Now</button></div>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-3 border-t border-slate-100 px-6 py-4 md:grid-cols-4">
           <Metric label="Taxable" value={formatCurrency(amount(summary?.total_taxable_value))} />
           <Metric label="Total GST" value={formatCurrency(amount(summary?.total_gst))} />
           <Metric label="Files" value={String(summary?.uploaded_files ?? 0)} />
           <Metric label="Errors" value={String(summary?.pending_errors ?? 0)} />
-        </div>
-      </WhitePanel>
-      <WhitePanel title="Our Tools" subtitle="Here is all tool click access now to use our tool.">
-        <div className="grid gap-5 px-7 pb-7 md:grid-cols-3">
-          {cards.map((card) => (
-            <div key={card.title} className={`rounded-sm border ${card.red ? "border-red-500" : "border-slate-200"} bg-[#10244d] p-3 text-white`}>
-              <div className="mb-3 flex h-28 items-center justify-center rounded bg-[#3b78ff] text-2xl font-bold">{card.tool === "recon" ? <FileSpreadsheet className="size-16" /> : "GST -> JSON"}</div>
-              <p className="text-xs uppercase text-slate-300">{card.tool === "e2t" ? "Account" : "GST"}</p>
-              <h3 className="mt-1 text-base font-bold">{card.title}</h3>
-              <p className="mt-2 min-h-12 text-xs leading-5 text-slate-300">{card.text}</p>
-              <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3"><span className="text-sm text-[#05d7c5]">Active</span><button onClick={() => { setTool(card.tool); setView(card.view); }} className="rounded bg-[#3b78ff] px-3 py-2 text-xs font-semibold">Access Now</button></div>
-            </div>
-          ))}
         </div>
       </WhitePanel>
     </div>
@@ -218,7 +226,7 @@ function HomeTools({ setTool, setView, summary }: { setTool: (tool: Tool) => voi
 }
 
 function PlatformLogo({ card }: { card: PlatformCard }) {
-  return <div className={`mx-auto grid size-14 place-items-center rounded-lg text-2xl font-black ${card.color}`}>{card.logo}</div>;
+  return <div className={`mx-auto grid size-12 place-items-center rounded-lg text-xl font-black ${card.color}`}>{card.logo}</div>;
 }
 
 function UploadGrid({ batches, openModal, e2t = false }: { batches: BatchStatus[]; openModal: (card: PlatformCard) => void; e2t?: boolean }) {
@@ -226,17 +234,17 @@ function UploadGrid({ batches, openModal, e2t = false }: { batches: BatchStatus[
   const latestByPlatform = new Map(batches.map((batch) => [batch.platform, batch]));
   return (
     <WhitePanel title="Import Platform Data" subtitle={e2t ? "Upload platform data to convert into Tally XML." : "Upload platform data then check view statement & generate GSTR1."}>
-      <div className="mx-auto max-w-[680px] px-7 pb-8">
+      <div className="mx-auto max-w-[620px] px-7 py-6">
         {!e2t && <><div className="mx-auto mb-4 flex max-w-[470px] rounded-md border border-slate-200 bg-white p-2"><Search className="ml-2 mt-2 size-4 text-slate-400" /><input className="flex-1 px-4 text-sm outline-none" placeholder="Search for platform" /><button className="grid size-10 place-items-center rounded bg-[#3478ff] text-white">{"->"}</button></div><p className="mb-7 text-center text-sm text-[#ff4d7d]">Caution: Avoid importing the edited file to prevent potential errors.</p></>}
         <div className="mb-5 flex items-center gap-3 text-xs text-slate-500"><span className="h-px flex-1 bg-slate-200" />{e2t ? "Order Data" : "Famous Platforms"}<span className="h-px flex-1 bg-slate-200" /></div>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           {cards.map((card) => {
             const batch = latestByPlatform.get(card.key);
             return (
-              <button key={card.key} onClick={() => openModal(card)} className="platform-card-shadow relative min-h-[142px] rounded-md border border-slate-200 bg-white p-4 text-center transition hover:-translate-y-0.5">
+              <button key={card.key} onClick={() => openModal(card)} className="platform-card-shadow relative min-h-[134px] rounded-md border border-slate-200 bg-white p-3 text-center transition hover:-translate-y-0.5">
                 {card.badge && <span className="absolute right-0 top-0 rounded-bl bg-[#12264f] px-2 py-1 text-[10px] font-bold text-white">{card.badge}</span>}
-                <PlatformLogo card={card} /><h3 className="mt-2 text-sm font-black text-black">{card.name}</h3><p className="text-xs text-slate-500">{card.sub}</p>
-                <span className={`mt-4 inline-flex rounded-full px-4 py-2 text-[11px] font-bold ${batch ? "bg-[#06c7a8] text-white" : "bg-slate-100 text-black"}`}>{batch ? `${batch.status} (${batch.parsed_rows})` : "IMPORT DATA"}</span>
+                <PlatformLogo card={card} /><h3 className="mt-2 text-[12px] font-black text-black">{card.name}</h3><p className="min-h-4 text-[11px] text-slate-500">{card.sub}</p>
+                <span className={`mt-3 inline-flex rounded-full px-4 py-2 text-[10px] font-bold ${batch ? "bg-[#06c7a8] text-white" : "bg-slate-100 text-black"}`}>{batch ? `${batch.status} (${batch.parsed_rows})` : "IMPORT DATA"}</span>
               </button>
             );
           })}
@@ -247,13 +255,13 @@ function UploadGrid({ batches, openModal, e2t = false }: { batches: BatchStatus[
 }
 
 function UploadModal({ card, token, profile, onClose, onRefresh }: { card: PlatformCard | null; token: string; profile: Profile | null; onClose: () => void; onRefresh: () => Promise<void> }) {
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [batch, setBatch] = useState<BatchStatus | null>(null);
   const [message, setMessage] = useState("");
   if (!card) return null;
   const activeCard = card;
   async function startUpload() {
-    if (!token || !profile || !files?.length) {
+    if (!token || !profile || !files.length) {
       setMessage("Select files after workspace is ready.");
       return;
     }
@@ -277,7 +285,25 @@ function UploadModal({ card, token, profile, onClose, onRefresh }: { card: Platf
           <div className="rounded-md border border-slate-200 py-2 text-center text-sm">{profile?.return_period || "Period"} Data</div>
           <div><p className="mb-2 text-xs font-bold">Download Path</p><p className="text-sm leading-5 text-slate-500">{card.guide}</p></div>
           <div className="flex rounded border border-slate-200"><span className="w-40 border-r border-slate-200 px-3 py-2 text-sm text-slate-500">GSTIN / ETIN</span><span className="flex-1 px-3 py-2 text-sm">{card.etin || profile?.gstin || "Auto Detect"}</span></div>
-          <div><p className="mb-2 text-xs font-bold">Upload Files: <span className="text-[#ff4d7d]">({profile?.return_period || "selected period"})</span></p><input multiple type="file" accept=".xlsx,.xls,.xlsm,.csv" onChange={(event) => setFiles(event.target.files)} className="w-full rounded border border-slate-200 px-3 py-2 text-sm" /><p className="mt-2 text-xs text-slate-500">Required: {card.files.join(", ")}</p></div>
+          <div>
+            <p className="mb-2 text-xs font-bold">Upload Files: <span className="text-[#ff4d7d]">({profile?.return_period || "selected period"})</span></p>
+            <div className="space-y-2">
+              {card.files.map((label, index) => (
+                <label key={label} className="flex overflow-hidden rounded border border-slate-200 text-sm">
+                  <span className="w-40 bg-slate-50 px-3 py-2">{label}</span>
+                  <input type="file" accept=".xlsx,.xls,.xlsm,.csv,.json" onChange={(event) => {
+                    const selected = event.target.files?.[0];
+                    if (!selected) return;
+                    setFiles((current) => {
+                      const next = [...current];
+                      next[index] = selected;
+                      return next.filter(Boolean);
+                    });
+                  }} className="flex-1 px-3 py-2 text-xs" />
+                </label>
+              ))}
+            </div>
+          </div>
           <button onClick={startUpload} className="rounded bg-[#3478ff] px-5 py-2 text-sm font-bold text-white">Upload</button>
           {(message || batch) && <div className="rounded-md bg-[#06c7a8] px-4 py-3 text-sm text-white">{message || batch?.status} {batch ? `Rows: ${batch.parsed_rows}, Errors: ${batch.error_rows}` : ""}</div>}
         </div>

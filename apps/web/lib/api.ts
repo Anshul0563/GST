@@ -164,7 +164,7 @@ export function updateProfile(token: string, profileId: number, payload: Omit<Pr
   return request<Profile>(`/gst-profile/${profileId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
 }
 
-export function uploadMarketplaceFiles(token: string, profileId: number, platform: string, files: FileList) {
+export function uploadMarketplaceFiles(token: string, profileId: number, platform: string, files: FileList | File[]) {
   const form = new FormData();
   Array.from(files).forEach((file) => form.append("files", file));
   return request<BatchStatus>(`/imports/${platform}/upload?profile_id=${profileId}`, { method: "POST", body: form }, token);
