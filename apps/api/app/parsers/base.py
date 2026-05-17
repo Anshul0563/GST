@@ -12,8 +12,8 @@ from app.utils.states import STATE_CODES, state_code_from_text
 
 
 ETINS = {
-    "amazon": "29AAICA3918J1C9",
-    "flipkart": "29AACCF0683K1C8",
+    "amazon": "07AAICA3918J1CV",
+    "flipkart": "07AACCF0683K1CU",
     "meesho": "07AARCM9332R1CQ",
     "myntra": "29AADCM5146R1C1",
     "jiomart": "27AABCI6363G1C7",

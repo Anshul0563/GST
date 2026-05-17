@@ -2,6 +2,7 @@ import unittest
 from decimal import Decimal
 
 from app.services.gst import build_gstr1_json
+from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
 from app.services.validation import money
 
@@ -108,6 +109,30 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(payload["b2cs"][0]["iamt"], 27.0)
         self.assertEqual(payload["supeco"]["supeco_det"][0]["suppval"], 900.0)
         self.assertEqual(len(payload["doc_issue"]["doc_det"]), 2)
+
+    def test_real_marketplace_files_match_official_summary(self):
+        paths = {
+            "flipkart": "/home/jarvis/Downloads/d5407d8e-bffa-4b10-8a44-6cace40f5f48_1778999957000.xlsx",
+            "meesho_sales": "/home/jarvis/Downloads/gst_3412749_4_2026/tcs_sales.xlsx",
+            "meesho_returns": "/home/jarvis/Downloads/gst_3412749_4_2026/tcs_sales_return.xlsx",
+            "meesho_invoice": "/home/jarvis/Downloads/3412749_2026-04-01_2026-04-30_TAX_INVOICE/Tax_invoice_details.xlsx",
+            "amazon": "/home/jarvis/Downloads/b2cReport_April_2026/MTR_B2C-APRIL-2026-A1YGIWFZR88S6S.csv",
+        }
+        if not all(__import__("pathlib").Path(path).exists() for path in paths.values()):
+            self.skipTest("Real marketplace sample files are not available on this machine.")
+        summary = calculate_marketplace_summary(paths)
+        combined = summary["combined"]
+        flipkart = summary["platform_summary"]["Flipkart"]
+        self.assertEqual(combined["taxable"], Decimal("21565.87"))
+        self.assertEqual(combined["igst"], Decimal("628.95"))
+        self.assertEqual(combined["cgst"], Decimal("9.01"))
+        self.assertEqual(combined["sgst"], Decimal("9.01"))
+        self.assertEqual(combined["total_gst"], Decimal("646.97"))
+        self.assertEqual(flipkart["taxable"], Decimal("743.71"))
+        self.assertEqual(flipkart["igst"], Decimal("22.29"))
+        self.assertEqual(summary["document_counts"]["invoice"], 190)
+        self.assertEqual(summary["document_counts"]["credit_note"], 46)
+        self.assertEqual(summary["document_counts"]["debit_note"], 2)
 
 
 if __name__ == "__main__":

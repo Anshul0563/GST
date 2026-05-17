@@ -42,6 +42,7 @@ STATE_CODES = {
 
 STATE_NAME_TO_CODE = {value.lower(): key for key, value in STATE_CODES.items()}
 ALIASES = {
+    "daman": "25",
     "delhi": "07",
     "new delhi": "07",
     "maharastra": "27",
@@ -62,4 +63,3 @@ def state_code_from_text(value: object) -> str | None:
     if lowered in STATE_NAME_TO_CODE:
         return STATE_NAME_TO_CODE[lowered]
     return ALIASES.get(lowered)
-
