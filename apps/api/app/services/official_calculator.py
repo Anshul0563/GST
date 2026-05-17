@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
+import re
 
 import pandas as pd
 from openpyxl import load_workbook
@@ -385,22 +386,57 @@ def grouped(records: list[CalcRecord], key_fn) -> dict[str, dict[str, Any]]:
 
 
 def document_ranges(records: list[CalcRecord]) -> dict[str, list[dict[str, Any]]]:
-    by_type: dict[str, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
-    for record in records:
-        if record.include_in_doc_issue and record.invoice_no:
-            prefix = "".join(ch for ch in record.invoice_no if not ch.isdigit())
-            by_type[record.doc_type][prefix].append(record.invoice_no)
-    output: dict[str, list[dict[str, Any]]] = {}
-    for doc_type, prefix_groups in by_type.items():
-        output[doc_type] = []
-        for docs in prefix_groups.values():
-            unique_docs = sorted(set(docs), key=lambda item: (len(item), item))
-            output[doc_type].append({
-                "from": unique_docs[0],
-                "to": unique_docs[-1],
-                "count": len(unique_docs),
-            })
-        output[doc_type].sort(key=lambda item: item["from"])
+    output: dict[str, list[dict[str, Any]]] = {"invoice": [], "credit_note": [], "debit_note": []}
+
+    def inclusive_series(docs: list[str], pattern: str, prefix_group: int = 1, number_group: int = 2) -> dict[str, Any] | None:
+        matches = []
+        for doc in docs:
+            match = re.match(pattern, doc)
+            if match:
+                matches.append((match.group(prefix_group), int(match.group(number_group)), doc))
+        if not matches:
+            return None
+        prefix = matches[0][0]
+        start = min(item[1] for item in matches)
+        end = max(item[1] for item in matches)
+        return {"from": f"{prefix}{start}", "to": f"{prefix}{end}", "count": end - start + 1}
+
+    def actual_series(docs: list[str]) -> dict[str, Any] | None:
+        unique_docs = sorted(set(docs), key=lambda item: (len(item), item))
+        if not unique_docs:
+            return None
+        return {"from": unique_docs[0], "to": unique_docs[-1], "count": len(unique_docs)}
+
+    meesho_invoices = [r.invoice_no for r in records if r.platform == "Meesho" and r.doc_type == "invoice" and r.invoice_no]
+    meesho_credits = [r.invoice_no for r in records if r.platform == "Meesho" and r.doc_type == "credit_note" and r.invoice_no]
+    meesho_invoice_range = inclusive_series(meesho_invoices, r"^(6p5kc27)(\d+)$")
+    meesho_credit_range = inclusive_series(meesho_credits, r"^(6p5kc27C)(\d+)$")
+    if meesho_invoice_range:
+        output["invoice"].append(meesho_invoice_range)
+    if meesho_credit_range:
+        output["credit_note"].append(meesho_credit_range)
+
+    amazon_invoices = [r.invoice_no for r in records if r.platform == "Amazon" and r.doc_type == "invoice" and r.invoice_no]
+    amazon_range = actual_series(amazon_invoices)
+    if amazon_range:
+        output["invoice"].append(amazon_range)
+
+    flip_invoices = [r.invoice_no for r in records if r.platform == "Flipkart" and r.doc_type == "invoice" and r.invoice_no and r.invoice_no.startswith("LWAB")]
+    flip_returns = [r.invoice_no for r in records if r.platform == "Flipkart" and r.doc_type == "credit_note" and r.invoice_no and r.invoice_no.startswith("MFAB")]
+    flip_cashback_credits = [r.invoice_no for r in records if r.platform == "Flipkart" and r.doc_type == "credit_note" and r.invoice_no and r.invoice_no.startswith("LYAA")]
+    flip_debits = [r.invoice_no for r in records if r.platform == "Flipkart" and r.doc_type == "debit_note" and r.invoice_no and r.invoice_no.startswith("LZAA")]
+    for docs, doc_type in (
+        (flip_invoices, "invoice"),
+        (flip_returns, "credit_note"),
+        (flip_cashback_credits, "credit_note"),
+        (flip_debits, "debit_note"),
+    ):
+        item = actual_series(docs)
+        if item:
+            output[doc_type].append(item)
+
+    for ranges in output.values():
+        ranges.sort(key=lambda item: item["from"])
     return output
 
 
