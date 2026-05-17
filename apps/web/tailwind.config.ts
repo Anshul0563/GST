@@ -19,6 +19,8 @@ const config: Config = {
           DEFAULT: "#F58220",
           foreground: "#111827"
         },
+        saffron: "#F58220",
+        navy: "#10244d",
         success: "#0F9F6E",
         muted: {
           DEFAULT: "#F4F7FB",
@@ -34,4 +36,3 @@ const config: Config = {
 };
 
 export default config;
-

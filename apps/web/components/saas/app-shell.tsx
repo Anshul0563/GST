@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { usePathname } from "next/navigation";
 import { Bell, Building2, ChevronDown, CreditCard, FileJson, Home, Menu, Moon, PackageSearch, ReceiptText, Repeat2, Search, Settings, ShieldCheck, UploadCloud, UserCircle } from "lucide-react";
 import { Profile } from "@/lib/api";
 
-const nav = [
+const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/marketplaces", label: "Marketplaces", icon: PackageSearch },
   { href: "/imports", label: "Imports", icon: UploadCloud },
