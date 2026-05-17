@@ -106,7 +106,11 @@ export async function ensureDemoWorkspace() {
   try {
     await request("/auth/me", {}, token);
   } catch {
-    token = (await auth("/auth/login")).access_token;
+    try {
+      token = (await auth("/auth/login")).access_token;
+    } catch {
+      token = (await auth("/auth/register")).access_token;
+    }
     window.localStorage.setItem("gst_bharat_token", token);
   }
   await request("/demo/seed", { method: "POST" }, token);
