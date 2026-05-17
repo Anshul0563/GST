@@ -1,0 +1,125 @@
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
+
+from pydantic import BaseModel, EmailStr, Field
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class RegisterIn(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8)
+    full_name: str | None = None
+
+
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class GSTProfileIn(BaseModel):
+    gstin: str = Field(min_length=15, max_length=15)
+    legal_name: str
+    trade_name: str | None = None
+    filing_frequency: str = "Monthly"
+    financial_year: str
+    return_period: str
+
+
+class GSTProfileOut(GSTProfileIn):
+    id: int
+    state_code: str
+
+    class Config:
+        from_attributes = True
+
+
+class TransactionOut(BaseModel):
+    id: int
+    platform: str
+    gstin: str
+    etin: str | None
+    filing_period: str
+    order_id: str | None
+    order_item_id: str | None
+    invoice_no: str | None
+    invoice_date: date | None
+    doc_type: str
+    buyer_state_code: str | None
+    buyer_state_name: str | None
+    hsn: str | None
+    product_name: str | None
+    sku: str | None
+    qty: Decimal
+    taxable_value: Decimal
+    gst_rate: Decimal
+    igst: Decimal
+    cgst: Decimal
+    sgst: Decimal
+    cess: Decimal
+    tcs: Decimal
+    tds: Decimal
+    gross_amount: Decimal
+    discount_seller: Decimal
+    discount_platform: Decimal
+    settlement_amount: Decimal
+    source_file: str | None
+    validation_status: str
+    validation_errors: str | None
+
+    class Config:
+        from_attributes = True
+
+
+class TransactionUpdate(BaseModel):
+    buyer_state_code: str | None = None
+    buyer_state_name: str | None = None
+    hsn: str | None = None
+    taxable_value: Decimal | None = None
+    gst_rate: Decimal | None = None
+    igst: Decimal | None = None
+    cgst: Decimal | None = None
+    sgst: Decimal | None = None
+    cess: Decimal | None = None
+    doc_type: str | None = None
+
+
+class BatchStatus(BaseModel):
+    id: int
+    platform: str
+    status: str
+    parsed_rows: int
+    error_rows: int
+    errors: list[dict[str, Any]] = []
+
+
+class GenerateGSTR1In(BaseModel):
+    profile_id: int
+    period: str
+
+
+class TallyCompanyIn(BaseModel):
+    profile_id: int
+    company_name: str
+    tally_guid: str | None = None
+
+
+class TallyGenerateIn(BaseModel):
+    profile_id: int
+    period: str
+    company_id: int
+    ledger_mapping: dict[str, str]
+

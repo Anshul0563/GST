@@ -1,0 +1,28 @@
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    app_name: str = "GST Bharat API"
+    secret_key: str = "dev-secret-change-in-production"
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24
+    database_url: str = "sqlite:///./gst_bharat.db"
+    upload_dir: Path = Path("../../storage/uploads")
+    export_dir: Path = Path("../../storage/exports")
+    max_upload_mb: int = 60
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    settings = Settings()
+    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    settings.export_dir.mkdir(parents=True, exist_ok=True)
+    return settings
+
