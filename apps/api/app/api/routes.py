@@ -252,6 +252,25 @@ def import_status(batch_id: int, user: User = Depends(get_current_user), db: Ses
     return BatchStatus(id=batch.id, platform=batch.platform, status=batch.status, parsed_rows=batch.parsed_rows, error_rows=batch.error_rows, errors=json.loads(batch.error_report_json or "[]"))
 
 
+@router.get("/imports", response_model=list[BatchStatus])
+def list_imports(profile_id: int | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(PlatformImportBatch).where(PlatformImportBatch.user_id == user.id).order_by(PlatformImportBatch.id.desc())
+    if profile_id:
+        stmt = stmt.where(PlatformImportBatch.profile_id == profile_id)
+    batches = db.scalars(stmt.limit(50)).all()
+    return [
+        BatchStatus(
+            id=batch.id,
+            platform=batch.platform,
+            status=batch.status,
+            parsed_rows=batch.parsed_rows,
+            error_rows=batch.error_rows,
+            errors=json.loads(batch.error_report_json or "[]"),
+        )
+        for batch in batches
+    ]
+
+
 @router.get("/imports/{batch_id}/errors")
 def import_errors(batch_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     batch = db.get(PlatformImportBatch, batch_id)
@@ -411,6 +430,15 @@ def tally_company(payload: TallyCompanyIn, user: User = Depends(get_current_user
     db.commit()
     db.refresh(company)
     return {"id": company.id, "company_name": company.company_name}
+
+
+@router.get("/tally/companies")
+def tally_companies(profile_id: int | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(TallyCompany).where(TallyCompany.user_id == user.id).order_by(TallyCompany.id.desc())
+    if profile_id:
+        stmt = stmt.where(TallyCompany.profile_id == profile_id)
+    companies = db.scalars(stmt.limit(50)).all()
+    return [{"id": company.id, "company_name": company.company_name, "tally_guid": company.tally_guid} for company in companies]
 
 
 @router.post("/tally/generate-xml")

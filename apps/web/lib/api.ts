@@ -71,6 +71,28 @@ export type Gstr1Payload = {
   doc_issue: { doc_det: Array<Record<string, unknown>> };
 };
 
+export type BatchStatus = {
+  id: number;
+  platform: string;
+  status: string;
+  parsed_rows: number;
+  error_rows: number;
+  errors?: Array<Record<string, unknown>>;
+};
+
+export type TallyCompany = {
+  id: number;
+  company_name: string;
+  tally_guid?: string | null;
+};
+
+export type ReconcileReport = {
+  id: number;
+  status: string;
+  categories?: string[];
+  summary?: Record<string, number>;
+};
+
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -118,6 +140,10 @@ export async function ensureDemoWorkspace() {
   return { token, profile: profiles[0] };
 }
 
+export function listProfiles(token: string) {
+  return request<Profile[]>("/gst-profile", {}, token);
+}
+
 export function getSummary(token: string, profile: Profile) {
   return request<DashboardSummary>(`/dashboard/summary?profile_id=${profile.id}&period=${profile.return_period}`, {}, token);
 }
@@ -134,10 +160,30 @@ export function createProfile(token: string, payload: Omit<Profile, "id" | "stat
   return request<Profile>("/gst-profile", { method: "POST", body: JSON.stringify(payload) }, token);
 }
 
+export function updateProfile(token: string, profileId: number, payload: Omit<Profile, "id" | "state_code">) {
+  return request<Profile>(`/gst-profile/${profileId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
+}
+
 export function uploadMarketplaceFiles(token: string, profileId: number, platform: string, files: FileList) {
   const form = new FormData();
   Array.from(files).forEach((file) => form.append("files", file));
-  return request(`/imports/${platform}/upload?profile_id=${profileId}`, { method: "POST", body: form }, token);
+  return request<BatchStatus>(`/imports/${platform}/upload?profile_id=${profileId}`, { method: "POST", body: form }, token);
+}
+
+export function listImportBatches(token: string, profileId?: number) {
+  return request<BatchStatus[]>(`/imports${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
+}
+
+export function getImportStatus(token: string, batchId: number) {
+  return request<BatchStatus>(`/imports/${batchId}/status`, {}, token);
+}
+
+export function updateTransaction(token: string, transactionId: number, payload: Partial<Transaction>) {
+  return request<Transaction>(`/transactions/${transactionId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
+}
+
+export function deleteTransaction(token: string, transactionId: number) {
+  return request<{ ok: boolean }>(`/transactions/${transactionId}`, { method: "DELETE" }, token);
 }
 
 export function generateGstr1(token: string, profile: Profile) {
@@ -145,4 +191,31 @@ export function generateGstr1(token: string, profile: Profile) {
     method: "POST",
     body: JSON.stringify({ profile_id: profile.id, period: profile.return_period })
   }, token);
+}
+
+export function downloadUrl(path: string) {
+  return `${API_BASE}${path}`;
+}
+
+export function createTallyCompany(token: string, payload: { profile_id: number; company_name: string; tally_guid?: string }) {
+  return request<TallyCompany>("/tally/company", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function listTallyCompanies(token: string, profileId?: number) {
+  return request<TallyCompany[]>(`/tally/companies${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
+}
+
+export function generateTallyXml(token: string, payload: { profile_id: number; period: string; company_id: number; ledger_mapping: Record<string, string> }) {
+  return request<{ id: string; download: string }>("/tally/generate-xml", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function uploadReconcileFiles(token: string, profileId: number, portalFile: File, booksFile: File) {
+  const form = new FormData();
+  form.append("portal_file", portalFile);
+  form.append("books_file", booksFile);
+  return request<ReconcileReport>(`/reconcile/upload?profile_id=${profileId}`, { method: "POST", body: form }, token);
+}
+
+export function getReconcileReport(token: string, batchId: number) {
+  return request<ReconcileReport>(`/reconcile/report/${batchId}`, {}, token);
 }
