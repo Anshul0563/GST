@@ -251,13 +251,14 @@ function UploadModal({ card, token, profile, onClose, onRefresh }: { card: Platf
   const [batch, setBatch] = useState<BatchStatus | null>(null);
   const [message, setMessage] = useState("");
   if (!card) return null;
+  const activeCard = card;
   async function startUpload() {
     if (!token || !profile || !files?.length) {
       setMessage("Select files after workspace is ready.");
       return;
     }
     setMessage("Uploading and parsing...");
-    const nextBatch = await uploadMarketplaceFiles(token, profile.id, card.key, files);
+    const nextBatch = await uploadMarketplaceFiles(token, profile.id, activeCard.key, files);
     setBatch(nextBatch);
     for (let attempt = 0; attempt < 8; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 900));
