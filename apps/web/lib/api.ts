@@ -93,7 +93,7 @@ export type ReconcileReport = {
   summary?: Record<string, number>;
 };
 
-async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
+export async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -113,6 +113,24 @@ async function auth(path: "/auth/register" | "/auth/login") {
     method: "POST",
     body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD, full_name: "Demo Seller" })
   });
+}
+
+export function loginUser(payload: { email: string; password: string }) {
+  return request<{ access_token: string; token_type: string }>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function registerUser(payload: { email: string; password: string; full_name?: string }) {
+  return request<{ access_token: string; token_type: string }>("/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getCurrentUser(token: string) {
+  return request<{ id: number; email: string; full_name?: string | null }>("/auth/me", {}, token);
 }
 
 export async function ensureDemoWorkspace() {
