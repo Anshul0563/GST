@@ -1,0 +1,77 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, FileSpreadsheet, UploadCloud } from "lucide-react";
+import { AppShell } from "@/components/saas/app-shell";
+import { EmptyState, Panel, StatusPill } from "@/components/saas/ui";
+import { useWorkspace } from "@/components/saas/workspace";
+import { marketplaces } from "@/lib/marketplaces";
+import { getImportStatus, uploadMarketplaceFiles } from "@/lib/api";
+
+export function ImportsPage() {
+  const params = useSearchParams();
+  const workspace = useWorkspace();
+  const initial = params.get("platform") || "meesho";
+  const [platformKey, setPlatformKey] = useState(initial);
+  const [files, setFiles] = useState<File[]>([]);
+  const [progress, setProgress] = useState("");
+  const selected = useMemo(() => marketplaces.find((item) => item.key === platformKey) || marketplaces[0], [platformKey]);
+
+  async function startImport() {
+    if (!workspace.token || !workspace.profile || !files.length) {
+      setProgress("Choose files before starting import.");
+      return;
+    }
+    setProgress("Uploading files securely...");
+    const batch = await uploadMarketplaceFiles(workspace.token, workspace.profile.id, selected.key, files);
+    setProgress(`Batch ${batch.id} queued. Parser is reading files...`);
+    for (let index = 0; index < 8; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      const status = await getImportStatus(workspace.token, batch.id);
+      setProgress(`Status: ${status.status}. Parsed ${status.parsed_rows}, errors ${status.error_rows}.`);
+      if (!["queued", "processing"].includes(status.status)) break;
+    }
+    await workspace.refresh();
+  }
+
+  return (
+    <AppShell title="Guided Import Flow" subtitle="Select profile, platform, required files and track parser progress from upload to normalized transactions." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+        <Panel title="Import steps" subtitle="A production upload flow with profile, period and parser feedback.">
+          <div className="space-y-3">
+            {["Select GST profile + filing period", "Choose marketplace platform", "Review required files", "Drag/drop upload", "Parse progress", "Success/error report", "View imported transactions"].map((step, index) => <div key={step} className={`flex items-center gap-3 rounded-2xl p-3 text-sm font-semibold ${index < 3 ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-600 dark:bg-white/5"}`}><span className="grid size-7 place-items-center rounded-full bg-white text-xs shadow-sm">{index + 1}</span>{step}</div>)}
+          </div>
+        </Panel>
+        <Panel title="Upload workspace" subtitle="Only active parsers will process data. Coming-soon platforms show the same guided flow but may return parser errors.">
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-bold">GST profile<select className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option>{workspace.profile?.gstin || "No GSTIN"}</option></select></label>
+            <label className="text-sm font-bold">Filing period<input value={workspace.profile?.return_period || ""} readOnly className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>
+            <label className="text-sm font-bold md:col-span-2">Platform<select value={platformKey} onChange={(event) => { setPlatformKey(event.target.value); setFiles([]); }} className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">{marketplaces.map((item) => <option key={item.key} value={item.key}>{item.name} - {item.status}</option>)}</select></label>
+          </div>
+          <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/5">
+            <div className="flex items-center justify-between"><div><h3 className="font-black">{selected.name}</h3><p className="text-sm text-slate-500">{selected.guide}</p></div><StatusPill status={selected.status} /></div>
+            <div className="mt-4 grid gap-3">
+              {selected.requiredFiles.map((file, index) => <label key={file} className="flex min-h-16 cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm dark:border-white/10 dark:bg-slate-900"><FileSpreadsheet className="size-5 text-emerald-600" /><span className="w-44 font-bold">{file}</span><input type="file" className="flex-1 text-xs" onChange={(event) => {
+                const selectedFile = event.target.files?.[0];
+                if (!selectedFile) return;
+                setFiles((current) => {
+                  const next = [...current];
+                  next[index] = selectedFile;
+                  return next.filter(Boolean);
+                });
+              }} /></label>)}
+            </div>
+            <button onClick={startImport} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> Start import <ArrowRight className="size-4" /></button>
+            {progress && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{progress}</div>}
+          </div>
+        </Panel>
+      </div>
+      <div className="mt-6">
+        <Panel title="Import status timeline" subtitle="Recent parser jobs and error counts.">
+          {workspace.batches.length ? <div className="space-y-3">{workspace.batches.map((batch) => <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]"><b className="capitalize">{batch.platform}</b><span>{batch.parsed_rows} parsed</span><span>{batch.error_rows} errors</span><StatusPill status={batch.status} /></div>)}</div> : <EmptyState title="No import batches" body="Start your first guided import to see progress here." /> }
+        </Panel>
+      </div>
+    </AppShell>
+  );
+}
