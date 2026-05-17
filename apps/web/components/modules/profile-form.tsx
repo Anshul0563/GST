@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import type { Profile } from "@/lib/api";
 
 const schema = z.object({
   gstin: z.string().length(15),
@@ -18,16 +19,16 @@ const schema = z.object({
   return_period: z.string().length(6)
 });
 
-export function ProfileForm() {
+export function ProfileForm({ profile, onSave }: { profile?: Profile | null; onSave?: (payload: z.infer<typeof schema>) => Promise<void> | void }) {
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: {
-      gstin: "07ABCDE1234F1Z5",
-      legal_name: "Bharat Online Traders",
-      trade_name: "Bharat Store",
-      filing_frequency: "Monthly",
-      financial_year: "2026-27",
-      return_period: "042026"
+    values: {
+      gstin: profile?.gstin || "07ABCDE1234F1Z5",
+      legal_name: profile?.legal_name || "Bharat Online Traders",
+      trade_name: profile?.trade_name || "Bharat Store",
+      filing_frequency: (profile?.filing_frequency as "Monthly" | "Quarterly") || "Monthly",
+      financial_year: profile?.financial_year || "2026-27",
+      return_period: profile?.return_period || "042026"
     }
   });
   const gstin = form.watch("gstin");
@@ -38,7 +39,7 @@ export function ProfileForm() {
         <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600">State code: {gstin?.slice(0, 2) || "--"}</span>
       </CardHeader>
       <CardContent>
-        <form className="grid gap-4 md:grid-cols-3" onSubmit={form.handleSubmit(() => undefined)}>
+        <form className="grid gap-4 md:grid-cols-3" onSubmit={form.handleSubmit(async (values) => onSave?.(values))}>
           <div><Label>GSTIN</Label><Input {...form.register("gstin")} /></div>
           <div><Label>Legal name</Label><Input {...form.register("legal_name")} /></div>
           <div><Label>Trade name</Label><Input {...form.register("trade_name")} /></div>
@@ -51,4 +52,3 @@ export function ProfileForm() {
     </Card>
   );
 }
-

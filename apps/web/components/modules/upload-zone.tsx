@@ -7,9 +7,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { uploadMarketplaceFiles } from "@/lib/api";
 
-export function UploadZone() {
+export function UploadZone({ token, profileId, onUploaded }: { token?: string; profileId?: number; onUploaded?: () => void }) {
   const [selected, setSelected] = useState<(typeof platforms)[number] | null>(null);
+  const [status, setStatus] = useState("Validation pending");
+  const [files, setFiles] = useState<FileList | null>(null);
+  async function upload(platform: string) {
+    if (!token || !profileId || !files?.length) {
+      setStatus("Choose files after the demo workspace is ready");
+      return;
+    }
+    setStatus("Uploading and parsing in background");
+    await uploadMarketplaceFiles(token, profileId, platform, files);
+    setStatus("Upload accepted. Refreshing dashboard shortly.");
+    onUploaded?.();
+  }
   return (
     <Card id="marketplace-upload">
       <CardHeader>
@@ -35,14 +48,14 @@ export function UploadZone() {
                     <FileSpreadsheet className="mb-3 size-8 text-primary" />
                     <p className="font-medium text-slate-900">Required files</p>
                     <p className="mt-1 text-sm text-slate-500">{platform.files}</p>
-                    <Input type="file" multiple className="mt-4" />
+                    <Input type="file" multiple className="mt-4" onChange={(event) => setFiles(event.target.files)} />
                   </div>
                   <div className="grid gap-3 md:grid-cols-3">
-                    {["File format guide ready", "Validation pending", "Parsed rows: 0"].map((text) => (
+                    {["File format guide ready", status, "Parsed rows update after import"].map((text) => (
                       <div key={text} className="flex items-center gap-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-600"><CheckCircle2 className="size-4 text-success" />{text}</div>
                     ))}
                   </div>
-                  <Button className="w-full">Start secure import</Button>
+                  <Button className="w-full" onClick={() => upload(platform.key)}>Start secure import</Button>
                 </div>
               </DialogContent>
             </Dialog>
@@ -52,4 +65,3 @@ export function UploadZone() {
     </Card>
   );
 }
-

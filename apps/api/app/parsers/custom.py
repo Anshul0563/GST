@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.parsers.base import MarketplaceParser, ParseResult, clean_column, dataframe_from_excel
-from app.services.validation import validate_transaction
+from app.services.transaction_normalizer import finalize_transaction
 
 
 class CustomExcelParser(MarketplaceParser):
@@ -20,11 +20,7 @@ class CustomExcelParser(MarketplaceParser):
                     frame = dataframe_from_excel(path)
                 for _, series in frame.iterrows():
                     txn = self.normalize_row(series.to_dict(), path.name)
-                    errors = validate_transaction(txn)
-                    txn["validation_status"] = "error" if errors else "valid"
-                    txn["validation_errors"] = "; ".join(errors) if errors else None
-                    result.transactions.append(txn)
+                    result.transactions.append(finalize_transaction(txn))
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})
         return result
-

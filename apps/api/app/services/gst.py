@@ -11,27 +11,9 @@ def classify_supply(seller_gstin: str, pos: str | None) -> str:
     return "INTRA" if pos and seller_state == pos else "INTER"
 
 
-def normalize_tax_split(txn: dict) -> dict:
-    txn = dict(txn)
-    sply_ty = classify_supply(str(txn.get("gstin", "")), txn.get("buyer_state_code"))
-    taxable = money(txn.get("taxable_value"))
-    rate = money(txn.get("gst_rate"))
-    total_tax = money(txn.get("igst")) + money(txn.get("cgst")) + money(txn.get("sgst"))
-    if total_tax == Decimal("0.00") and rate:
-        total_tax = money(taxable * rate / Decimal("100"))
-    if sply_ty == "INTER":
-        txn["igst"] = total_tax
-        txn["cgst"] = Decimal("0.00")
-        txn["sgst"] = Decimal("0.00")
-    else:
-        half = money(total_tax / Decimal("2"))
-        txn["igst"] = Decimal("0.00")
-        txn["cgst"] = half
-        txn["sgst"] = money(total_tax - half)
-    return txn
-
-
 def build_gstr1_json(gstin: str, period: str, rows: list[dict]) -> dict:
+    from app.services.transaction_normalizer import normalize_tax_split
+
     b2cs = defaultdict(lambda: {"txval": Decimal("0"), "iamt": Decimal("0"), "camt": Decimal("0"), "samt": Decimal("0"), "csamt": Decimal("0")})
     supeco = defaultdict(lambda: {"suppval": Decimal("0"), "igst": Decimal("0"), "cgst": Decimal("0"), "sgst": Decimal("0"), "cess": Decimal("0")})
     docs = defaultdict(list)
@@ -110,4 +92,3 @@ def build_gstr1_json(gstin: str, period: str, rows: list[dict]) -> dict:
     }
     payload["hash"] = sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
     return payload
-

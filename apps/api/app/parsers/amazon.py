@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 
 from app.parsers.base import MarketplaceParser, ParseResult, clean_column
-from app.services.validation import validate_transaction
+from app.services.transaction_normalizer import finalize_transaction
 
 
 class AmazonParser(MarketplaceParser):
@@ -21,12 +21,7 @@ class AmazonParser(MarketplaceParser):
                     type_blob = " ".join(str(row.get(key, "")) for key in row.keys()).lower()
                     if any(word in type_blob for word in ["refund", "cancel"]):
                         txn["doc_type"] = "credit_note"
-                        txn["taxable_value"] = -abs(txn["taxable_value"])
-                    errors = validate_transaction(txn)
-                    txn["validation_status"] = "error" if errors else "valid"
-                    txn["validation_errors"] = "; ".join(errors) if errors else None
-                    result.transactions.append(txn)
+                    result.transactions.append(finalize_transaction(txn))
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})
         return result
-

@@ -30,6 +30,20 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
+class DashboardSummary(BaseModel):
+    total_sales: Decimal
+    total_taxable_value: Decimal
+    total_gst: Decimal
+    igst: Decimal
+    cgst: Decimal
+    sgst: Decimal
+    platform_wise_sale: list[dict[str, Any]]
+    state_wise_sale: list[dict[str, Any]]
+    uploaded_files: int
+    pending_errors: int
+    json_generation_status: str
+
+
 class GSTProfileIn(BaseModel):
     gstin: str = Field(min_length=15, max_length=15)
     legal_name: str
@@ -122,4 +136,3 @@ class TallyGenerateIn(BaseModel):
     period: str
     company_id: int
     ledger_mapping: dict[str, str]
-

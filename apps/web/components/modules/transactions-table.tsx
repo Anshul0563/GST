@@ -3,16 +3,18 @@
 import { useMemo, useState } from "react";
 import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, useReactTable } from "@tanstack/react-table";
 import { Edit3, RefreshCcw, Search, Trash2 } from "lucide-react";
-import { transactions } from "@/lib/mock-data";
+import { transactions as fallbackTransactions } from "@/lib/mock-data";
+import type { Transaction } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { formatCurrency } from "@/lib/utils";
 
-type Txn = (typeof transactions)[number];
+type Txn = Transaction;
 
-export function TransactionsTable() {
+export function TransactionsTable({ rows }: { rows?: Transaction[] }) {
   const [globalFilter, setGlobalFilter] = useState("");
+  const data = (rows?.length ? rows : fallbackTransactions.map((row, index) => ({ id: index + 1, gstin: "", etin: null, filing_period: "042026", order_item_id: null, buyer_state_name: null, product_name: null, sku: null, qty: 1, cess: 0, gross_amount: 0, discount_seller: 0, discount_platform: 0, settlement_amount: 0, validation_status: "valid", validation_errors: null, ...row }))) as Transaction[];
   const columns = useMemo<ColumnDef<Txn>[]>(() => [
     { accessorKey: "platform", header: "Platform" },
     { accessorKey: "invoice_no", header: "Invoice number" },
@@ -20,7 +22,7 @@ export function TransactionsTable() {
     { accessorKey: "invoice_date", header: "Date" },
     { accessorKey: "buyer_state_code", header: "State/POS" },
     { accessorKey: "hsn", header: "HSN" },
-    { accessorKey: "taxable_value", header: "Taxable value", cell: ({ row }) => formatCurrency(row.original.taxable_value) },
+    { accessorKey: "taxable_value", header: "Taxable value", cell: ({ row }) => formatCurrency(Number(row.original.taxable_value)) },
     { accessorKey: "gst_rate", header: "GST rate", cell: ({ row }) => `${row.original.gst_rate}%` },
     { accessorKey: "igst", header: "IGST" },
     { accessorKey: "cgst", header: "CGST" },
@@ -31,7 +33,7 @@ export function TransactionsTable() {
     { accessorKey: "source_file", header: "Source file" },
     { id: "actions", header: "", cell: () => <div className="flex gap-1"><Button variant="ghost" size="icon" title="Edit row"><Edit3 className="size-4" /></Button><Button variant="ghost" size="icon" title="Delete row"><Trash2 className="size-4" /></Button></div> }
   ], []);
-  const table = useReactTable({ data: transactions, columns, state: { globalFilter }, onGlobalFilterChange: setGlobalFilter, getCoreRowModel: getCoreRowModel(), getFilteredRowModel: getFilteredRowModel() });
+  const table = useReactTable({ data, columns, state: { globalFilter }, onGlobalFilterChange: setGlobalFilter, getCoreRowModel: getCoreRowModel(), getFilteredRowModel: getFilteredRowModel() });
 
   return (
     <Card id="manage-data">
@@ -64,4 +66,3 @@ export function TransactionsTable() {
     </Card>
   );
 }
-

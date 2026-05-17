@@ -65,7 +65,7 @@ class MarketplaceParser:
             "product_name": text(first_value(row, ["product_name", "product title", "product name", "sku title", "item description"])),
             "sku": text(first_value(row, ["sku", "seller sku", "fsn", "merchant sku"])),
             "qty": money(first_value(row, ["qty", "quantity", "item quantity"])),
-            "taxable_value": money(first_value(row, ["taxable_value", "taxable value", "taxable amount", "tax exclusive gross", "taxable sales"])),
+            "taxable_value": money(first_value(row, ["taxable_value", "taxable value", "taxable amount", "tax exclusive gross", "taxable sales", "price before tax", "taxable turnover"])),
             "gst_rate": money(first_value(row, ["gst_rate", "gst rate", "tax rate", "igst rate", "total tax rate"])),
             "igst": money(first_value(row, ["igst", "igst amount", "integrated tax"])),
             "cgst": money(first_value(row, ["cgst", "cgst amount", "central tax"])),
@@ -73,7 +73,7 @@ class MarketplaceParser:
             "cess": money(first_value(row, ["cess", "cess amount"])),
             "tcs": money(first_value(row, ["tcs", "tcs amount"])),
             "tds": money(first_value(row, ["tds", "tds amount"])),
-            "gross_amount": money(first_value(row, ["gross_amount", "gross amount", "invoice amount", "total amount", "selling price"])),
+            "gross_amount": money(first_value(row, ["gross_amount", "gross amount", "invoice amount", "total amount", "selling price", "price before discount"])),
             "discount_seller": money(first_value(row, ["discount_seller", "seller discount", "merchant discount"])),
             "discount_platform": money(first_value(row, ["discount_platform", "platform discount", "bank discount", "cashback"])),
             "settlement_amount": money(first_value(row, ["settlement_amount", "settlement amount", "net payable"])),
@@ -85,7 +85,7 @@ class MarketplaceParser:
 def clean_column(value: object) -> str:
     text_value = "" if value is None else str(value)
     text_value = re.sub(r"\s+", " ", text_value.strip().lower())
-    return text_value.replace("\n", " ")
+    return text_value.replace("\n", " ").replace("_", " ")
 
 
 def text(value: object) -> str | None:
@@ -118,6 +118,17 @@ def first_value(row: dict[str, Any], candidates: list[str]) -> Any:
     return None
 
 
+def unique_headers(headers: list[str]) -> list[str]:
+    seen: dict[str, int] = {}
+    result: list[str] = []
+    for index, header in enumerate(headers):
+        normalized = header or f"column {index}"
+        count = seen.get(normalized, 0)
+        seen[normalized] = count + 1
+        result.append(normalized if count == 0 else f"{normalized} {count + 1}")
+    return result
+
+
 def detect_header_row_frame(raw: pd.DataFrame, required_tokens: list[str]) -> int:
     best_index = 0
     best_score = -1
@@ -135,8 +146,23 @@ def detect_header_row_frame(raw: pd.DataFrame, required_tokens: list[str]) -> in
 def dataframe_from_excel(path: Path, sheet_name: str | int | None = None) -> pd.DataFrame:
     raw = pd.read_excel(path, sheet_name=sheet_name if sheet_name is not None else 0, header=None, dtype=object)
     header_index = detect_header_row_frame(raw, ["invoice", "order", "tax", "gst", "state", "hsn"])
-    headers = [clean_column(value) or f"column_{idx}" for idx, value in enumerate(raw.iloc[header_index].tolist())]
+    headers = unique_headers([clean_column(value) or f"column {idx}" for idx, value in enumerate(raw.iloc[header_index].tolist())])
     frame = raw.iloc[header_index + 1:].copy()
     frame.columns = headers
     return frame.dropna(how="all")
 
+
+def excel_frames(path: Path) -> list[tuple[str, pd.DataFrame]]:
+    sheets = pd.read_excel(path, sheet_name=None, header=None, dtype=object)
+    frames: list[tuple[str, pd.DataFrame]] = []
+    for sheet_name, raw in sheets.items():
+        if raw.dropna(how="all").empty:
+            continue
+        header_index = detect_header_row_frame(raw, ["invoice", "order", "tax", "gst", "state", "hsn"])
+        headers = unique_headers([clean_column(value) or f"column {idx}" for idx, value in enumerate(raw.iloc[header_index].tolist())])
+        frame = raw.iloc[header_index + 1:].copy()
+        frame.columns = headers
+        frame = frame.dropna(how="all")
+        if not frame.empty:
+            frames.append((sheet_name, frame))
+    return frames

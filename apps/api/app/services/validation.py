@@ -14,11 +14,20 @@ def money(value: object) -> Decimal:
     if isinstance(value, Decimal):
         decimal_value = value
     else:
-        cleaned = str(value).replace(",", "").replace("₹", "").strip()
-        if cleaned in {"", "-", "nan", "None"}:
+        cleaned = str(value).replace(",", "").replace("₹", "").replace("%", "").strip()
+        if cleaned.lower() in {"", "-", "nan", "none", "null"}:
             return Decimal("0.00")
+        is_parenthesized_negative = cleaned.startswith("(") and cleaned.endswith(")")
+        cleaned = cleaned.strip("()")
+        multiplier = Decimal("-1") if is_parenthesized_negative or cleaned.upper().endswith(("CR", "DR")) and cleaned.startswith("-") else Decimal("1")
+        cleaned = cleaned.upper().replace("CR", "").replace("DR", "").strip()
         decimal_value = Decimal(cleaned)
-    return decimal_value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        decimal_value *= multiplier
+    return round_money(decimal_value)
+
+
+def round_money(value: Decimal | int | float | str) -> Decimal:
+    return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 def validate_gstin(gstin: str) -> bool:
@@ -47,9 +56,8 @@ def validate_transaction(txn: dict) -> list[str]:
     if not txn.get("etin"):
         errors.append("Missing ETIN")
     taxable = money(txn.get("taxable_value"))
-    expected = (taxable * rate / Decimal("100")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    expected = round_money(taxable * rate / Decimal("100"))
     actual = money(txn.get("igst")) + money(txn.get("cgst")) + money(txn.get("sgst")) + money(txn.get("cess"))
     if abs(expected - actual) > Decimal("1.00"):
         errors.append("Tax mismatch beyond Rs. 1 tolerance")
     return errors
-

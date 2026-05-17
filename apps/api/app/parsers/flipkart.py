@@ -3,8 +3,8 @@ from pathlib import Path
 from openpyxl import load_workbook
 import pandas as pd
 
-from app.parsers.base import MarketplaceParser, ParseResult, clean_column, detect_header_row_frame
-from app.services.validation import validate_transaction
+from app.parsers.base import MarketplaceParser, ParseResult, clean_column, detect_header_row_frame, unique_headers
+from app.services.transaction_normalizer import finalize_transaction
 
 
 class FlipkartParser(MarketplaceParser):
@@ -21,7 +21,7 @@ class FlipkartParser(MarketplaceParser):
                         continue
                     frame = pd.DataFrame(rows)
                     header_index = detect_header_row_frame(frame, ["order", "invoice", "taxable", "igst", "cgst", "sgst"])
-                    headers = [clean_column(value) or f"column_{idx}" for idx, value in enumerate(frame.iloc[header_index].tolist())]
+                    headers = unique_headers([clean_column(value) or f"column {idx}" for idx, value in enumerate(frame.iloc[header_index].tolist())])
                     data = frame.iloc[header_index + 1:].copy()
                     data.columns = headers
                     data = data.dropna(how="all")
@@ -32,14 +32,9 @@ class FlipkartParser(MarketplaceParser):
                         blob = " ".join(str(value) for value in series.to_dict().values()).lower()
                         if "credit note" in blob or "return" in blob:
                             txn["doc_type"] = "credit_note"
-                            txn["taxable_value"] = -abs(txn["taxable_value"])
                         elif "debit note" in blob:
                             txn["doc_type"] = "debit_note"
-                        errors = validate_transaction(txn)
-                        txn["validation_status"] = "error" if errors else "valid"
-                        txn["validation_errors"] = "; ".join(errors) if errors else None
-                        result.transactions.append(txn)
+                        result.transactions.append(finalize_transaction(txn))
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})
         return result
-

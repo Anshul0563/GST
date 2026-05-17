@@ -5,8 +5,9 @@ import shutil
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -26,6 +27,7 @@ from app.models.entities import (
 from app.parsers.factory import get_parser
 from app.schemas.dto import (
     BatchStatus,
+    DashboardSummary,
     GSTProfileIn,
     GSTProfileOut,
     GenerateGSTR1In,
@@ -40,7 +42,8 @@ from app.schemas.dto import (
 from app.services.excel_export import write_gstr1_excel
 from app.services.gst import build_gstr1_json
 from app.services.tally import build_tally_xml
-from app.services.validation import validate_gstin
+from app.services.transaction_normalizer import finalize_transaction
+from app.services.validation import money, validate_gstin
 from app.utils.security import create_access_token, hash_password, verify_password
 
 
@@ -68,6 +71,11 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
     return Token(access_token=create_access_token(str(user.id)))
 
 
+@router.get("/auth/me")
+def me(user: User = Depends(get_current_user)):
+    return {"id": user.id, "email": user.email, "full_name": user.full_name}
+
+
 @router.post("/gst-profile", response_model=GSTProfileOut)
 def create_profile(payload: GSTProfileIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     gstin = payload.gstin.upper()
@@ -93,6 +101,57 @@ def create_profile(payload: GSTProfileIn, user: User = Depends(get_current_user)
 @router.get("/gst-profile", response_model=list[GSTProfileOut])
 def list_profiles(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return db.scalars(select(GSTProfile).where(GSTProfile.user_id == user.id)).all()
+
+
+@router.post("/demo/seed")
+def seed_demo(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    profile = db.scalar(select(GSTProfile).where(GSTProfile.user_id == user.id).order_by(GSTProfile.id.asc()))
+    if not profile:
+        profile = GSTProfile(
+            user_id=user.id,
+            gstin="07ABCDE1234F1Z5",
+            legal_name="Bharat Online Traders",
+            trade_name="Bharat Store",
+            state_code="07",
+            filing_frequency="Monthly",
+            financial_year="2026-27",
+            return_period="042026",
+        )
+        db.add(profile)
+        db.flush()
+    existing = db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id, NormalizedTransaction.profile_id == profile.id)).all()
+    if existing:
+        return {"profile_id": profile.id, "transactions": len(existing), "status": "already_seeded"}
+    batch = PlatformImportBatch(user_id=user.id, profile_id=profile.id, platform="demo", status="completed", parsed_rows=6, error_rows=0, completed_at=datetime.utcnow())
+    db.add(batch)
+    db.flush()
+    rows = [
+        {"platform": "meesho", "etin": "07AARCM9332R1CQ", "order_id": "MSH-1001", "order_item_id": "1", "invoice_no": "MSH-28491", "invoice_date": "2026-04-04", "buyer_state_code": "37", "buyer_state_name": "Andhra Pradesh", "hsn": "711790", "product_name": "Fashion jewellery set", "sku": "JWL-01", "qty": 1, "taxable_value": 1327.42, "gst_rate": 3, "igst": 39.82, "tcs": 13.27, "source_file": "tcs_sales.xlsx"},
+        {"platform": "amazon", "etin": "29AAICA3918J1C9", "order_id": "405-1122", "order_item_id": "A1", "invoice_no": "IN-7781", "invoice_date": "2026-04-08", "buyer_state_code": "07", "buyer_state_name": "Delhi", "hsn": "7117", "product_name": "Oxidised necklace", "sku": "AMZ-JW-2", "qty": 2, "taxable_value": 2600, "gst_rate": 3, "cgst": 39, "sgst": 39, "tcs": 26, "source_file": "MTR_B2C.csv"},
+        {"platform": "flipkart", "etin": "29AACCF0683K1C8", "order_id": "OD3301", "order_item_id": "FK1", "invoice_no": "FK-9982", "invoice_date": "2026-04-12", "buyer_state_code": "29", "buyer_state_name": "Karnataka", "hsn": "4202", "product_name": "Travel pouch", "sku": "FK-BAG-1", "qty": 1, "taxable_value": 4100, "gst_rate": 18, "igst": 738, "tcs": 41, "source_file": "sales-report.xlsx:hidden"},
+        {"platform": "meesho", "etin": "07AARCM9332R1CQ", "order_id": "MSH-1001", "order_item_id": "1-R", "invoice_no": "CN-120", "invoice_date": "2026-04-16", "doc_type": "credit_note", "buyer_state_code": "37", "buyer_state_name": "Andhra Pradesh", "hsn": "711790", "product_name": "Fashion jewellery set", "sku": "JWL-01", "qty": 1, "taxable_value": 420, "gst_rate": 3, "igst": 12.6, "tcs": 4.2, "source_file": "tcs_sales_return.xlsx"},
+        {"platform": "jiomart", "etin": "27AABCI6363G1C7", "order_id": "JM-901", "order_item_id": "J1", "invoice_no": "JM-551", "invoice_date": "2026-04-18", "buyer_state_code": "24", "buyer_state_name": "Gujarat", "hsn": "3926", "product_name": "Home organizer", "sku": "ORG-9", "qty": 4, "taxable_value": 1199.2, "gst_rate": 18, "igst": 215.86, "source_file": "jiomart-sales.xlsx"},
+        {"platform": "custom", "etin": "29AACCF0683K1C8", "order_id": "CUS-18", "order_item_id": "C1", "invoice_no": "CUST-18", "invoice_date": "2026-04-21", "buyer_state_code": "07", "buyer_state_name": "Delhi", "hsn": "4819", "product_name": "Packaging material", "sku": "PACK-1", "qty": 10, "taxable_value": 850, "gst_rate": 12, "cgst": 51, "sgst": 51, "source_file": "custom.xlsx"},
+    ]
+    for row in rows:
+        row = dict(row)
+        txn = finalize_transaction({
+            "gstin": profile.gstin,
+            "filing_period": profile.return_period,
+            "doc_type": row.pop("doc_type", "invoice"),
+            "cess": 0,
+            "tds": 0,
+            "gross_amount": 0,
+            "discount_seller": 0,
+            "discount_platform": 0,
+            "settlement_amount": 0,
+            "raw_row_json": json.dumps(row, default=str),
+            **row,
+        })
+        db.add(NormalizedTransaction(user_id=user.id, profile_id=profile.id, batch_id=batch.id, **txn))
+    db.add(AuditLog(user_id=user.id, action="demo.seed", entity_type="gst_profile", entity_id=str(profile.id)))
+    db.commit()
+    return {"profile_id": profile.id, "transactions": len(rows), "status": "seeded"}
 
 
 @router.put("/gst-profile/{profile_id}", response_model=GSTProfileOut)
@@ -159,6 +218,15 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         parser = get_parser(batch.platform)(profile.gstin, profile.return_period)
         result = parser.parse([Path(path) for path in file_paths])
         for txn in result.transactions:
+            duplicate = db.scalar(select(NormalizedTransaction).where(
+                NormalizedTransaction.profile_id == batch.profile_id,
+                NormalizedTransaction.platform == txn.get("platform"),
+                NormalizedTransaction.invoice_no == txn.get("invoice_no"),
+                NormalizedTransaction.order_item_id == txn.get("order_item_id"),
+            ))
+            if duplicate:
+                result.errors.append({"error": "Duplicate invoice/order item skipped", "invoice_no": txn.get("invoice_no"), "order_item_id": txn.get("order_item_id")})
+                continue
             db.add(NormalizedTransaction(user_id=batch.user_id, profile_id=batch.profile_id, batch_id=batch.id, **txn))
         batch.parsed_rows = len(result.transactions)
         batch.error_rows = len(result.errors) + sum(1 for txn in result.transactions if txn.get("validation_status") == "error")
@@ -204,6 +272,58 @@ def transactions(profile_id: int | None = None, period: str | None = None, platf
     if platform:
         stmt = stmt.where(NormalizedTransaction.platform == platform)
     return db.scalars(stmt.limit(1000)).all()
+
+
+@router.get("/dashboard/summary", response_model=DashboardSummary)
+def dashboard_summary(profile_id: int | None = None, period: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id)
+    if profile_id:
+        stmt = stmt.where(NormalizedTransaction.profile_id == profile_id)
+    if period:
+        stmt = stmt.where(NormalizedTransaction.filing_period == period)
+    rows = db.scalars(stmt).all()
+    platform_totals: dict[str, dict] = {}
+    state_totals: dict[str, dict] = {}
+    total_taxable = money(0)
+    total_sales = money(0)
+    igst = money(0)
+    cgst = money(0)
+    sgst = money(0)
+    pending_errors = 0
+    for row in rows:
+        taxable = money(row.taxable_value)
+        row_gst = money(row.igst) + money(row.cgst) + money(row.sgst) + money(row.cess)
+        total_taxable += taxable
+        total_sales += taxable + row_gst
+        igst += money(row.igst)
+        cgst += money(row.cgst)
+        sgst += money(row.sgst)
+        pending_errors += 1 if row.validation_status == "error" else 0
+        platform = row.platform or "unknown"
+        state = row.buyer_state_code or "NA"
+        platform_totals.setdefault(platform, {"platform": platform, "taxable_value": money(0), "gst": money(0), "rows": 0})
+        state_totals.setdefault(state, {"state_code": state, "taxable_value": money(0), "gst": money(0), "rows": 0})
+        platform_totals[platform]["taxable_value"] += taxable
+        platform_totals[platform]["gst"] += row_gst
+        platform_totals[platform]["rows"] += 1
+        state_totals[state]["taxable_value"] += taxable
+        state_totals[state]["gst"] += row_gst
+        state_totals[state]["rows"] += 1
+    uploaded_files = len(db.scalars(select(UploadedFile).where(UploadedFile.user_id == user.id)).all())
+    latest_export = db.scalar(select(GSTR1JsonExport).where(GSTR1JsonExport.user_id == user.id).order_by(GSTR1JsonExport.id.desc()))
+    return DashboardSummary(
+        total_sales=money(total_sales),
+        total_taxable_value=money(total_taxable),
+        total_gst=money(igst + cgst + sgst),
+        igst=money(igst),
+        cgst=money(cgst),
+        sgst=money(sgst),
+        platform_wise_sale=[{**item, "taxable_value": money(item["taxable_value"]), "gst": money(item["gst"])} for item in platform_totals.values()],
+        state_wise_sale=[{**item, "taxable_value": money(item["taxable_value"]), "gst": money(item["gst"])} for item in state_totals.values()],
+        uploaded_files=uploaded_files,
+        pending_errors=pending_errors,
+        json_generation_status=latest_export.status if latest_export else "not_generated",
+    )
 
 
 @router.put("/transactions/{transaction_id}", response_model=TransactionOut)
@@ -341,4 +461,3 @@ def reconcile_download(batch_id: int, user: User = Depends(get_current_user), db
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
     return JSONResponse({"message": "Reconciliation Excel generation hook is ready", "batch_id": batch.id})
-
