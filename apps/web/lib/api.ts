@@ -294,6 +294,20 @@ export function generateTallyXml(token: string, payload: { profile_id: number; p
   return request<{ id: number; voucher_count: number; validation: Record<string, unknown>; download: string; download_excel: string }>("/tally/generate", { method: "POST", body: JSON.stringify(payload) }, token);
 }
 
+export function uploadTallyImport(token: string, profileId: number, platform: string, files: FileList | File[]) {
+  const form = new FormData();
+  Array.from(files).forEach((file) => form.append("files", file));
+  return request<BatchStatus>(`/tally/import?platform=${platform}&profile_id=${profileId}`, { method: "POST", body: form }, token);
+}
+
+export function getTallyMapping(token: string, companyId: number) {
+  return request<{ company_id: number; mapping: Record<string, string> }>(`/tally/mapping/${companyId}`, {}, token);
+}
+
+export function saveTallyMapping(token: string, companyId: number, mapping: Record<string, string>) {
+  return request<{ company_id: number; mapping: Record<string, string>; status: string }>(`/tally/mapping/${companyId}`, { method: "POST", body: JSON.stringify(mapping) }, token);
+}
+
 export function uploadReconcileFiles(token: string, profileId: number, portalFile: File, booksFile: File) {
   const form = new FormData();
   form.append("portal_file", portalFile);

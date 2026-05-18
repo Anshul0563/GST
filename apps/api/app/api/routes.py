@@ -25,6 +25,7 @@ from app.models.entities import (
     ReconciliationRow,
     TallyCompany,
     TallyExport,
+    TallyLedgerMapping,
     TallyVoucher,
     UploadedFile,
     User,
@@ -559,6 +560,39 @@ def tally_companies(profile_id: int | None = None, user: User = Depends(get_curr
     return [{"id": company.id, "company_name": company.company_name, "gstin": company.gstin, "financial_year": company.financial_year, "state": company.state, "auto_create_ledger": bool(company.auto_create_ledger), "tally_guid": company.tally_guid} for company in companies]
 
 
+@router.post("/tally/import", response_model=BatchStatus)
+async def tally_import(
+    platform: str,
+    background_tasks: BackgroundTasks,
+    profile_id: int,
+    files: list[UploadFile] = File(...),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return await upload_import(platform, background_tasks, profile_id, files, user, db)
+
+
+@router.get("/tally/mapping/{company_id}")
+def tally_mapping(company_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    company = db.get(TallyCompany, company_id)
+    if not company or company.user_id != user.id:
+        raise HTTPException(404, "Company not found")
+    mapping = db.scalar(select(TallyLedgerMapping).where(TallyLedgerMapping.company_id == company.id).order_by(TallyLedgerMapping.id.desc()))
+    return {"company_id": company.id, "mapping": json.loads(mapping.mapping_json) if mapping else {}}
+
+
+@router.post("/tally/mapping/{company_id}")
+def save_tally_mapping(company_id: int, payload: dict[str, str], user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    company = db.get(TallyCompany, company_id)
+    if not company or company.user_id != user.id:
+        raise HTTPException(404, "Company not found")
+    mapping = TallyLedgerMapping(company_id=company.id, mapping_json=json.dumps(payload))
+    db.add(mapping)
+    db.add(AuditLog(user_id=user.id, action="tally.mapping.save", entity_type="tally_ledger_mapping", entity_id=str(company.id)))
+    db.commit()
+    return {"company_id": company.id, "mapping": payload, "status": "saved"}
+
+
 @router.post("/tally/generate-xml")
 @router.post("/tally/generate")
 def tally_xml(payload: TallyGenerateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
@@ -597,11 +631,6 @@ def tally_xml(payload: TallyGenerateIn, user: User = Depends(get_current_user), 
     db.add(AuditLog(user_id=user.id, action="tally.export.generate", entity_type="tally_export", entity_id=str(export.id)))
     db.commit()
     return {"id": export.id, "voucher_count": len(vouchers), "validation": validation, "download": f"/tally/export/{export.id}", "download_excel": f"/tally/export/{export.id}?format=xlsx"}
-
-
-@router.post("/tally/generate-xml")
-def tally_xml_legacy(payload: TallyGenerateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return tally_xml(payload, user, db)
 
 
 @router.get("/tally/history")

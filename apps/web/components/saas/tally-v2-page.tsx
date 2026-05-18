@@ -8,7 +8,7 @@ import { Download, FileArchive, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { TallyCompany, TallyExportItem, createTallyCompany, generateTallyXml, getTallyExportUrl, getTallyHistory } from "@/lib/api";
+import { TallyCompany, TallyExportItem, createTallyCompany, generateTallyXml, getTallyExportUrl, getTallyHistory, getTallyMapping, saveTallyMapping, uploadTallyImport } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 const defaultMapping = {
@@ -69,11 +69,52 @@ export function TallyCompanyPage() {
 }
 
 export function TallyImportPage() {
-  return <TallyDashboardFrame title="Tally Import" subtitle="Use GST Bharat's existing marketplace upload and normalized transaction engine."><Panel title="Marketplace imports" subtitle="Meesho, Amazon, Flipkart and Custom Excel imports are shared with GSTR-1 engine."><EmptyState title="Use Marketplace Hub" body="Upload marketplace reports once; Tally XML uses the same normalized transaction database." action={<Link href="/marketplaces" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> Open marketplace upload</Link>} /></Panel></TallyDashboardFrame>;
+  const workspace = useWorkspace();
+  const [platform, setPlatform] = useState("meesho");
+  const [files, setFiles] = useState<FileList | null>(null);
+  const [status, setStatus] = useState("");
+  async function submit() {
+    if (!workspace.token || !workspace.profile || !files?.length) return;
+    const batch = await uploadTallyImport(workspace.token, workspace.profile.id, platform, files);
+    setStatus(`Batch #${batch.id} ${batch.status}. Parsed rows will update in Imports timeline.`);
+    await workspace.refresh();
+  }
+  return <AppShell title="Tally Import" subtitle="Upload marketplace files directly into the shared normalized transaction engine." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+    <Panel title="Marketplace import for Tally" subtitle="Uses backend /tally/import, which reuses the same Meesho/Amazon/Flipkart/Custom parsers.">
+      <div className="grid gap-4 md:grid-cols-2">
+        <select value={platform} onChange={(event) => setPlatform(event.target.value)} className="rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option value="meesho">Meesho</option><option value="amazon">Amazon</option><option value="flipkart">Flipkart</option><option value="custom">Custom Excel</option></select>
+        <input type="file" multiple onChange={(event) => setFiles(event.target.files)} className="rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" />
+      </div>
+      <button onClick={submit} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> Import for Tally</button>
+      {status && <div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{status}</div>}
+    </Panel>
+  </AppShell>;
 }
 
 export function TallyMappingPage() {
-  return <TallyDashboardFrame title="Ledger Mapping" subtitle="Mapping presets used by the XML generator."><Panel title="Default mapping preset" subtitle="These keys are sent to backend /tally/generate.">{Object.entries(defaultMapping).map(([key, value]) => <div key={key} className="mb-3 grid gap-3 rounded-2xl bg-slate-50 p-3 text-sm dark:bg-white/5 md:grid-cols-[220px_1fr]"><b>{key.replaceAll("_", " ")}</b><span>{value}</span></div>)}</Panel></TallyDashboardFrame>;
+  const workspace = useWorkspace();
+  const [companyId, setCompanyId] = useState("");
+  const [mapping, setMapping] = useState(defaultMapping);
+  const [message, setMessage] = useState("");
+  async function load(company: string) {
+    setCompanyId(company);
+    if (!workspace.token || !company) return;
+    const result = await getTallyMapping(workspace.token, Number(company));
+    setMapping({ ...defaultMapping, ...result.mapping });
+  }
+  async function save() {
+    if (!workspace.token || !companyId) return;
+    await saveTallyMapping(workspace.token, Number(companyId), mapping);
+    setMessage("Mapping template saved.");
+  }
+  return <AppShell title="Ledger Mapping" subtitle="Save reusable Tally ledger templates per company." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+    <Panel title="Mapping template" subtitle="Stored in backend tally_ledger_mappings.">
+      <select value={companyId} onChange={(event) => load(event.target.value)} className="mb-5 w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option value="">Choose company</option>{workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.company_name}</option>)}</select>
+      {Object.entries(mapping).map(([key, value]) => <label key={key} className="mb-3 grid gap-2 text-sm font-bold"><span>{key.replaceAll("_", " ")}</span><input value={value} onChange={(event) => setMapping({ ...mapping, [key]: event.target.value })} className="rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>)}
+      <button onClick={save} className="mt-3 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Save mapping</button>
+      {message && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</div>}
+    </Panel>
+  </AppShell>;
 }
 
 export function TallyExportPage() {
@@ -88,7 +129,7 @@ export function TallyExportPage() {
   }
   return <AppShell title="Generate Tally XML" subtitle="Preview mapping, generate XML and download voucher Excel." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-      <Panel title="Export settings" subtitle="Select company and generate from normalized rows."><select value={companyId} onChange={(event) => setCompanyId(event.target.value)} className="w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option value="">Choose company</option>{workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.company_name}</option>)}</select><button onClick={generate} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileArchive className="size-4" /> Generate XML</button>{result && <div className="mt-5 rounded-3xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">Generated {result.voucher_count} vouchers. Validation: {String(result.validation.valid)}</div>}</Panel>
+      <Panel title="Export settings" subtitle="Select company and generate from normalized rows."><select value={companyId} onChange={async (event) => { const value = event.target.value; setCompanyId(value); if (workspace.token && value) { const saved = await getTallyMapping(workspace.token, Number(value)); setMapping({ ...defaultMapping, ...saved.mapping }); } }} className="w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option value="">Choose company</option>{workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.company_name}</option>)}</select><button onClick={generate} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileArchive className="size-4" /> Generate XML</button>{result && <div className="mt-5 rounded-3xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">Generated {result.voucher_count} vouchers. Validation: {String(result.validation.valid)}</div>}</Panel>
       <Panel title="Mapping editor" subtitle="Customize ledgers before generation.">{Object.entries(mapping).map(([key, value]) => <label key={key} className="mb-3 grid gap-2 text-sm font-bold"><span>{key.replaceAll("_", " ")}</span><input value={value} onChange={(event) => setMapping({ ...mapping, [key]: event.target.value })} className="rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>)}</Panel>
     </div>
     {result && <div className="mt-6 flex gap-3"><a href={getTallyExportUrl(result.id)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Download XML</a><a href={getTallyExportUrl(result.id, "xlsx")} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Voucher Excel</a></div>}
