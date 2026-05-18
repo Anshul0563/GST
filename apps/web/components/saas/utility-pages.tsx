@@ -1,24 +1,26 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { CreditCard, FileArchive, FileSpreadsheet, Settings } from "lucide-react";
+import { CreditCard, Download, FileArchive, Settings } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { createProfile, createTallyCompany, downloadUrl, generateTallyXml, uploadReconcileFiles } from "@/lib/api";
+import { ReconcileReport, createProfile, createTallyCompany, downloadUrl, generateTallyXml, getReconcileDownloadUrl, getReconcileReport, updateProfile, uploadReconcileFiles } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 export function ReconciliationPage() {
   const workspace = useWorkspace();
   const [portal, setPortal] = useState<File | null>(null);
   const [books, setBooks] = useState<File | null>(null);
-  const [result, setResult] = useState<string>("");
+  const [result, setResult] = useState<ReconcileReport | null>(null);
   async function submit() {
     if (!workspace.token || !workspace.profile || !portal || !books) return;
     const upload = await uploadReconcileFiles(workspace.token, workspace.profile.id, portal, books);
-    setResult(`Batch ${upload.id} ${upload.status}. Matching summary will populate as reconciliation engine is expanded.`);
+    const report = await getReconcileReport(workspace.token, upload.id);
+    setResult({ ...upload, ...report });
   }
-  return <AppShell title="2A/2B Reconciliation" subtitle="Upload GST portal 2A/2B and purchase register files for matching and query report generation." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}><div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]"><Panel title="Reconcile workflow" subtitle="Designed for supplier GSTIN, invoice number, date and tax amount matching."><div className="space-y-3">{["Upload portal 2A/2B", "Upload purchase register", "Run match engine", "Review mismatch buckets", "Download query report"].map((item, index) => <div key={item} className="rounded-2xl bg-slate-50 p-4 text-sm font-bold dark:bg-white/5">{index + 1}. {item}</div>)}</div></Panel><Panel title="Upload files" subtitle="Current backend stores batch/report status; deeper matching remains a backend roadmap item."><div className="grid gap-4 md:grid-cols-2"><input type="file" onChange={(event) => setPortal(event.target.files?.[0] || null)} className="rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" /><input type="file" onChange={(event) => setBooks(event.target.files?.[0] || null)} className="rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" /></div><button onClick={submit} className="mt-5 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Run reconciliation</button>{result ? <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{result}</div> : <EmptyState title="No reconciliation run yet" body="Upload both files to begin." />}</Panel></div></AppShell>;
+  const categories = result?.categories || ["Matched", "Amount mismatch", "Invoice mismatch", "Missing in 2B", "Missing in books", "Pending"];
+  return <AppShell title="2A/2B Reconciliation" subtitle="Upload GST portal 2A/2B and purchase register files for matching and query report generation." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}><div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]"><Panel title="Reconcile workflow" subtitle="Designed for supplier GSTIN, invoice number, date and tax amount matching."><div className="space-y-3">{["Upload portal 2A/2B", "Upload purchase register", "Run match engine", "Review mismatch buckets", "Download query report"].map((item, index) => <div key={item} className="rounded-2xl bg-slate-50 p-4 text-sm font-bold dark:bg-white/5">{index + 1}. {item}</div>)}</div></Panel><Panel title="Upload files" subtitle="Connected to /reconcile/upload, /reconcile/report and /reconcile/download."><div className="grid gap-4 md:grid-cols-2"><input type="file" onChange={(event) => setPortal(event.target.files?.[0] || null)} className="rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" /><input type="file" onChange={(event) => setBooks(event.target.files?.[0] || null)} className="rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" /></div><button onClick={submit} className="mt-5 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Run reconciliation</button>{result ? <div className="mt-5 space-y-4"><div className="rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">Batch #{result.id} {result.status}</div><div className="grid gap-3 md:grid-cols-3">{categories.map((category) => <div key={category} className="rounded-2xl bg-slate-50 p-4 text-sm font-bold dark:bg-white/5"><span>{category}</span><p className="mt-2 text-2xl">{result.summary?.[category.toLowerCase().replaceAll(" ", "_")] ?? 0}</p></div>)}</div><a href={getReconcileDownloadUrl(result.id)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Download report</a></div> : <EmptyState title="No reconciliation run yet" body="Upload both files to begin." />}</Panel></div></AppShell>;
 }
 
 export function TallyPage() {
@@ -44,13 +46,20 @@ export function TallyPage() {
 export function ProfilePage() {
   const workspace = useWorkspace();
   const [form, setForm] = useState({ gstin: "", legal_name: "", trade_name: "", filing_frequency: "Monthly", financial_year: "2026-27", return_period: "042026" });
+  const [editingId, setEditingId] = useState<number | null>(null);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!workspace.token) return;
-    await createProfile(workspace.token, form);
+    if (editingId) {
+      await updateProfile(workspace.token, editingId, form);
+    } else {
+      await createProfile(workspace.token, form);
+    }
+    setEditingId(null);
+    setForm({ gstin: "", legal_name: "", trade_name: "", filing_frequency: "Monthly", financial_year: "2026-27", return_period: "042026" });
     await workspace.refresh();
   }
-  return <AppShell title="GST Profiles" subtitle="Manage GSTIN workspaces, filing frequency and return period." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}><div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]"><Panel title="Profiles" subtitle="Switch workspace from sidebar anytime."><div className="space-y-3">{workspace.profiles.map((profile) => <div key={profile.id} className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>{profile.gstin}</b><p className="text-sm text-slate-500">{profile.legal_name} / {profile.return_period}</p></div>)}</div></Panel><Panel title="Add GST profile" subtitle="State code is detected from GSTIN by backend."><form onSubmit={submit} className="space-y-3">{Object.keys(form).map((key) => <input key={key} value={form[key as keyof typeof form]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} className="w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" placeholder={key.replaceAll("_", " ")} />)}<button className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Create profile</button></form></Panel></div></AppShell>;
+  return <AppShell title="GST Profiles" subtitle="Manage GSTIN workspaces, filing frequency and return period." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}><div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]"><Panel title="Profiles" subtitle="Switch or edit backend GST profiles."><div className="space-y-3">{workspace.profiles.map((profile) => <div key={profile.id} className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><button onClick={() => { workspace.setProfile(profile); workspace.refresh(profile); }} className="text-left"><b>{profile.gstin}</b><p className="text-sm text-slate-500">{profile.legal_name} / {profile.return_period}</p></button><button onClick={() => { setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }} className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-[#1746A2] dark:bg-slate-900">Edit</button></div>)}</div></Panel><Panel title={editingId ? "Update GST profile" : "Add GST profile"} subtitle="State code is detected from GSTIN by backend."><form onSubmit={submit} className="space-y-3">{Object.keys(form).map((key) => <input key={key} value={form[key as keyof typeof form]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} className="w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" placeholder={key.replaceAll("_", " ")} />)}<button className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">{editingId ? "Update profile" : "Create profile"}</button>{editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ gstin: "", legal_name: "", trade_name: "", filing_frequency: "Monthly", financial_year: "2026-27", return_period: "042026" }); }} className="ml-3 rounded-2xl border px-5 py-3 text-sm font-bold">Cancel</button>}</form></Panel></div></AppShell>;
 }
 
 export function SettingsPage() {
