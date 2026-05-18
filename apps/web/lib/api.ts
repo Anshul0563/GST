@@ -80,6 +80,11 @@ export type BatchStatus = {
   errors?: Array<Record<string, unknown>>;
 };
 
+export type ImportErrors = {
+  parser_errors: Array<Record<string, unknown>>;
+  row_errors: Transaction[];
+};
+
 export type TallyCompany = {
   id: number;
   company_name: string;
@@ -158,6 +163,12 @@ export async function ensureDemoWorkspace() {
   return { token, profile: profiles[0] };
 }
 
+export async function loadWorkspace(token: string) {
+  const user = await getCurrentUser(token);
+  const profiles = await listProfiles(token);
+  return { user, profiles, profile: profiles[0] ?? null };
+}
+
 export function listProfiles(token: string) {
   return request<Profile[]>("/gst-profile", {}, token);
 }
@@ -194,6 +205,10 @@ export function listImportBatches(token: string, profileId?: number) {
 
 export function getImportStatus(token: string, batchId: number) {
   return request<BatchStatus>(`/imports/${batchId}/status`, {}, token);
+}
+
+export function getImportErrors(token: string, batchId: number) {
+  return request<ImportErrors>(`/imports/${batchId}/errors`, {}, token);
 }
 
 export function updateTransaction(token: string, transactionId: number, payload: Partial<Transaction>) {
@@ -236,4 +251,8 @@ export function uploadReconcileFiles(token: string, profileId: number, portalFil
 
 export function getReconcileReport(token: string, batchId: number) {
   return request<ReconcileReport>(`/reconcile/report/${batchId}`, {}, token);
+}
+
+export function getReconcileDownloadUrl(batchId: number) {
+  return downloadUrl(`/reconcile/download/${batchId}`);
 }

@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, FileSpreadsheet, UploadCloud } from "lucide-react";
+import { AlertTriangle, ArrowRight, FileSpreadsheet, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatusPill } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
 import { marketplaces } from "@/lib/marketplaces";
-import { getImportStatus, uploadMarketplaceFiles } from "@/lib/api";
+import { BatchStatus, ImportErrors, getImportErrors, getImportStatus, uploadMarketplaceFiles } from "@/lib/api";
 
 export function ImportsPage() {
   const params = useSearchParams();
@@ -16,6 +16,8 @@ export function ImportsPage() {
   const [platformKey, setPlatformKey] = useState(initial);
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState("");
+  const [activeBatch, setActiveBatch] = useState<BatchStatus | null>(null);
+  const [errors, setErrors] = useState<ImportErrors | null>(null);
   const selected = useMemo(() => marketplaces.find((item) => item.key === platformKey) || marketplaces[0], [platformKey]);
 
   async function startImport() {
@@ -25,14 +27,26 @@ export function ImportsPage() {
     }
     setProgress("Uploading files securely...");
     const batch = await uploadMarketplaceFiles(workspace.token, workspace.profile.id, selected.key, files);
+    setActiveBatch(batch);
     setProgress(`Batch ${batch.id} queued. Parser is reading files...`);
     for (let index = 0; index < 8; index += 1) {
       await new Promise((resolve) => setTimeout(resolve, 900));
       const status = await getImportStatus(workspace.token, batch.id);
+      setActiveBatch(status);
       setProgress(`Status: ${status.status}. Parsed ${status.parsed_rows}, errors ${status.error_rows}.`);
       if (!["queued", "processing"].includes(status.status)) break;
     }
+    const finalStatus = await getImportStatus(workspace.token, batch.id);
+    if (finalStatus.error_rows) {
+      setErrors(await getImportErrors(workspace.token, batch.id));
+    }
     await workspace.refresh();
+  }
+
+  async function openErrors(batchId: number) {
+    if (!workspace.token) return;
+    setActiveBatch(workspace.batches.find((batch) => batch.id === batchId) || null);
+    setErrors(await getImportErrors(workspace.token, batchId));
   }
 
   return (
@@ -64,14 +78,16 @@ export function ImportsPage() {
             </div>
             <button onClick={startImport} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> Start import <ArrowRight className="size-4" /></button>
             {progress && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{progress}</div>}
+            {activeBatch && <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 text-sm dark:bg-slate-900 md:grid-cols-3"><b>Batch #{activeBatch.id}</b><span>{activeBatch.parsed_rows} parsed</span><span>{activeBatch.error_rows} errors</span></div>}
           </div>
         </Panel>
       </div>
       <div className="mt-6">
         <Panel title="Import status timeline" subtitle="Recent parser jobs and error counts.">
-          {workspace.batches.length ? <div className="space-y-3">{workspace.batches.map((batch) => <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]"><b className="capitalize">{batch.platform}</b><span>{batch.parsed_rows} parsed</span><span>{batch.error_rows} errors</span><StatusPill status={batch.status} /></div>)}</div> : <EmptyState title="No import batches" body="Start your first guided import to see progress here." /> }
+          {workspace.batches.length ? <div className="space-y-3">{workspace.batches.map((batch) => <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto_auto]"><b className="capitalize">{batch.platform}</b><span>{batch.parsed_rows} parsed</span><span>{batch.error_rows} errors</span><StatusPill status={batch.status} />{batch.error_rows ? <button onClick={() => openErrors(batch.id)} className="inline-flex items-center gap-1 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"><AlertTriangle className="size-3" /> Errors</button> : <span />}</div>)}</div> : <EmptyState title="No import batches" body="Start your first guided import to see progress here." /> }
         </Panel>
       </div>
+      {errors && <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/40" onClick={() => setErrors(null)}><aside onClick={(event) => event.stopPropagation()} className="h-full w-full max-w-2xl overflow-auto bg-white p-6 shadow-2xl dark:bg-slate-950"><h2 className="text-2xl font-black">Import error report</h2><p className="mt-1 text-sm text-slate-500">Batch #{activeBatch?.id}</p><pre className="mt-6 whitespace-pre-wrap rounded-3xl bg-slate-950 p-5 text-xs text-slate-100">{JSON.stringify(errors, null, 2)}</pre></aside></div>}
     </AppShell>
   );
 }

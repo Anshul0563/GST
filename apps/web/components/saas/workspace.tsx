@@ -15,7 +15,8 @@ import {
   getTransactions,
   listImportBatches,
   listProfiles,
-  listTallyCompanies
+  listTallyCompanies,
+  loadWorkspace
 } from "@/lib/api";
 
 export type Workspace = {
@@ -50,9 +51,22 @@ export function useWorkspace(): Workspace {
   const refresh = useCallback(async (profileOverride?: Profile) => {
     const activeToken = token || (typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") || "" : "");
     const activeProfile = profileOverride || profile;
-    if (!activeToken || !activeProfile) return;
+    if (!activeToken) return;
     setLoading(true);
     try {
+      if (!activeProfile) {
+        const [nextUser, nextProfiles] = await Promise.all([getCurrentUser(activeToken), listProfiles(activeToken)]);
+        setUser(nextUser);
+        setProfiles(nextProfiles);
+        setProfile(nextProfiles[0] ?? null);
+        setSummary(null);
+        setTransactions([]);
+        setBatches([]);
+        setPreview(null);
+        setCompanies([]);
+        setError("");
+        return;
+      }
       const [nextUser, nextProfiles, nextSummary, nextRows, nextBatches, nextPreview, nextCompanies] = await Promise.all([
         getCurrentUser(activeToken),
         listProfiles(activeToken),
@@ -78,11 +92,21 @@ export function useWorkspace(): Workspace {
   }, [profile, token]);
 
   useEffect(() => {
-    ensureDemoWorkspace()
-      .then(async ({ token, profile }) => {
+    const storedToken = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") : null;
+    const initializer = storedToken
+      ? loadWorkspace(storedToken).then(({ user, profiles, profile }) => ({ token: storedToken, user, profiles, profile }))
+      : ensureDemoWorkspace().then(async ({ token, profile }) => {
+          const user = await getCurrentUser(token);
+          const profiles = await listProfiles(token);
+          return { token, user, profiles, profile };
+        });
+    initializer
+      .then(async ({ token, user, profiles, profile }) => {
         setToken(token);
+        setUser(user);
+        setProfiles(profiles);
         setProfile(profile);
-        await refresh(profile);
+        await refresh(profile ?? undefined);
       })
       .catch((exc) => {
         setError(exc instanceof Error ? exc.message : "Could not initialize workspace");
