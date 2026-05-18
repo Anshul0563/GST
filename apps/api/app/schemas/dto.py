@@ -25,6 +25,10 @@ class UserOut(BaseModel):
     id: int
     email: EmailStr
     full_name: str | None = None
+    role: str = "user"
+    plan: str = "free"
+    subscription_status: str = "inactive"
+    free_access_reason: str | None = None
 
     class Config:
         from_attributes = True
@@ -136,3 +140,15 @@ class TallyGenerateIn(BaseModel):
     period: str
     company_id: int
     ledger_mapping: dict[str, str]
+
+
+class CreatePaymentOrderIn(BaseModel):
+    plan_id: str
+    billing_cycle: str = "monthly"
+
+
+class VerifyPaymentIn(BaseModel):
+    order_id: int
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str

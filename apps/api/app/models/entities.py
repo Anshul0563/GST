@@ -14,6 +14,10 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str | None] = mapped_column(String(160))
+    role: Mapped[str] = mapped_column(String(32), default="user")
+    plan: Mapped[str] = mapped_column(String(40), default="free")
+    subscription_status: Mapped[str] = mapped_column(String(32), default="inactive")
+    free_access_reason: Mapped[str | None] = mapped_column(String(160))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     profiles: Mapped[list["GSTProfile"]] = relationship(back_populates="user")
@@ -181,3 +185,20 @@ class AuditLog(Base):
     metadata_json: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
+class PaymentOrder(Base):
+    __tablename__ = "payment_orders"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    plan_id: Mapped[str] = mapped_column(String(40), index=True)
+    billing_cycle: Mapped[str] = mapped_column(String(20), default="monthly")
+    amount_paise: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(8), default="INR")
+    provider: Mapped[str] = mapped_column(String(40), default="razorpay")
+    provider_order_id: Mapped[str | None] = mapped_column(String(120), index=True)
+    provider_payment_id: Mapped[str | None] = mapped_column(String(120), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="created")
+    raw_response_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime)

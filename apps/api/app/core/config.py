@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     upload_dir: Path = Path("../../storage/uploads")
     export_dir: Path = Path("../../storage/exports")
     max_upload_mb: int = 60
+    admin_email: str = "anshulshakya5632@gmail.com"
+    admin_password: str = "Jarvis@563"
+    razorpay_key_id: str | None = None
+    razorpay_key_secret: str | None = None
+    razorpay_webhook_secret: str | None = None
 
     class Config:
         env_file = ".env"
@@ -25,4 +30,3 @@ def get_settings() -> Settings:
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.export_dir.mkdir(parents=True, exist_ok=True)
     return settings
-
