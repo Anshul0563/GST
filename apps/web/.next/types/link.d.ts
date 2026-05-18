@@ -40,12 +40,21 @@ declare namespace __next_route_internal_types__ {
     | `/login`
     | `/marketplaces`
     | `/profile`
+    | `/reconcile`
+    | `/reconcile/history`
+    | `/reconcile/upload`
     | `/reconciliation`
     | `/register`
     | `/settings`
     | `/tally`
+    | `/tally/company`
+    | `/tally/export`
+    | `/tally/history`
+    | `/tally/import`
+    | `/tally/mapping`
     | `/transactions`
-  type DynamicRoutes<T extends string = string> = never
+  type DynamicRoutes<T extends string = string> = 
+    | `/reconcile/results/${SafeSlug<T>}`
 
   type RouteImpl<T> = 
     | StaticRoutes

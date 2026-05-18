@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: gst_bharat
+      POSTGRES_USER: gst_bharat
+      POSTGRES_PASSWORD: gst_bharat
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      DATABASE_URL: postgresql+psycopg://gst_bharat:gst_bharat@postgres:5432/gst_bharat
+      UPLOAD_DIR: /data/uploads
+      EXPORT_DIR: /data/exports
+      REDIS_URL: redis://redis:6379/0
+      ADMIN_EMAIL: anshulshakya5632@gmail.com
+      ADMIN_PASSWORD: Jarvis@563
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+    depends_on:
+      - postgres
+      - redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - gst_storage:/data
+
+  web:
+    build:
+      context: ./apps/web
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  gst_storage:

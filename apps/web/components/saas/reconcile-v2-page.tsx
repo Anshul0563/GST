@@ -96,14 +96,15 @@ export function ReconcileResultsPage({ id }: { id: number }) {
   }, [workspace.token, id, category]);
   const rows = report?.rows || [];
   const summary = report?.summary || {};
-  const riskData = categories.map((item) => ({ name: item.replaceAll("_", " "), value: Number(summary[item] || 0) }));
+  const summaryNumber = (key: string) => Number(summary[key] || 0);
+  const riskData = categories.map((item) => ({ name: item.replaceAll("_", " "), value: summaryNumber(item) }));
   return <AppShell title={`Reconcile Result #${id}`} subtitle="Mismatch explorer with exact reason, tax difference and download actions." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<a href={getReconcileDownloadUrl(id)} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Excel report</a>}>
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard label="Matched" value={String(summary.matched || 0)} tone="green" />
-        <StatCard label="Mismatch %" value={`${summary.mismatch_percent || 0}%`} tone="saffron" />
-        <StatCard label="Tax difference" value={formatCurrency(money(summary.tax_difference))} tone="red" />
-        <StatCard label="ITC risk" value={formatCurrency(money(summary.itc_risk_amount))} tone="red" />
+        <StatCard label="Matched" value={String(summaryNumber("matched"))} tone="green" />
+        <StatCard label="Mismatch %" value={`${summaryNumber("mismatch_percent")}%`} tone="saffron" />
+        <StatCard label="Tax difference" value={formatCurrency(summaryNumber("tax_difference"))} tone="red" />
+        <StatCard label="ITC risk" value={formatCurrency(summaryNumber("itc_risk_amount"))} tone="red" />
       </div>
       <Panel title="Mismatch buckets" subtitle="Filter explorer by status.">
         <div className="mb-5 flex flex-wrap gap-2">{["", ...categories].map((item) => <button key={item || "all"} onClick={() => setCategory(item)} className={`rounded-2xl px-4 py-2 text-sm font-bold ${category === item ? "bg-[#10244d] text-white" : "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300"}`}>{item || "all"}</button>)}</div>

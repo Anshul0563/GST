@@ -108,6 +108,42 @@ type LayoutConfig<Route extends LayoutRoutes = LayoutRoutes> = {
   type __Unused = __Check
 }
 
+// Validate ../../app/reconcile/history/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/reconcile/history">> = Specific
+  const handler = {} as typeof import("../../app/reconcile/history/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/reconcile/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/reconcile">> = Specific
+  const handler = {} as typeof import("../../app/reconcile/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/reconcile/results/[id]/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/reconcile/results/[id]">> = Specific
+  const handler = {} as typeof import("../../app/reconcile/results/[id]/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/reconcile/upload/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/reconcile/upload">> = Specific
+  const handler = {} as typeof import("../../app/reconcile/upload/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/reconciliation/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/reconciliation">> = Specific
@@ -130,6 +166,51 @@ type LayoutConfig<Route extends LayoutRoutes = LayoutRoutes> = {
 {
   type __IsExpected<Specific extends AppPageConfig<"/settings">> = Specific
   const handler = {} as typeof import("../../app/settings/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/tally/company/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/tally/company">> = Specific
+  const handler = {} as typeof import("../../app/tally/company/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/tally/export/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/tally/export">> = Specific
+  const handler = {} as typeof import("../../app/tally/export/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/tally/history/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/tally/history">> = Specific
+  const handler = {} as typeof import("../../app/tally/history/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/tally/import/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/tally/import">> = Specific
+  const handler = {} as typeof import("../../app/tally/import/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/tally/mapping/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/tally/mapping">> = Specific
+  const handler = {} as typeof import("../../app/tally/mapping/page.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

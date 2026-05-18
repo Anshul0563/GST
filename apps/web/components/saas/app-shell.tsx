@@ -12,7 +12,7 @@ const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
   { href: "/imports", label: "Imports", icon: UploadCloud },
   { href: "/transactions", label: "Transactions", icon: ReceiptText },
   { href: "/gstr1", label: "GSTR-1", icon: FileJson },
-  { href: "/reconciliation", label: "2A/2B Reconcile", icon: Repeat2 },
+  { href: "/reconcile", label: "2A/2B Reconcile", icon: Repeat2 },
   { href: "/tally", label: "eCom to Tally", icon: Building2 },
   { href: "/profile", label: "GST Profiles", icon: UserCircle },
   { href: "/settings", label: "Settings", icon: Settings },

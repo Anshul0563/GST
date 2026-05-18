@@ -97,7 +97,7 @@ export type ReconcileReport = {
   id: number;
   status: string;
   categories?: string[];
-  summary?: Record<string, number | string | unknown[]>;
+  summary?: Record<string, number | string>;
   rows?: ReconcileRow[];
 };
 
@@ -127,7 +127,7 @@ export type ReconcileHistoryItem = {
   mismatch_rows: number;
   tax_difference: number | string;
   itc_risk_amount: number | string;
-  summary: Record<string, number | string | unknown[]>;
+  summary: Record<string, number | string>;
   created_at: string;
 };
 
