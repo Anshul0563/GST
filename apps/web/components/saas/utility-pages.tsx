@@ -1,8 +1,8 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { CreditCard, Settings } from "lucide-react";
-import { AppShell } from "@/components/saas/app-shell";
+import { CalendarDays, CreditCard, Settings } from "lucide-react";
+import { AppShell, ClassicToolShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
 import { BillingPlan, BillingStatus, createBillingOrder, createProfile, getBillingPlans, getBillingStatus, updateProfile, verifyBillingPayment } from "@/lib/api";
@@ -12,6 +12,7 @@ export function ProfilePage() {
   const workspace = useWorkspace();
   const [form, setForm] = useState({ gstin: "", legal_name: "", trade_name: "", filing_frequency: "Monthly", financial_year: "2026-27", return_period: "042026" });
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [message, setMessage] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!workspace.token) return;
@@ -23,8 +24,56 @@ export function ProfilePage() {
     setEditingId(null);
     setForm({ gstin: "", legal_name: "", trade_name: "", filing_frequency: "Monthly", financial_year: "2026-27", return_period: "042026" });
     await workspace.refresh();
+    setMessage(editingId ? "GST profile updated." : "GST profile added.");
   }
-  return <AppShell title="GST Profiles" subtitle="Manage GSTIN workspaces, filing frequency and return period." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}><div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]"><Panel title="Profiles" subtitle="Switch or edit backend GST profiles."><div className="space-y-3">{workspace.profiles.map((profile) => <div key={profile.id} className="flex items-center justify-between gap-4 rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><button onClick={() => { workspace.setProfile(profile); workspace.refresh(profile); }} className="text-left"><b>{profile.gstin}</b><p className="text-sm text-slate-500">{profile.legal_name} / {profile.return_period}</p></button><button onClick={() => { setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }} className="rounded-xl bg-white px-3 py-2 text-xs font-bold text-[#1746A2] dark:bg-slate-900">Edit</button></div>)}</div></Panel><Panel title={editingId ? "Update GST profile" : "Add GST profile"} subtitle="State code is detected from GSTIN by backend."><form onSubmit={submit} className="space-y-3">{Object.keys(form).map((key) => <input key={key} value={form[key as keyof typeof form]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} className="w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" placeholder={key.replaceAll("_", " ")} />)}<button className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">{editingId ? "Update profile" : "Create profile"}</button>{editingId && <button type="button" onClick={() => { setEditingId(null); setForm({ gstin: "", legal_name: "", trade_name: "", filing_frequency: "Monthly", financial_year: "2026-27", return_period: "042026" }); }} className="ml-3 rounded-2xl border px-5 py-3 text-sm font-bold">Cancel</button>}</form></Panel></div></AppShell>;
+  return <ClassicToolShell title="GST Online Seller Tool" crumb="GST Online Seller" active="profile" profile={workspace.profile}>
+    <section className="rounded-md bg-white p-7 shadow-xl shadow-slate-200/80">
+      <div className="text-center">
+        <h2 className="text-xl font-black">GST Information</h2>
+        <p className="mt-2 text-xs text-slate-500">Provide GST Number, month and year of filing.</p>
+      </div>
+      <form onSubmit={submit} className="mx-auto mt-8 max-w-2xl rounded-md border border-slate-200 bg-white shadow-sm">
+        <div className="grid border-b border-slate-200 md:grid-cols-[1fr_220px]">
+          <label className="flex items-center gap-3 px-4 py-3 text-xs text-slate-500">
+            <span className="text-slate-400">▣</span>
+            <input value={form.gstin} onChange={(event) => setForm({ ...form, gstin: event.target.value.toUpperCase() })} className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none" placeholder="GST Number" required maxLength={15} />
+          </label>
+          <div className="flex items-center justify-center gap-5 border-t border-slate-200 px-4 py-3 text-xs font-semibold md:border-l md:border-t-0">
+            {["Monthly", "Quarterly"].map((item) => <label key={item} className="flex items-center gap-2"><input type="radio" checked={form.filing_frequency === item} onChange={() => setForm({ ...form, filing_frequency: item })} /> {item}</label>)}
+          </div>
+        </div>
+        <div className="grid border-b border-slate-200 md:grid-cols-2">
+          <label className="flex items-center gap-3 px-4 py-3 text-xs text-slate-500"><CalendarDays className="size-4 text-slate-400" /><input value={form.return_period} onChange={(event) => setForm({ ...form, return_period: event.target.value })} className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none" placeholder="Month e.g. 042026" required /></label>
+          <label className="flex items-center gap-3 border-t border-slate-200 px-4 py-3 text-xs text-slate-500 md:border-l md:border-t-0"><CalendarDays className="size-4 text-slate-400" /><input value={form.financial_year} onChange={(event) => setForm({ ...form, financial_year: event.target.value })} className="w-full bg-transparent text-sm font-semibold text-slate-800 outline-none" placeholder="2026-27" required /></label>
+        </div>
+        <div className="grid border-b border-slate-200 md:grid-cols-2">
+          <input value={form.legal_name} onChange={(event) => setForm({ ...form, legal_name: event.target.value })} className="px-4 py-3 text-sm font-semibold outline-none" placeholder="Business / legal name" required />
+          <input value={form.trade_name} onChange={(event) => setForm({ ...form, trade_name: event.target.value })} className="border-t border-slate-200 px-4 py-3 text-sm font-semibold outline-none md:border-l md:border-t-0" placeholder="Trade name" />
+        </div>
+        <div className="flex items-center justify-between px-4 py-4">
+          <button className="rounded bg-[#2f72ff] px-5 py-2.5 text-xs font-bold text-white">{editingId ? "Update" : "Submit"}</button>
+          <button type="button" className="text-xs font-semibold text-[#2f72ff]">Need Help ? Read the Guide ⓘ</button>
+        </div>
+      </form>
+      {message && <div className="mx-auto mt-4 max-w-2xl rounded bg-emerald-50 p-3 text-sm font-bold text-emerald-700">{message}</div>}
+    </section>
+
+    <section className="rounded-md bg-white p-7 shadow-xl shadow-slate-200/80">
+      <div className="text-center">
+        <h2 className="text-lg font-black">GSTIN List</h2>
+        <p className="mt-1 text-xs text-slate-500">( Added: {workspace.profiles.length} / Limit: 20 )</p>
+      </div>
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        {workspace.profiles.map((profile) => <div key={profile.id} className="rounded border border-slate-200 bg-slate-50 p-4 text-center text-xs shadow-sm">
+          <b className="text-slate-800">{profile.gstin}</b>
+          <p className="mt-1 text-slate-500">Added: {profile.financial_year} / Used: {profile.return_period}</p>
+          <p className="mt-1 font-semibold text-slate-700">{profile.trade_name || profile.legal_name}</p>
+          <button onClick={() => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }} className="mt-3 rounded bg-[#2f72ff] px-4 py-1.5 text-xs font-bold text-white">Select</button>
+        </div>)}
+        {!workspace.profiles.length && <EmptyState title="No GSTIN added" body="Submit GST information to create first backend profile." />}
+      </div>
+    </section>
+  </ClassicToolShell>;
 }
 
 export function SettingsPage() {

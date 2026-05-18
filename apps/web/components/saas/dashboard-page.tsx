@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { Route } from "next";
 import { ArrowRight, FileJson, GitCompareArrows, ReceiptText, UploadCloud } from "lucide-react";
 import { ClassicToolShell } from "@/components/saas/app-shell";
 import { EmptyState, StatCard, StatusPill } from "@/components/saas/ui";
@@ -32,7 +33,14 @@ const tools = [
     accent: "from-[#10244d] to-[#1746A2]",
     points: ["Marketplace to XML", "Ledger mapping", "Voucher export"]
   }
-];
+] satisfies Array<{
+  title: string;
+  type: string;
+  href: Route;
+  icon: typeof UploadCloud;
+  accent: string;
+  points: string[];
+}>;
 
 export function DashboardSaasPage() {
   const workspace = useWorkspace();
