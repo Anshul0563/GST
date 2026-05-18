@@ -304,6 +304,7 @@
     "doc_det": [
       {
         "doc_num": 1,
+        "doc_typ": "Invoices for outward supply",
         "docs": [
           {
             "num": 1,
@@ -333,6 +334,7 @@
       },
       {
         "doc_num": 4,
+        "doc_typ": "Debit Note",
         "docs": [
           {
             "num": 1,
@@ -346,6 +348,7 @@
       },
       {
         "doc_num": 5,
+        "doc_typ": "Credit Note",
         "docs": [
           {
             "num": 1,

@@ -46,6 +46,12 @@ DOC_NUM = {
     "credit_note": 5,
 }
 
+DOC_TYP = {
+    "invoice": "Invoices for outward supply",
+    "debit_note": "Debit Note",
+    "credit_note": "Credit Note",
+}
+
 
 def dec_json(value: Decimal) -> float:
     return float(money(value))
@@ -154,6 +160,7 @@ def build_doc_issue(document_ranges):
             continue
         doc_det.append({
             "doc_num": DOC_NUM[doc_type],
+            "doc_typ": DOC_TYP[doc_type],
             "docs": [
                 {
                     "num": index,
