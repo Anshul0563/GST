@@ -29,8 +29,9 @@ export function MarketplacesPage() {
             {filtered.map((item) => {
               const Icon = item.icon;
               const batch = latest.get(item.key);
+              const canImport = item.status !== "Coming Soon";
               return (
-                <div key={item.key} className="group rounded-3xl border border-slate-200 bg-white p-5 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-200/80 dark:border-white/10 dark:bg-slate-900 dark:hover:shadow-none">
+                <div key={item.key} className={`group rounded-3xl border border-slate-200 bg-white p-5 transition dark:border-white/10 dark:bg-slate-900 ${canImport ? "hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-200/80 dark:hover:shadow-none" : "opacity-75"}`}>
                   <div className="flex items-start justify-between">
                     <div className={`grid size-14 place-items-center rounded-3xl bg-gradient-to-br ${item.accent} text-white shadow-lg`}><Icon className="size-6" /></div>
                     <StatusPill status={item.status} />
@@ -44,9 +45,11 @@ export function MarketplacesPage() {
                   <div className="mt-5 rounded-2xl bg-slate-50 p-3 text-xs text-slate-500 dark:bg-white/5">
                     {batch ? <>Last import: <b>{batch.parsed_rows}</b> parsed, <b>{batch.error_rows}</b> errors</> : "No uploads yet"}
                   </div>
-                  <Link href={`/imports?platform=${item.key}`} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-4 py-3 text-sm font-bold text-white">
+                  {canImport ? <Link href={`/imports?platform=${item.key}`} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-4 py-3 text-sm font-bold text-white">
                     <UploadCloud className="size-4" /> Start guided upload <ArrowRight className="size-4" />
-                  </Link>
+                  </Link> : <button disabled className="mt-4 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl bg-slate-200 px-4 py-3 text-sm font-bold text-slate-500 dark:bg-white/10">
+                    Coming soon
+                  </button>}
                 </div>
               );
             })}
