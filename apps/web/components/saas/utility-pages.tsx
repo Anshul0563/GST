@@ -95,7 +95,7 @@ export function BillingPage() {
       return;
     }
     const loaded = await loadRazorpay();
-    if (!loaded || !order.id || !order.provider_order_id || !order.gateway_key_id) {
+    if (!loaded || !order.id || !order.provider_order_id || !order.gateway_key_id || !order.amount_paise) {
       setMessage("Razorpay Checkout could not be loaded. Check internet access and gateway keys.");
       return;
     }
