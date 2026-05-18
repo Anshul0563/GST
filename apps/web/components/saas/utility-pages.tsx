@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { CreditCard, Download, FileArchive, Settings } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { ReconcileReport, createProfile, createTallyCompany, downloadUrl, generateTallyXml, getReconcileDownloadUrl, getReconcileReport, updateProfile, uploadReconcileFiles } from "@/lib/api";
+import { BillingPlan, BillingStatus, ReconcileReport, createBillingOrder, createProfile, createTallyCompany, downloadUrl, generateTallyXml, getBillingPlans, getBillingStatus, getReconcileDownloadUrl, getReconcileReport, updateProfile, uploadReconcileFiles } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 export function ReconciliationPage() {
@@ -69,5 +69,71 @@ export function SettingsPage() {
 
 export function BillingPage() {
   const workspace = useWorkspace();
-  return <AppShell title="Billing" subtitle="Subscription and usage management placeholder for GST Bharat plans." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}><Panel title="Plan management" subtitle="Placeholder only. No payment integration is implemented yet."><EmptyState title="Billing is not connected" body="Add pricing plans, invoices and payment gateway integration in the next product phase." action={<button className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><CreditCard className="size-4" /> Coming soon</button>} /></Panel></AppShell>;
+  const [plans, setPlans] = useState<BillingPlan[]>([]);
+  const [status, setStatus] = useState<BillingStatus | null>(null);
+  const [cycle, setCycle] = useState("monthly");
+  const [message, setMessage] = useState("");
+
+  async function loadBilling() {
+    if (!workspace.token) return;
+    const [planResult, statusResult] = await Promise.all([getBillingPlans(workspace.token), getBillingStatus(workspace.token)]);
+    setPlans(planResult.plans);
+    setStatus(statusResult);
+  }
+
+  async function startCheckout(planId: string) {
+    if (!workspace.token) return;
+    const order = await createBillingOrder(workspace.token, { plan_id: planId, billing_cycle: cycle });
+    if (order.free_access) {
+      setMessage(order.message || "Free access is active.");
+      await loadBilling();
+      return;
+    }
+    if (!order.gateway_configured) {
+      setMessage(`Payment order #${order.id} created, but Razorpay keys are not configured in backend .env yet.`);
+      await loadBilling();
+      return;
+    }
+    setMessage(`Razorpay order created: ${order.provider_order_id}. Add Checkout.js handoff with key ${order.gateway_key_id}.`);
+    await loadBilling();
+  }
+
+  useEffect(() => {
+    if (!workspace.token) return;
+    loadBilling().catch((exc) => setMessage(exc instanceof Error ? exc.message : "Could not load billing"));
+  }, [workspace.token]);
+
+  return <AppShell title="Billing" subtitle="Subscription, free-access admin status and Razorpay checkout." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+    <div className="space-y-6">
+      {!workspace.token ? <EmptyState title="Login required" body="Billing is connected to authenticated backend APIs." /> : null}
+      <Panel title="Account access" subtitle="Live billing status from backend.">
+        <div className="grid gap-4 md:grid-cols-4">
+          <StatCard label="Role" value={status?.role || workspace.user?.role || "user"} />
+          <StatCard label="Plan" value={status?.plan || workspace.user?.plan || "free"} tone={status?.free_access ? "green" : "blue"} />
+          <StatCard label="Status" value={status?.subscription_status || workspace.user?.subscription_status || "inactive"} tone={status?.subscription_status === "active" ? "green" : "saffron"} />
+          <StatCard label="Billing cycle" value={cycle} />
+        </div>
+        {status?.free_access && <div className="mt-5 rounded-3xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{status.free_access_reason || "This account has unrestricted free access."}</div>}
+        {message && <div className="mt-5 rounded-3xl bg-blue-50 p-4 text-sm font-bold text-blue-700">{message}</div>}
+      </Panel>
+      <Panel title="Plans" subtitle="Orders are created through backend /billing/create-order. Razorpay key/secret come from .env.">
+        <div className="mb-5 inline-flex rounded-2xl bg-slate-100 p-1 text-sm font-bold dark:bg-white/10">
+          {["monthly", "yearly"].map((item) => <button key={item} onClick={() => setCycle(item)} className={`rounded-xl px-4 py-2 capitalize ${cycle === item ? "bg-[#10244d] text-white" : "text-slate-600 dark:text-slate-300"}`}>{item}</button>)}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {plans.map((plan) => {
+            const amount = cycle === "yearly" ? plan.yearly_amount : plan.monthly_amount;
+            return <div key={plan.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-900 dark:shadow-none">
+              <h3 className="text-xl font-black">{plan.name}</h3>
+              <p className="mt-3 text-3xl font-black">{formatCurrency(amount)}</p>
+              <p className="text-sm text-slate-500">per {cycle === "yearly" ? "year" : "month"}</p>
+              <div className="mt-5 space-y-2 text-sm text-slate-600 dark:text-slate-300">{plan.features.map((feature) => <p key={feature}>- {feature}</p>)}</div>
+              <button onClick={() => startCheckout(plan.id)} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><CreditCard className="size-4" /> Create order</button>
+            </div>;
+          })}
+          {!plans.length && <EmptyState title="Plans not loaded" body="Login and retry billing status." />}
+        </div>
+      </Panel>
+    </div>
+  </AppShell>;
 }
