@@ -1,12 +1,13 @@
 import { AlertTriangle, Download, FileJson } from "lucide-react";
-import { b2cs as fallbackB2cs } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import type { Gstr1Payload } from "@/lib/api";
 
 export function JsonPreview({ payload, onGenerate }: { payload?: Gstr1Payload | null; onGenerate?: () => void }) {
-  const b2cs = payload?.b2cs?.length ? payload.b2cs : fallbackB2cs;
+  const b2cs = payload?.b2cs || [];
+  const supecoCount = payload?.supeco?.supeco_det?.length || 0;
+  const docCount = payload?.doc_issue?.doc_det?.length || 0;
   return (
     <Card id="gstr-1-json">
       <CardHeader className="flex flex-row items-center justify-between">
@@ -19,17 +20,18 @@ export function JsonPreview({ payload, onGenerate }: { payload?: Gstr1Payload | 
             <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-3">Supply</th><th className="p-3">Rate</th><th className="p-3">POS</th><th className="p-3">Taxable</th><th className="p-3">IGST</th><th className="p-3">CGST</th><th className="p-3">SGST</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {b2cs.map((row) => <tr key={`${row.sply_ty}-${row.pos}-${row.rt}`}><td className="p-3">{row.sply_ty}</td><td className="p-3">{row.rt}%</td><td className="p-3">{row.pos}</td><td className="p-3">{formatCurrency(row.txval)}</td><td className="p-3">{row.iamt}</td><td className="p-3">{row.camt}</td><td className="p-3">{row.samt}</td></tr>)}
+              {!b2cs.length && <tr><td className="p-6 text-center text-slate-500" colSpan={7}>No backend preview available yet.</td></tr>}
             </tbody>
           </table>
         </div>
         <div className="space-y-3">
           {[
-            `SUPECO summary: ${payload?.supeco?.supeco_det?.length ?? 3} operator groups`,
-            `Document issue: ${payload?.doc_issue?.doc_det?.length ?? 2} document groups ready`,
-            `GSTIN: ${payload?.gstin ?? "07ABCDE1234F1Z5"}`,
-            `Return period: ${payload?.fp ?? "042026"}`
+            `SUPECO summary: ${supecoCount} operator groups`,
+            `Document issue: ${docCount} document groups ready`,
+            `GSTIN: ${payload?.gstin ?? "Not generated"}`,
+            `Return period: ${payload?.fp ?? "Not selected"}`
           ].map((item) => <div key={item} className="rounded-lg bg-slate-50 p-3 text-sm text-slate-700">{item}</div>)}
-          <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><AlertTriangle className="mt-0.5 size-4 shrink-0" />2 rows need ETIN or POS correction before final filing.</div>
+          <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><AlertTriangle className="mt-0.5 size-4 shrink-0" />Validation warnings come from the backend preview and transaction errors.</div>
         </div>
       </CardContent>
     </Card>

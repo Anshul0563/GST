@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, useReactTable } from "@tanstack/react-table";
 import { Edit3, RefreshCcw, Search, Trash2 } from "lucide-react";
-import { transactions as fallbackTransactions } from "@/lib/mock-data";
 import type { Transaction } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +13,7 @@ type Txn = Transaction;
 
 export function TransactionsTable({ rows }: { rows?: Transaction[] }) {
   const [globalFilter, setGlobalFilter] = useState("");
-  const data = (rows?.length ? rows : fallbackTransactions.map((row, index) => ({ id: index + 1, gstin: "", etin: null, filing_period: "042026", order_item_id: null, buyer_state_name: null, product_name: null, sku: null, qty: 1, cess: 0, gross_amount: 0, discount_seller: 0, discount_platform: 0, settlement_amount: 0, validation_status: "valid", validation_errors: null, ...row }))) as Transaction[];
+  const data = (rows || []) as Transaction[];
   const columns = useMemo<ColumnDef<Txn>[]>(() => [
     { accessorKey: "platform", header: "Platform" },
     { accessorKey: "invoice_no", header: "Invoice number" },
@@ -59,6 +58,7 @@ export function TransactionsTable({ rows }: { rows?: Transaction[] }) {
               {table.getRowModel().rows.map((row) => (
                 <tr key={row.id} className="hover:bg-slate-50">{row.getVisibleCells().map((cell) => <td key={cell.id} className="whitespace-nowrap px-3 py-3 text-slate-700">{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>)}</tr>
               ))}
+              {!table.getRowModel().rows.length && <tr><td className="px-3 py-10 text-center text-slate-500" colSpan={columns.length}>No backend transactions loaded.</td></tr>}
             </tbody>
           </table>
         </div>
