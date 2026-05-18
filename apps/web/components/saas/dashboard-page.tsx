@@ -15,15 +15,19 @@ const tools = [
     href: "/marketplaces",
     icon: UploadCloud,
     accent: "from-[#12396f] to-[#0e5fd8]",
-    points: ["Import marketplace data", "Generate GSTR1", "Excel and JSON export"]
+    badge: "GST",
+    description: "Marketplace sales ko import karke GSTR-1 JSON/Excel banane ka workflow.",
+    points: ["GST Profile", "Import Data", "Manage Data", "GSTR1 Report"]
   },
   {
     title: "2B/2A Reconcile v2.0",
     type: "GST",
-    href: "/reconcile",
+    href: "/reconcile/upload",
     icon: GitCompareArrows,
     accent: "from-[#3b66ff] to-[#6dd5ff]",
-    points: ["2A/2B upload", "Purchase matching", "Query report"]
+    badge: "2B",
+    description: "GST portal 2A/2B ko purchase register se match karne ka workflow.",
+    points: ["2A/2B Upload", "Purchase Register", "Mismatch Report", "Query Download"]
   },
   {
     title: "eCom to Tally",
@@ -31,7 +35,9 @@ const tools = [
     href: "/tally",
     icon: ReceiptText,
     accent: "from-[#10244d] to-[#1746A2]",
-    points: ["Marketplace to XML", "Ledger mapping", "Voucher export"]
+    badge: "XML",
+    description: "Marketplace transactions ko Tally vouchers aur XML me convert karne ka workflow.",
+    points: ["Tally Company", "Import Data", "Ledger Mapping", "Generate XML"]
   }
 ] satisfies Array<{
   title: string;
@@ -39,6 +45,8 @@ const tools = [
   href: Route;
   icon: typeof UploadCloud;
   accent: string;
+  badge: string;
+  description: string;
   points: string[];
 }>;
 
@@ -61,15 +69,15 @@ export function DashboardSaasPage() {
               <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(circle_at_20%_30%,white_0_7px,transparent_8px)] [background-size:42px_42px]" />
               {index === 2 && <span className="absolute right-0 top-0 rounded-bl bg-rose-500 px-2 py-1 text-[10px] font-black">v2.0</span>}
               <div className="relative flex h-full items-center justify-center gap-4">
-                <div className="grid size-14 place-items-center rounded bg-white text-2xl font-black text-[#10244d]">a</div>
-                <div className="grid size-12 place-items-center rounded-full bg-red-600 text-white">GST</div>
+                <div className="grid size-14 place-items-center rounded bg-white text-xl font-black text-[#10244d]">{tool.badge}</div>
+                <div className="grid size-12 place-items-center rounded-full bg-red-600 text-xs font-black text-white">{index === 0 ? "GSTR1" : index === 1 ? "MATCH" : "TALLY"}</div>
                 <div className="grid size-14 place-items-center rounded bg-white text-[#1746A2]"><Icon className="size-8" /></div>
               </div>
             </div>
             <div className="p-4">
               <p className="text-[10px] font-black uppercase text-slate-400">{tool.type}</p>
               <h3 className="mt-1 text-base font-black">{tool.title}</h3>
-              <p className="mt-1 text-xs text-slate-500">Convert eCommerce excel into GST-ready reports.</p>
+              <p className="mt-1 min-h-10 text-xs leading-5 text-slate-500">{tool.description}</p>
               <div className="mt-4 space-y-1.5 text-xs text-slate-600">
                 {tool.points.map((point) => <p key={point}>› {point}</p>)}
               </div>
