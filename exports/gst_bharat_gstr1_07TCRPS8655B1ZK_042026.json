@@ -10,8 +10,8 @@
       "typ": "OE",
       "pos": "37",
       "txval": 1327.42,
-      "csamt": 0.0,
-      "iamt": 39.82
+      "iamt": 39.82,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -19,8 +19,8 @@
       "typ": "OE",
       "pos": "10",
       "txval": 2512.43,
-      "csamt": 0.0,
-      "iamt": 75.38
+      "iamt": 75.38,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -28,8 +28,8 @@
       "typ": "OE",
       "pos": "22",
       "txval": 650.49,
-      "csamt": 0.0,
-      "iamt": 19.51
+      "iamt": 19.52,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -37,8 +37,8 @@
       "typ": "OE",
       "pos": "26",
       "txval": 140.78,
-      "csamt": 0.0,
-      "iamt": 4.22
+      "iamt": 4.22,
+      "csamt": 0
     },
     {
       "sply_ty": "INTRA",
@@ -46,9 +46,9 @@
       "typ": "OE",
       "pos": "07",
       "txval": 600.53,
-      "csamt": 0.0,
       "camt": 9.01,
-      "samt": 9.01
+      "samt": 9.01,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -56,8 +56,8 @@
       "typ": "OE",
       "pos": "24",
       "txval": 143.69,
-      "csamt": 0.0,
-      "iamt": 4.31
+      "iamt": 4.31,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -65,8 +65,8 @@
       "typ": "OE",
       "pos": "06",
       "txval": 964.68,
-      "csamt": 0.0,
-      "iamt": 28.94
+      "iamt": 28.94,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -74,17 +74,17 @@
       "typ": "OE",
       "pos": "02",
       "txval": 335.92,
-      "csamt": 0.0,
-      "iamt": 10.08
+      "iamt": 10.08,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
       "pos": "01",
-      "txval": 0.0,
-      "csamt": 0.0,
-      "iamt": 0.0
+      "txval": 0,
+      "iamt": 0,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -92,8 +92,8 @@
       "typ": "OE",
       "pos": "20",
       "txval": 509.95,
-      "csamt": 0.0,
-      "iamt": 15.3
+      "iamt": 15.3,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -101,8 +101,8 @@
       "typ": "OE",
       "pos": "29",
       "txval": 1290.22,
-      "csamt": 0.0,
-      "iamt": 38.7
+      "iamt": 38.7,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -110,8 +110,8 @@
       "typ": "OE",
       "pos": "32",
       "txval": 1902.84,
-      "csamt": 0.0,
-      "iamt": 57.09
+      "iamt": 57.09,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -119,17 +119,17 @@
       "typ": "OE",
       "pos": "23",
       "txval": 131.3,
-      "csamt": 0.0,
-      "iamt": 3.94
+      "iamt": 3.94,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
       "pos": "27",
-      "txval": 2292.44,
-      "csamt": 0.0,
-      "iamt": 68.78
+      "txval": 2292.45,
+      "iamt": 68.77,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -137,8 +137,8 @@
       "typ": "OE",
       "pos": "15",
       "txval": 158.25,
-      "csamt": 0.0,
-      "iamt": 4.75
+      "iamt": 4.75,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -146,17 +146,17 @@
       "typ": "OE",
       "pos": "21",
       "txval": 881.79,
-      "csamt": 0.0,
-      "iamt": 26.45
+      "iamt": 26.45,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
       "pos": "34",
-      "txval": 0.0,
-      "csamt": 0.0,
-      "iamt": 0.0
+      "txval": 0,
+      "iamt": 0,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -164,8 +164,8 @@
       "typ": "OE",
       "pos": "03",
       "txval": 564.35,
-      "csamt": 0.0,
-      "iamt": 16.93
+      "iamt": 16.93,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -173,8 +173,8 @@
       "typ": "OE",
       "pos": "08",
       "txval": 844.25,
-      "csamt": 0.0,
-      "iamt": 25.33
+      "iamt": 25.33,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -182,8 +182,8 @@
       "typ": "OE",
       "pos": "33",
       "txval": 1647.7,
-      "csamt": 0.0,
-      "iamt": 49.42
+      "iamt": 49.42,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -191,8 +191,8 @@
       "typ": "OE",
       "pos": "36",
       "txval": 1226.08,
-      "csamt": 0.0,
-      "iamt": 36.78
+      "iamt": 36.78,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -200,8 +200,8 @@
       "typ": "OE",
       "pos": "09",
       "txval": 1965.21,
-      "csamt": 0.0,
-      "iamt": 58.95
+      "iamt": 58.95,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -209,8 +209,8 @@
       "typ": "OE",
       "pos": "05",
       "txval": 932.54,
-      "csamt": 0.0,
-      "iamt": 27.98
+      "iamt": 27.98,
+      "csamt": 0
     },
     {
       "sply_ty": "INTER",
@@ -218,8 +218,8 @@
       "typ": "OE",
       "pos": "19",
       "txval": 543.01,
-      "csamt": 0.0,
-      "iamt": 16.29
+      "iamt": 16.29,
+      "csamt": 0
     }
   ],
   "supeco": {

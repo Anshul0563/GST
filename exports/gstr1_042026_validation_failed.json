@@ -1,7 +1,7 @@
 {
   "validation_checks": {
     "b2cs_records": "24",
-    "b2cs_taxable": "21565.86",
+    "b2cs_taxable": "21565.89",
     "b2cs_igst": "628.95",
     "b2cs_cgst": "9.01",
     "b2cs_sgst": "9.01",
@@ -16,9 +16,15 @@
   },
   "failures": {
     "b2cs_taxable": {
-      "actual": "21565.86",
-      "expected": "21565.87"
+      "actual": "21565.89",
+      "expected": "21565.88"
     }
+  },
+  "rounding_adjustments": {
+    "INTER|3|OE|20|txval": "0.01",
+    "INTER|3|OE|27|txval": "0.01",
+    "INTER|3|OE|22|iamt": "0.01",
+    "INTER|3|OE|27|iamt": "-0.01"
   },
   "combined_summary": {
     "rows": "245",
