@@ -274,3 +274,7 @@ export function getBillingStatus(token: string) {
 export function createBillingOrder(token: string, payload: { plan_id: string; billing_cycle: string }) {
   return request<PaymentOrder>("/billing/create-order", { method: "POST", body: JSON.stringify(payload) }, token);
 }
+
+export function verifyBillingPayment(token: string, payload: { order_id: number; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) {
+  return request<{ status: string; plan: string; subscription_status: string }>("/billing/verify", { method: "POST", body: JSON.stringify(payload) }, token);
+}
