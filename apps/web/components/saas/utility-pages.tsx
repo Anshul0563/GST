@@ -29,7 +29,36 @@ export function ProfilePage() {
 
 export function SettingsPage() {
   const workspace = useWorkspace();
-  return <AppShell title="Settings" subtitle="Workspace preferences, security controls, notifications and export defaults." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}><Panel title="Workspace settings" subtitle="Frontend-ready settings. Persistence can be added to backend later."><div className="grid gap-4 md:grid-cols-2"><label className="rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5"><Settings className="mb-3 size-5 text-[#1746A2]" />Default export format<select className="mt-3 w-full rounded-xl border px-3 py-2 dark:border-white/10 dark:bg-slate-900"><option>JSON + Excel</option><option>JSON only</option><option>Excel only</option></select></label><label className="rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5">Notifications<div className="mt-3 space-y-2 text-sm font-medium text-slate-500"><label className="flex gap-2"><input type="checkbox" defaultChecked /> Import completed</label><label className="flex gap-2"><input type="checkbox" defaultChecked /> Validation warning</label><label className="flex gap-2"><input type="checkbox" /> Filing reminders</label></div></label></div></Panel></AppShell>;
+  const [settings, setSettings] = useState({ export_format: "JSON + Excel", import_completed: true, validation_warning: true, filing_reminders: false });
+  const [saved, setSaved] = useState("");
+  useEffect(() => {
+    const raw = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_workspace_settings") : null;
+    if (raw) setSettings({ ...settings, ...JSON.parse(raw) });
+  }, []);
+  function saveSettings() {
+    window.localStorage.setItem("gst_bharat_workspace_settings", JSON.stringify(settings));
+    setSaved("Workspace preferences saved in this browser.");
+  }
+  return <AppShell title="Settings" subtitle="Workspace preferences, account context and export defaults." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+    <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+      <Panel title="Account context" subtitle="Loaded from authenticated backend session and active GST profile.">
+        <div className="grid gap-3 text-sm md:grid-cols-2">
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>Email</b><p>{workspace.user?.email || "Not logged in"}</p></div>
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>Role</b><p>{workspace.user?.role || "user"}</p></div>
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>Plan</b><p>{workspace.user?.plan || "free"}</p></div>
+          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>GSTIN</b><p>{workspace.profile?.gstin || "No GST profile"}</p></div>
+        </div>
+      </Panel>
+      <Panel title="Workspace preferences" subtitle="Stored locally until a backend settings table is added.">
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5"><Settings className="mb-3 size-5 text-[#1746A2]" />Default export format<select value={settings.export_format} onChange={(event) => setSettings({ ...settings, export_format: event.target.value })} className="mt-3 w-full rounded-xl border px-3 py-2 dark:border-white/10 dark:bg-slate-900"><option>JSON + Excel</option><option>JSON only</option><option>Excel only</option></select></label>
+          <label className="rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5">Notifications<div className="mt-3 space-y-2 text-sm font-medium text-slate-500"><label className="flex gap-2"><input type="checkbox" checked={settings.import_completed} onChange={(event) => setSettings({ ...settings, import_completed: event.target.checked })} /> Import completed</label><label className="flex gap-2"><input type="checkbox" checked={settings.validation_warning} onChange={(event) => setSettings({ ...settings, validation_warning: event.target.checked })} /> Validation warning</label><label className="flex gap-2"><input type="checkbox" checked={settings.filing_reminders} onChange={(event) => setSettings({ ...settings, filing_reminders: event.target.checked })} /> Filing reminders</label></div></label>
+        </div>
+        <button onClick={saveSettings} className="mt-5 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Save settings</button>
+        {saved && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{saved}</div>}
+      </Panel>
+    </div>
+  </AppShell>;
 }
 
 export function BillingPage() {
