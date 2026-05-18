@@ -1,0 +1,240 @@
+{
+  "validation_checks": {
+    "b2cs_records": "24",
+    "b2cs_taxable": "21565.86",
+    "b2cs_igst": "628.95",
+    "b2cs_cgst": "9.01",
+    "b2cs_sgst": "9.01",
+    "supeco_taxable": "21565.87",
+    "supeco_gst": "646.97",
+    "invoice_count": "190",
+    "credit_note_count": "46",
+    "debit_note_count": "2",
+    "unknown_etin": "0",
+    "missing_pos": "0",
+    "negative_b2cs": "0"
+  },
+  "failures": {
+    "b2cs_taxable": {
+      "actual": "21565.86",
+      "expected": "21565.87"
+    }
+  },
+  "combined_summary": {
+    "rows": "245",
+    "invoices": "192",
+    "credit_notes": "51",
+    "debit_notes": "2",
+    "gross_sales": "29417.38",
+    "sales_taxable_before_returns": "28560.55",
+    "return_taxable": "-6950.02",
+    "debit_taxable": "-44.66",
+    "taxable": "21565.87",
+    "igst": "628.95",
+    "cgst": "9.01",
+    "sgst": "9.01",
+    "cess": "0.00",
+    "total_gst": "646.97",
+    "invoice_value": "22212.83",
+    "tcs": "7.07",
+    "tds": "2.47"
+  },
+  "platform_summary": {
+    "Amazon": {
+      "rows": "3",
+      "invoices": "3",
+      "credit_notes": "0",
+      "debit_notes": "0",
+      "gross_sales": "687.00",
+      "sales_taxable_before_returns": "666.98",
+      "return_taxable": "0.00",
+      "debit_taxable": "0.00",
+      "taxable": "666.98",
+      "igst": "20.02",
+      "cgst": "0.00",
+      "sgst": "0.00",
+      "cess": "0.00",
+      "total_gst": "20.02",
+      "invoice_value": "687.00",
+      "tcs": "3.34",
+      "tds": "None"
+    },
+    "Flipkart": {
+      "rows": "30",
+      "invoices": "15",
+      "credit_notes": "13",
+      "debit_notes": "2",
+      "gross_sales": "1586.00",
+      "sales_taxable_before_returns": "1539.80",
+      "return_taxable": "-751.43",
+      "debit_taxable": "-44.66",
+      "taxable": "743.71",
+      "igst": "22.29",
+      "cgst": "0.00",
+      "sgst": "0.00",
+      "cess": "0.00",
+      "total_gst": "22.29",
+      "invoice_value": "766.00",
+      "tcs": "3.73",
+      "tds": "2.47"
+    },
+    "Meesho": {
+      "rows": "212",
+      "invoices": "174",
+      "credit_notes": "38",
+      "debit_notes": "0",
+      "gross_sales": "27144.38",
+      "sales_taxable_before_returns": "26353.77",
+      "return_taxable": "-6198.59",
+      "debit_taxable": "0.00",
+      "taxable": "20155.18",
+      "igst": "586.64",
+      "cgst": "9.01",
+      "sgst": "9.01",
+      "cess": "0.00",
+      "total_gst": "604.66",
+      "invoice_value": "20759.83",
+      "tcs": "None",
+      "tds": "None"
+    }
+  },
+  "supeco_summary": {
+    "Amazon|07AAICA3918J1CV": {
+      "rows": "3",
+      "invoices": "3",
+      "credit_notes": "0",
+      "debit_notes": "0",
+      "gross_sales": "687.00",
+      "sales_taxable_before_returns": "666.98",
+      "return_taxable": "0.00",
+      "debit_taxable": "0.00",
+      "taxable": "666.98",
+      "igst": "20.02",
+      "cgst": "0.00",
+      "sgst": "0.00",
+      "cess": "0.00",
+      "total_gst": "20.02",
+      "invoice_value": "687.00",
+      "tcs": "3.34",
+      "tds": "None"
+    },
+    "Flipkart|07AACCF0683K1CU": {
+      "rows": "30",
+      "invoices": "15",
+      "credit_notes": "13",
+      "debit_notes": "2",
+      "gross_sales": "1586.00",
+      "sales_taxable_before_returns": "1539.80",
+      "return_taxable": "-751.43",
+      "debit_taxable": "-44.66",
+      "taxable": "743.71",
+      "igst": "22.29",
+      "cgst": "0.00",
+      "sgst": "0.00",
+      "cess": "0.00",
+      "total_gst": "22.29",
+      "invoice_value": "766.00",
+      "tcs": "3.73",
+      "tds": "2.47"
+    },
+    "Meesho|07AARCM9332R1CQ": {
+      "rows": "212",
+      "invoices": "174",
+      "credit_notes": "38",
+      "debit_notes": "0",
+      "gross_sales": "27144.38",
+      "sales_taxable_before_returns": "26353.77",
+      "return_taxable": "-6198.59",
+      "debit_taxable": "0.00",
+      "taxable": "20155.18",
+      "igst": "586.64",
+      "cgst": "9.01",
+      "sgst": "9.01",
+      "cess": "0.00",
+      "total_gst": "604.66",
+      "invoice_value": "20759.83",
+      "tcs": "None",
+      "tds": "None"
+    }
+  },
+  "document_ranges": {
+    "invoice": [
+      {
+        "from": "6p5kc271",
+        "to": "6p5kc27172",
+        "count": 172
+      },
+      {
+        "from": "IN-1",
+        "to": "IN-3",
+        "count": 3
+      },
+      {
+        "from": "LWABOG7270000001",
+        "to": "LWABOG7270000015",
+        "count": 15
+      }
+    ],
+    "credit_note": [
+      {
+        "from": "6p5kc27C7",
+        "to": "6p5kc27C39",
+        "count": 33
+      },
+      {
+        "from": "LYAA9U7270000001",
+        "to": "LYAA9U7270000005",
+        "count": 5
+      },
+      {
+        "from": "MFABNVY270000001",
+        "to": "MFABNVY270000008",
+        "count": 8
+      }
+    ],
+    "debit_note": [
+      {
+        "from": "LZAA9B7270000001",
+        "to": "LZAA9B7270000002",
+        "count": 2
+      }
+    ]
+  },
+  "document_counts": {
+    "invoice": 190,
+    "credit_note": 46,
+    "debit_note": 2
+  },
+  "ignored_rows": [
+    {
+      "platform": "Amazon",
+      "source": "MTR_B2C-APRIL-2026-A1YGIWFZR88S6S.csv",
+      "row": 2,
+      "reason": "Cancel row with zero amount/no invoice number",
+      "order_id": "171-5738323-3337906"
+    }
+  ],
+  "warnings": [
+    "Meesho: source has total GST only; IGST/CGST/SGST is split after summing by supply type/POS."
+  ],
+  "flipkart_sheets": [
+    {
+      "title": "Help",
+      "state": "visible",
+      "max_row": 19,
+      "max_col": 7
+    },
+    {
+      "title": "Sales Report",
+      "state": "visible",
+      "max_row": 24,
+      "max_col": 60
+    },
+    {
+      "title": "Cash Back Report",
+      "state": "visible",
+      "max_row": 8,
+      "max_col": 32
+    }
+  ]
+}
