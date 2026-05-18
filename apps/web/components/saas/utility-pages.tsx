@@ -5,7 +5,7 @@ import { CreditCard, Download, FileArchive, Settings } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { BillingPlan, BillingStatus, ReconcileReport, createBillingOrder, createProfile, createTallyCompany, downloadUrl, generateTallyXml, getBillingPlans, getBillingStatus, getReconcileDownloadUrl, getReconcileReport, updateProfile, uploadReconcileFiles } from "@/lib/api";
+import { BillingPlan, BillingStatus, ReconcileReport, createBillingOrder, createProfile, createTallyCompany, downloadUrl, generateTallyXml, getBillingPlans, getBillingStatus, getReconcileDownloadUrl, getReconcileReport, updateProfile, uploadReconcileFiles, verifyBillingPayment } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 export function ReconciliationPage() {
@@ -94,7 +94,40 @@ export function BillingPage() {
       await loadBilling();
       return;
     }
-    setMessage(`Razorpay order created: ${order.provider_order_id}. Add Checkout.js handoff with key ${order.gateway_key_id}.`);
+    const loaded = await loadRazorpay();
+    if (!loaded || !order.id || !order.provider_order_id || !order.gateway_key_id) {
+      setMessage("Razorpay Checkout could not be loaded. Check internet access and gateway keys.");
+      return;
+    }
+    const Razorpay = window.Razorpay;
+    if (!Razorpay) {
+      setMessage("Razorpay Checkout is unavailable after script load.");
+      return;
+    }
+    const checkout = new Razorpay({
+      key: order.gateway_key_id,
+      amount: order.amount_paise,
+      currency: order.currency || "INR",
+      name: "GST Bharat",
+      description: `${order.plan_id} ${order.billing_cycle} subscription`,
+      order_id: order.provider_order_id,
+      prefill: {
+        name: workspace.user?.full_name || "",
+        email: workspace.user?.email || "",
+      },
+      theme: { color: "#10244d" },
+      handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+        await verifyBillingPayment(workspace.token, {
+          order_id: order.id!,
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+        });
+        setMessage("Payment verified. Subscription is active.");
+        await loadBilling();
+      },
+    });
+    checkout.open();
     await loadBilling();
   }
 
@@ -136,4 +169,22 @@ export function BillingPage() {
       </Panel>
     </div>
   </AppShell>;
+}
+
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+function loadRazorpay() {
+  if (typeof window === "undefined") return Promise.resolve(false);
+  if (window.Razorpay) return Promise.resolve(true);
+  return new Promise<boolean>((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
 }
