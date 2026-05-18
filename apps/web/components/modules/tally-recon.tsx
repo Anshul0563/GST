@@ -13,11 +13,11 @@ export function TallyRecon() {
         <CardHeader><CardTitle className="flex items-center gap-2"><BookOpenCheck className="size-4 text-primary" />eCom to Tally XML</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
-            <div><Label>Tally company</Label><Input defaultValue="Bharat Online Traders" /></div>
-            <div><Label>Return period</Label><Input defaultValue="042026" /></div>
+            <div><Label>Tally company</Label><Input placeholder="Select or add company" /></div>
+            <div><Label>Return period</Label><Input placeholder="Return period from GST profile" /></div>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            {ledgers.map((ledger) => <div key={ledger}><Label>{ledger}</Label><Input defaultValue={ledger.replace(" ledger", "")} /></div>)}
+            {ledgers.map((ledger) => <div key={ledger}><Label>{ledger}</Label><Input placeholder={ledger.replace(" ledger", "")} /></div>)}
           </div>
           <div className="flex gap-2"><Button><Settings2 className="size-4" />Generate XML</Button><Button variant="outline"><Download className="size-4" />Download</Button></div>
         </CardContent>
@@ -30,7 +30,7 @@ export function TallyRecon() {
             <div><Label>Purchase register Excel</Label><Input type="file" /></div>
           </div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            {["Matched", "Amount mismatch", "Invoice mismatch", "Missing in 2B", "Missing in books", "Pending"].map((item, index) => <div key={item} className="rounded-lg bg-slate-50 p-4"><p className="text-xl font-bold text-slate-950">{[128, 7, 4, 12, 3, 9][index]}</p><p className="text-xs text-slate-500">{item}</p></div>)}
+            {["Matched", "Amount mismatch", "Invoice mismatch", "Missing in 2B", "Missing in books", "Pending"].map((item) => <div key={item} className="rounded-lg bg-slate-50 p-4"><p className="text-xl font-bold text-slate-950">0</p><p className="text-xs text-slate-500">{item}</p></div>)}
           </div>
           <Button variant="secondary"><Download className="size-4" />Export reconciliation Excel</Button>
         </CardContent>
@@ -38,4 +38,3 @@ export function TallyRecon() {
     </div>
   );
 }
-

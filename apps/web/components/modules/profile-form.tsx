@@ -23,9 +23,9 @@ export function ProfileForm({ profile, onSave }: { profile?: Profile | null; onS
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
     values: {
-      gstin: profile?.gstin || "07ABCDE1234F1Z5",
-      legal_name: profile?.legal_name || "Bharat Online Traders",
-      trade_name: profile?.trade_name || "Bharat Store",
+      gstin: profile?.gstin || "",
+      legal_name: profile?.legal_name || "",
+      trade_name: profile?.trade_name || "",
       filing_frequency: (profile?.filing_frequency as "Monthly" | "Quarterly") || "Monthly",
       financial_year: profile?.financial_year || "2026-27",
       return_period: profile?.return_period || "042026"
