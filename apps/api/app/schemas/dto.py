@@ -132,6 +132,10 @@ class GenerateGSTR1In(BaseModel):
 class TallyCompanyIn(BaseModel):
     profile_id: int
     company_name: str
+    gstin: str | None = None
+    financial_year: str | None = None
+    state: str | None = None
+    auto_create_ledger: bool = True
     tally_guid: str | None = None
 
 
@@ -140,6 +144,14 @@ class TallyGenerateIn(BaseModel):
     period: str
     company_id: int
     ledger_mapping: dict[str, str]
+    auto_create_ledgers: bool = True
+
+
+class ReconcileSettingsIn(BaseModel):
+    tax_tolerance: Decimal = Decimal("1.00")
+    date_tolerance_days: int = 3
+    enable_date_tolerance: bool = True
+    enable_fuzzy_invoice: bool = True
 
 
 class CreatePaymentOrderIn(BaseModel):

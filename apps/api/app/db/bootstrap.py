@@ -22,6 +22,49 @@ def run_lightweight_migrations(engine) -> None:
             for column, definition in additions.items():
                 if column not in user_columns:
                     connection.execute(text(f"ALTER TABLE users ADD COLUMN {column} {definition}"))
+    if "tally_companies" in inspector.get_table_names():
+        tally_columns = {column["name"] for column in inspector.get_columns("tally_companies")}
+        additions = {
+            "gstin": "VARCHAR(15)",
+            "financial_year": "VARCHAR(9)",
+            "state": "VARCHAR(80)",
+            "auto_create_ledger": "INTEGER DEFAULT 1",
+        }
+        with engine.begin() as connection:
+            for column, definition in additions.items():
+                if column not in tally_columns:
+                    connection.execute(text(f"ALTER TABLE tally_companies ADD COLUMN {column} {definition}"))
+    if "reconciliation_batches" in inspector.get_table_names():
+        batch_columns = {column["name"] for column in inspector.get_columns("reconciliation_batches")}
+        additions = {
+            "portal_rows": "INTEGER DEFAULT 0",
+            "book_rows": "INTEGER DEFAULT 0",
+            "matched_rows": "INTEGER DEFAULT 0",
+            "mismatch_rows": "INTEGER DEFAULT 0",
+            "tax_difference": "NUMERIC(14, 2) DEFAULT 0",
+            "itc_risk_amount": "NUMERIC(14, 2) DEFAULT 0",
+            "summary_json": "TEXT",
+        }
+        with engine.begin() as connection:
+            for column, definition in additions.items():
+                if column not in batch_columns:
+                    connection.execute(text(f"ALTER TABLE reconciliation_batches ADD COLUMN {column} {definition}"))
+    if "reconciliation_rows" in inspector.get_table_names():
+        row_columns = {column["name"] for column in inspector.get_columns("reconciliation_rows")}
+        additions = {
+            "taxable_value": "NUMERIC(14, 2) DEFAULT 0",
+            "igst": "NUMERIC(14, 2) DEFAULT 0",
+            "cgst": "NUMERIC(14, 2) DEFAULT 0",
+            "sgst": "NUMERIC(14, 2) DEFAULT 0",
+            "total_tax": "NUMERIC(14, 2) DEFAULT 0",
+            "tax_difference": "NUMERIC(14, 2) DEFAULT 0",
+            "match_score": "NUMERIC(6, 2) DEFAULT 0",
+            "mismatch_reason": "VARCHAR(255)",
+        }
+        with engine.begin() as connection:
+            for column, definition in additions.items():
+                if column not in row_columns:
+                    connection.execute(text(f"ALTER TABLE reconciliation_rows ADD COLUMN {column} {definition}"))
 
 
 def seed_super_admin() -> None:

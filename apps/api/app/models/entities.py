@@ -139,6 +139,10 @@ class TallyCompany(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     profile_id: Mapped[int] = mapped_column(ForeignKey("gst_profiles.id"), index=True)
     company_name: Mapped[str] = mapped_column(String(255))
+    gstin: Mapped[str | None] = mapped_column(String(15), index=True)
+    financial_year: Mapped[str | None] = mapped_column(String(9))
+    state: Mapped[str | None] = mapped_column(String(80))
+    auto_create_ledger: Mapped[int] = mapped_column(Integer, default=1)
     tally_guid: Mapped[str | None] = mapped_column(String(120))
 
 
@@ -157,6 +161,13 @@ class ReconciliationBatch(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     profile_id: Mapped[int] = mapped_column(ForeignKey("gst_profiles.id"), index=True)
     status: Mapped[str] = mapped_column(String(32), default="completed")
+    portal_rows: Mapped[int] = mapped_column(Integer, default=0)
+    book_rows: Mapped[int] = mapped_column(Integer, default=0)
+    matched_rows: Mapped[int] = mapped_column(Integer, default=0)
+    mismatch_rows: Mapped[int] = mapped_column(Integer, default=0)
+    tax_difference: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    itc_risk_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    summary_json: Mapped[str | None] = mapped_column(Text)
     report_path: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -169,9 +180,63 @@ class ReconciliationRow(Base):
     supplier_gstin: Mapped[str | None] = mapped_column(String(15))
     invoice_no: Mapped[str | None] = mapped_column(String(120))
     invoice_date: Mapped[datetime | None] = mapped_column(Date)
+    taxable_value: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    igst: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    cgst: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    sgst: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    total_tax: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    tax_difference: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    match_score: Mapped[Decimal] = mapped_column(Numeric(6, 2), default=0)
+    mismatch_reason: Mapped[str | None] = mapped_column(String(255))
     category: Mapped[str] = mapped_column(String(40), index=True)
     books_json: Mapped[str | None] = mapped_column(Text)
     portal_json: Mapped[str | None] = mapped_column(Text)
+
+
+class ReconciliationReport(Base):
+    __tablename__ = "reconciliation_reports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    batch_id: Mapped[int] = mapped_column(ForeignKey("reconciliation_batches.id"), index=True)
+    report_type: Mapped[str] = mapped_column(String(40), index=True)
+    path: Mapped[str] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TallyVoucher(Base):
+    __tablename__ = "tally_vouchers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("gst_profiles.id"), index=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("tally_companies.id"), index=True)
+    transaction_id: Mapped[int | None] = mapped_column(ForeignKey("normalized_transactions.id"), index=True)
+    voucher_no: Mapped[str] = mapped_column(String(120), index=True)
+    voucher_type: Mapped[str] = mapped_column(String(40), index=True)
+    voucher_date: Mapped[datetime | None] = mapped_column(Date)
+    party_ledger: Mapped[str] = mapped_column(String(255))
+    taxable_value: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    total_tax: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=0)
+    status: Mapped[str] = mapped_column(String(32), default="ready")
+    raw_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class TallyExport(Base):
+    __tablename__ = "tally_exports"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("gst_profiles.id"), index=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("tally_companies.id"), index=True)
+    period: Mapped[str] = mapped_column(String(6), index=True)
+    xml_path: Mapped[str | None] = mapped_column(String(500))
+    voucher_excel_path: Mapped[str | None] = mapped_column(String(500))
+    voucher_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(32), default="generated")
+    validation_json: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class AuditLog(Base):
