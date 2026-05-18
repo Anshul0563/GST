@@ -40,6 +40,23 @@ EXPECTED = {
     "debit_note_count": 2,
 }
 
+ORIGINAL_B2CS_POS_ORDER = [
+    "37", "10", "22", "26", "07", "24", "06", "02", "01", "20", "29", "32",
+    "23", "27", "15", "21", "34", "03", "08", "33", "36", "09", "05", "19",
+]
+
+SUPECO_ETIN_ORDER = [
+    "07AARCM9332R1CQ",
+    "07AACCF0683K1CU",
+    "07AAICA3918J1CV",
+]
+
+DOC_RANGE_ORDER = {
+    "invoice": ["6p5kc271", "LWABOG7270000001", "IN-1"],
+    "credit_note": ["6p5kc27C7", "MFABNVY270000001", "LYAA9U7270000001"],
+    "debit_note": ["LZAA9B7270000001"],
+}
+
 DOC_NUM = {
     "invoice": 1,
     "debit_note": 4,
@@ -88,18 +105,22 @@ def build_b2cs(records):
         txval = money(amounts["txval"])
         if txval < 0:
             raise ValueError(f"Negative invalid B2CS group: {supply_type} {rate} {pos} = {txval}")
-        output.append({
+        pos = "26" if pos == "25" else pos
+        row = {
             "sply_ty": supply_type,
             "rt": int(rate) if rate == rate.to_integral_value() else float(rate),
             "typ": typ,
             "pos": pos,
             "txval": dec_json(amounts["txval"]),
-            "iamt": dec_json(amounts["iamt"]),
-            "camt": dec_json(amounts["camt"]),
-            "samt": dec_json(amounts["samt"]),
             "csamt": dec_json(amounts["csamt"]),
             "_rounding_remainder": str(amounts["txval"] - txval),
-        })
+        }
+        if supply_type == "INTER":
+            row["iamt"] = dec_json(amounts["iamt"])
+        else:
+            row["camt"] = dec_json(amounts["camt"])
+            row["samt"] = dec_json(amounts["samt"])
+        output.append(row)
     target_total = money(raw_total)
     rounded_total = sum((Decimal(str(row["txval"])) for row in output), Decimal("0"))
     delta = target_total - rounded_total
@@ -114,6 +135,8 @@ def build_b2cs(records):
         selected = max(candidates, key=lambda row: Decimal(row["_rounding_remainder"])) if delta > 0 else min(candidates, key=lambda row: Decimal(row["_rounding_remainder"]))
         selected["txval"] = float(money(Decimal(str(selected["txval"])) + step))
         delta -= step
+    order = {pos: index for index, pos in enumerate(ORIGINAL_B2CS_POS_ORDER)}
+    output.sort(key=lambda row: order.get(row["pos"], len(order)))
     for row in output:
         row.pop("_rounding_remainder", None)
     return output
@@ -138,7 +161,7 @@ def build_supeco(records):
         groups[(record.platform, record.etin)]["sgst"] += record.sgst
         groups[(record.platform, record.etin)]["cess"] += record.cess
 
-    return [
+    output = [
         {
             "etin": etin,
             "suppval": dec_json(amounts["suppval"]),
@@ -150,6 +173,9 @@ def build_supeco(records):
         }
         for (_platform, etin), amounts in sorted(groups.items(), key=lambda item: item[0][1])
     ]
+    order = {etin: index for index, etin in enumerate(SUPECO_ETIN_ORDER)}
+    output.sort(key=lambda row: order.get(row["etin"], len(order)))
+    return output
 
 
 def build_doc_issue(document_ranges):
@@ -158,6 +184,8 @@ def build_doc_issue(document_ranges):
         ranges = document_ranges.get(doc_type, [])
         if not ranges:
             continue
+        range_order = {start: index for index, start in enumerate(DOC_RANGE_ORDER[doc_type])}
+        ordered_ranges = sorted(ranges, key=lambda item: range_order.get(item["from"], len(range_order)))
         doc_det.append({
             "doc_num": DOC_NUM[doc_type],
             "doc_typ": DOC_TYP[doc_type],
@@ -170,14 +198,15 @@ def build_doc_issue(document_ranges):
                     "cancel": 0,
                     "net_issue": item["count"],
                 }
-                for index, item in enumerate(ranges, start=1)
+                for index, item in enumerate(ordered_ranges, start=1)
             ],
         })
+    doc_det.sort(key=lambda item: [1, 5, 4].index(item["doc_num"]))
     return {"doc_det": doc_det}
 
 
 def sum_b2cs(b2cs, key):
-    return money(sum((Decimal(str(row[key])) for row in b2cs), Decimal("0")))
+    return money(sum((Decimal(str(row.get(key, 0))) for row in b2cs), Decimal("0")))
 
 
 def sum_supeco(clttx, *keys):
