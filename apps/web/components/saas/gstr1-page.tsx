@@ -37,6 +37,7 @@ export function Gstr1Page() {
   return (
     <AppShell title="GSTR-1 Filing Studio" subtitle="Preview B2CS, SUPECO and document issue summaries before generating GST portal-compatible files." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<button onClick={generate} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileJson className="size-4" /> Generate JSON</button>}>
       <div className="space-y-6">
+        {!workspace.token ? <EmptyState title="Login required" body="GSTR-1 preview and generation use authenticated backend APIs." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="GSTR-1 generation needs GSTIN, filing frequency and return period." /> : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <StatCard label="Taxable value" value={formatCurrency(money(summary?.total_taxable_value))} tone="blue" />
           <StatCard label="IGST" value={formatCurrency(money(summary?.igst))} tone="green" />

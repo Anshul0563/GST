@@ -7,8 +7,8 @@ import { loginUser } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("demo@gstbharat.example.com");
-  const [password, setPassword] = useState("Password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -30,7 +30,7 @@ export default function LoginPage() {
         <form onSubmit={submit} className="w-full max-w-md">
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#1746A2]">GST Bharat</p>
           <h1 className="mt-3 text-4xl font-black tracking-tight">Login</h1>
-          <p className="mt-2 text-slate-500">Use your account credentials. Demo is prefilled.</p>
+          <p className="mt-2 text-slate-500">Use your GST Bharat account credentials.</p>
           <label className="mt-8 block text-sm font-bold">Email<input value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-slate-200 px-4 outline-none focus:border-[#1746A2]" /></label>
           <label className="mt-5 block text-sm font-bold">Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-slate-200 px-4 outline-none focus:border-[#1746A2]" /></label>
           {error && <div className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}

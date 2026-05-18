@@ -1,6 +1,4 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
-const DEMO_EMAIL = "demo@gstbharat.example.com";
-const DEMO_PASSWORD = "Password123";
 
 export type Profile = {
   id: number;
@@ -113,13 +111,6 @@ export async function request<T>(path: string, options: RequestInit = {}, token?
   return response.json();
 }
 
-async function auth(path: "/auth/register" | "/auth/login") {
-  return request<{ access_token: string }>(path, {
-    method: "POST",
-    body: JSON.stringify({ email: DEMO_EMAIL, password: DEMO_PASSWORD, full_name: "Demo Seller" })
-  });
-}
-
 export function loginUser(payload: { email: string; password: string }) {
   return request<{ access_token: string; token_type: string }>("/auth/login", {
     method: "POST",
@@ -136,31 +127,6 @@ export function registerUser(payload: { email: string; password: string; full_na
 
 export function getCurrentUser(token: string) {
   return request<{ id: number; email: string; full_name?: string | null }>("/auth/me", {}, token);
-}
-
-export async function ensureDemoWorkspace() {
-  let token = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") : null;
-  if (!token) {
-    try {
-      token = (await auth("/auth/register")).access_token;
-    } catch {
-      token = (await auth("/auth/login")).access_token;
-    }
-    window.localStorage.setItem("gst_bharat_token", token);
-  }
-  try {
-    await request("/auth/me", {}, token);
-  } catch {
-    try {
-      token = (await auth("/auth/login")).access_token;
-    } catch {
-      token = (await auth("/auth/register")).access_token;
-    }
-    window.localStorage.setItem("gst_bharat_token", token);
-  }
-  await request("/demo/seed", { method: "POST" }, token);
-  const profiles = await request<Profile[]>("/gst-profile", {}, token);
-  return { token, profile: profiles[0] };
 }
 
 export async function loadWorkspace(token: string) {

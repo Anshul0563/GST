@@ -25,15 +25,15 @@ export default function LandingPage() {
           <h1 className="text-5xl font-black tracking-tight md:text-7xl">GST filing OS for marketplace sellers.</h1>
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">GST Bharat turns messy platform reports into normalized transactions, validation insights, GSTR-1 JSON/Excel, Tally XML and reconciliation workflows.</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-6 py-4 font-bold text-white shadow-2xl shadow-blue-950/20">Open demo workspace <ArrowRight className="size-4" /></Link>
+            <Link href="/register" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-6 py-4 font-bold text-white shadow-2xl shadow-blue-950/20">Create workspace <ArrowRight className="size-4" /></Link>
             <Link href="/marketplaces" className="rounded-2xl border border-slate-200 bg-white px-6 py-4 font-bold text-slate-700">Explore integrations</Link>
           </div>
         </div>
         <div className="rounded-[2rem] border border-white bg-white p-4 shadow-2xl shadow-slate-300/60">
           <div className="rounded-[1.5rem] bg-gradient-to-br from-[#10244d] via-[#1746A2] to-[#0F9F6E] p-6 text-white">
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-200">April 2026 Filing</p>
-            <div className="mt-8 grid grid-cols-2 gap-4">
-              {["Taxable ₹21,565.87", "GST ₹646.97", "B2CS 24", "Documents 238"].map((item) => <div key={item} className="rounded-3xl bg-white/12 p-5 backdrop-blur"><p className="text-2xl font-black">{item.split(" ")[1]}</p><p className="text-sm text-white/70">{item.split(" ")[0]}</p></div>)}
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-200">Backend-connected workflow</p>
+            <div className="mt-8 grid gap-4">
+              {["Create GST profile", "Upload marketplace reports", "Review normalized rows", "Generate GSTR-1 JSON/Excel"].map((item, index) => <div key={item} className="flex items-center gap-3 rounded-3xl bg-white/12 p-5 backdrop-blur"><span className="grid size-9 place-items-center rounded-2xl bg-white/20 text-sm font-black">{index + 1}</span><p className="font-black">{item}</p></div>)}
             </div>
             <div className="mt-6 rounded-3xl bg-white p-5 text-slate-950">
               <p className="font-black">Ready checklist</p>

@@ -17,7 +17,13 @@ export function DashboardSaasPage() {
 
   return (
     <AppShell title="Command Center" subtitle="Live filing intelligence across marketplace imports, GST validations, GSTR-1 export readiness and reconciliation status." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/marketplaces" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white shadow-xl shadow-blue-950/20"><UploadCloud className="size-4" /> Start import</Link>}>
-      {workspace.loading ? <SkeletonGrid /> : (
+      {workspace.loading ? <SkeletonGrid /> : !workspace.token ? (
+        <EmptyState title="Login required" body="Connect to the backend by logging in or creating your GST Bharat account." action={<Link className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white" href="/login">Login</Link>} />
+      ) : !workspace.profile ? (
+        <EmptyState title="Create GST profile" body="Dashboard cards, charts and filing status appear after you create a GST profile." action={<Link className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white" href="/profile">Add GST profile</Link>} />
+      ) : workspace.error ? (
+        <EmptyState title="Backend data unavailable" body={workspace.error} action={<button onClick={() => workspace.refresh()} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Retry</button>} />
+      ) : (
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard label="Total taxable value" value={formatCurrency(money(summary?.total_taxable_value))} detail={`${summary?.platform_wise_sale.length || 0} active platforms`} tone="blue" />
