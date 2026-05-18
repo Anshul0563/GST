@@ -96,6 +96,46 @@ export type ReconcileReport = {
   summary?: Record<string, number>;
 };
 
+export type BillingPlan = {
+  id: string;
+  name: string;
+  monthly_amount: number;
+  yearly_amount: number;
+  currency: string;
+  features: string[];
+};
+
+export type BillingStatus = {
+  role: string;
+  plan: string;
+  subscription_status: string;
+  free_access: boolean;
+  free_access_reason?: string | null;
+  latest_order?: {
+    id: number;
+    plan_id: string;
+    billing_cycle: string;
+    amount: number;
+    status: string;
+    provider_order_id?: string | null;
+  } | null;
+};
+
+export type PaymentOrder = {
+  id?: number;
+  free_access?: boolean;
+  message?: string;
+  provider?: string;
+  provider_order_id?: string;
+  amount?: number;
+  amount_paise?: number;
+  currency?: string;
+  plan_id?: string;
+  billing_cycle?: string;
+  gateway_key_id?: string | null;
+  gateway_configured?: boolean;
+};
+
 export async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -126,7 +166,7 @@ export function registerUser(payload: { email: string; password: string; full_na
 }
 
 export function getCurrentUser(token: string) {
-  return request<{ id: number; email: string; full_name?: string | null }>("/auth/me", {}, token);
+  return request<{ id: number; email: string; full_name?: string | null; role?: string; plan?: string; subscription_status?: string; free_access_reason?: string | null }>("/auth/me", {}, token);
 }
 
 export async function loadWorkspace(token: string) {
@@ -221,4 +261,16 @@ export function getReconcileReport(token: string, batchId: number) {
 
 export function getReconcileDownloadUrl(batchId: number) {
   return downloadUrl(`/reconcile/download/${batchId}`);
+}
+
+export function getBillingPlans(token: string) {
+  return request<{ plans: BillingPlan[]; gateway: string; free_access: boolean }>("/billing/plans", {}, token);
+}
+
+export function getBillingStatus(token: string) {
+  return request<BillingStatus>("/billing/status", {}, token);
+}
+
+export function createBillingOrder(token: string, payload: { plan_id: string; billing_cycle: string }) {
+  return request<PaymentOrder>("/billing/create-order", { method: "POST", body: JSON.stringify(payload) }, token);
 }

@@ -17,6 +17,7 @@ from app.models.entities import (
     GSTProfile,
     GSTR1JsonExport,
     NormalizedTransaction,
+    PaymentOrder,
     PlatformImportBatch,
     ReconciliationBatch,
     TallyCompany,
@@ -26,6 +27,7 @@ from app.models.entities import (
 from app.parsers.factory import get_parser
 from app.schemas.dto import (
     BatchStatus,
+    CreatePaymentOrderIn,
     DashboardSummary,
     GSTProfileIn,
     GSTProfileOut,
@@ -37,7 +39,9 @@ from app.schemas.dto import (
     Token,
     TransactionOut,
     TransactionUpdate,
+    VerifyPaymentIn,
 )
+from app.services.billing import create_razorpay_order, plan_amount_paise, public_plans, verify_razorpay_signature
 from app.services.excel_export import write_gstr1_excel
 from app.services.gst import build_gstr1_json
 from app.services.tally import build_tally_xml
@@ -72,7 +76,104 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
 
 @router.get("/auth/me")
 def me(user: User = Depends(get_current_user)):
-    return {"id": user.id, "email": user.email, "full_name": user.full_name}
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": getattr(user, "role", "user"),
+        "plan": getattr(user, "plan", "free"),
+        "subscription_status": getattr(user, "subscription_status", "inactive"),
+        "free_access_reason": getattr(user, "free_access_reason", None),
+    }
+
+
+@router.get("/billing/plans")
+def billing_plans(user: User = Depends(get_current_user)):
+    return {
+        "plans": public_plans(),
+        "gateway": "razorpay",
+        "free_access": getattr(user, "plan", "") == "admin_free",
+    }
+
+
+@router.get("/billing/status")
+def billing_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    latest = db.scalar(select(PaymentOrder).where(PaymentOrder.user_id == user.id).order_by(PaymentOrder.id.desc()))
+    return {
+        "role": getattr(user, "role", "user"),
+        "plan": getattr(user, "plan", "free"),
+        "subscription_status": getattr(user, "subscription_status", "inactive"),
+        "free_access": getattr(user, "plan", "") == "admin_free",
+        "free_access_reason": getattr(user, "free_access_reason", None),
+        "latest_order": {
+            "id": latest.id,
+            "plan_id": latest.plan_id,
+            "billing_cycle": latest.billing_cycle,
+            "amount": latest.amount_paise / 100,
+            "status": latest.status,
+            "provider_order_id": latest.provider_order_id,
+        } if latest else None,
+    }
+
+
+@router.post("/billing/create-order")
+def create_payment_order(payload: CreatePaymentOrderIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if getattr(user, "plan", "") == "admin_free":
+        return {
+            "free_access": True,
+            "message": "This admin account has unrestricted free access.",
+            "plan": user.plan,
+            "subscription_status": user.subscription_status,
+        }
+    try:
+        amount_paise = plan_amount_paise(payload.plan_id, payload.billing_cycle)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    order = PaymentOrder(user_id=user.id, plan_id=payload.plan_id, billing_cycle=payload.billing_cycle, amount_paise=amount_paise, currency="INR")
+    db.add(order)
+    db.flush()
+    settings = get_settings()
+    try:
+        gateway_order = create_razorpay_order(settings, amount_paise, f"gstbharat_{order.id}")
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    order.provider_order_id = str(gateway_order.get("id"))
+    order.raw_response_json = json.dumps(gateway_order)
+    db.add(AuditLog(user_id=user.id, action="billing.order.create", entity_type="payment_order", entity_id=str(order.id), metadata_json=json.dumps({"plan_id": payload.plan_id, "billing_cycle": payload.billing_cycle})))
+    db.commit()
+    db.refresh(order)
+    return {
+        "id": order.id,
+        "provider": "razorpay",
+        "provider_order_id": order.provider_order_id,
+        "amount": order.amount_paise / 100,
+        "amount_paise": order.amount_paise,
+        "currency": order.currency,
+        "plan_id": order.plan_id,
+        "billing_cycle": order.billing_cycle,
+        "gateway_key_id": settings.razorpay_key_id,
+        "gateway_configured": bool(settings.razorpay_key_id and settings.razorpay_key_secret),
+    }
+
+
+@router.post("/billing/verify")
+def verify_payment(payload: VerifyPaymentIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    order = db.get(PaymentOrder, payload.order_id)
+    if not order or order.user_id != user.id:
+        raise HTTPException(404, "Payment order not found")
+    if order.provider_order_id != payload.razorpay_order_id:
+        raise HTTPException(422, "Razorpay order ID mismatch")
+    settings = get_settings()
+    if not verify_razorpay_signature(settings, payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature):
+        raise HTTPException(422, "Invalid payment signature")
+    order.status = "paid"
+    order.provider_payment_id = payload.razorpay_payment_id
+    order.paid_at = datetime.utcnow()
+    user.plan = order.plan_id
+    user.subscription_status = "active"
+    db.add(AuditLog(user_id=user.id, action="billing.payment.verified", entity_type="payment_order", entity_id=str(order.id)))
+    db.commit()
+    return {"status": "paid", "plan": user.plan, "subscription_status": user.subscription_status}
 
 
 @router.post("/gst-profile", response_model=GSTProfileOut)
