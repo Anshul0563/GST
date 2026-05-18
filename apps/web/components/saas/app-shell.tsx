@@ -19,6 +19,22 @@ const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
   { href: "/billing", label: "Billing", icon: CreditCard }
 ];
 
+const moduleNav: Record<string, Array<{ href: Route; label: string }>> = {
+  reconcile: [
+    { href: "/reconcile", label: "Dashboard" },
+    { href: "/reconcile/upload", label: "Upload" },
+    { href: "/reconcile/history", label: "History" }
+  ],
+  tally: [
+    { href: "/tally", label: "Dashboard" },
+    { href: "/tally/company", label: "Company" },
+    { href: "/tally/import", label: "Import" },
+    { href: "/tally/mapping", label: "Mapping" },
+    { href: "/tally/export", label: "Export" },
+    { href: "/tally/history", label: "History" }
+  ]
+};
+
 export function LogoMark() {
   return (
     <div className="flex items-center gap-3">
@@ -41,6 +57,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const activeModule = pathname.startsWith("/reconcile") || pathname.startsWith("/reconciliation") ? "reconcile" : pathname.startsWith("/tally") ? "tally" : "";
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 dark:bg-[#07111f] dark:text-white">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-200/60 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none lg:block">
@@ -65,7 +82,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
         <nav className="mt-6 space-y-1">
           {nav.map((item) => {
             const Icon = item.icon;
-            const active = pathname === item.href;
+            const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
             return (
               <Link key={item.href} href={item.href} className={`group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${active ? "bg-[#10244d] text-white shadow-lg shadow-blue-950/20" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
                 <Icon className={`size-4 ${active ? "text-saffron" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
@@ -96,6 +113,12 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
           </div>
         </header>
         <main className="px-5 py-7 lg:px-8">
+          {activeModule && <div className="mb-6 flex gap-2 overflow-x-auto rounded-3xl border border-white/70 bg-white/80 p-2 shadow-sm dark:border-white/10 dark:bg-slate-950/70">
+            {moduleNav[activeModule].map((item) => {
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return <Link key={item.href} href={item.href} className={`whitespace-nowrap rounded-2xl px-4 py-2 text-sm font-bold ${active ? "bg-[#10244d] text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>{item.label}</Link>;
+            })}
+          </div>}
           <div className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#1746A2] dark:text-sky-300">GST Bharat Workspace</p>

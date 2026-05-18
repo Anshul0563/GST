@@ -15,29 +15,41 @@ const categories = ["matched", "partially_matched", "tax_mismatch", "invoice_mis
 export function ReconcileDashboardPage() {
   const workspace = useWorkspace();
   const [history, setHistory] = useState<ReconcileHistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   useEffect(() => {
     if (!workspace.token) return;
-    getReconcileHistory(workspace.token, workspace.profile?.id).then(setHistory).catch(() => setHistory([]));
+    setLoadingHistory(true);
+    getReconcileHistory(workspace.token, workspace.profile?.id).then(setHistory).catch(() => setHistory([])).finally(() => setLoadingHistory(false));
   }, [workspace.token, workspace.profile?.id]);
   const latest = history[0];
   const chart = history.slice(0, 8).reverse().map((item) => ({ name: `#${item.id}`, matched: item.matched_rows, mismatch: item.mismatch_rows }));
+  const totalRuns = history.length;
+  const totalMismatches = history.reduce((sum, item) => sum + item.mismatch_rows, 0);
   return <AppShell title="2B/2A Reconcile v2.0" subtitle="Professional ITC reconciliation across GST portal 2A/2B and purchase books." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/reconcile/upload" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> New reconcile</Link>}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Reconciliation history is loaded from authenticated backend APIs." /> : null}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
+        <StatCard label="Runs" value={String(totalRuns)} />
         <StatCard label="Portal invoices" value={String(latest?.portal_rows || 0)} />
         <StatCard label="Book invoices" value={String(latest?.book_rows || 0)} />
         <StatCard label="Matched" value={`${latest?.summary?.matched_percent || 0}%`} tone="green" />
-        <StatCard label="ITC risk" value={formatCurrency(money(latest?.itc_risk_amount))} tone="red" />
+        <StatCard label="Open mismatches" value={String(totalMismatches)} tone={totalMismatches ? "red" : "green"} />
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Panel title="Reconcile trend" subtitle="Matched vs mismatch rows by batch.">
           {chart.length ? <div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="matched" fill="#0F9F6E" radius={[10, 10, 0, 0]} /><Bar dataKey="mismatch" fill="#F58220" radius={[10, 10, 0, 0]} /></BarChart></ResponsiveContainer></div> : <EmptyState title="No reconciliation yet" body="Upload portal and books files to create your first result." />}
         </Panel>
         <Panel title="Recent batches" subtitle="Open result explorer or download Excel report.">
-          <HistoryList history={history} />
+          {loadingHistory ? <EmptyState title="Loading history" body="Fetching reconciliation batches from backend." /> : <HistoryList history={history} />}
         </Panel>
       </div>
+      {latest && <Panel title="Latest ITC risk snapshot" subtitle="Backend calculated tax difference and risk amount from the newest batch.">
+        <div className="grid gap-4 md:grid-cols-3">
+          <StatCard label="Tax difference" value={formatCurrency(money(latest.tax_difference))} tone="saffron" />
+          <StatCard label="ITC risk amount" value={formatCurrency(money(latest.itc_risk_amount))} tone="red" />
+          <StatCard label="Status" value={latest.status} tone={latest.status.includes("error") ? "red" : "green"} />
+        </div>
+      </Panel>}
     </div>
   </AppShell>;
 }
@@ -65,6 +77,7 @@ export function ReconcileUploadPage() {
     }
   }
   return <AppShell title="Reconcile Upload" subtitle="Upload GST portal 2A/2B and purchase register, then run the matching engine." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+    {!workspace.profile ? <EmptyState title="GST profile required" body="Create or select a GST profile before uploading 2A/2B reconciliation files." /> : null}
     <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
       <Panel title="Workflow" subtitle="Real parser + matching pipeline.">
         {["Select GST profile and period", "Upload 2A/2B Excel or JSON", "Upload purchase register", "Normalize supplier invoices", "Run exact/fuzzy/tolerance matching", "Download Excel reports"].map((item, index) => <div key={item} className="mb-3 rounded-2xl bg-slate-50 p-4 text-sm font-bold dark:bg-white/5">{index + 1}. {item}</div>)}
@@ -80,7 +93,7 @@ export function ReconcileUploadPage() {
         </div>
         <button onClick={submit} disabled={busy || !workspace.profile} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"><FileSearch className="size-4" /> {busy ? "Reconciling..." : "Run reconciliation"}</button>
         {error && <div className="mt-4 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
-        {result && <div className="mt-5 rounded-3xl bg-emerald-50 p-5 text-sm font-bold text-emerald-700">Batch #{result.id} completed. <Link className="underline" href={`/reconcile/results/${result.id}`}>Open results</Link></div>}
+        {result && <div className="mt-5 rounded-3xl bg-emerald-50 p-5 text-sm font-bold text-emerald-700"><div>Batch #{result.id} completed.</div><div className="mt-2 grid gap-2 md:grid-cols-3"><span>Matched: {result.summary?.matched || 0}</span><span>Tax mismatch: {result.summary?.tax_mismatch || 0}</span><span>Missing: {Number(result.summary?.missing_in_portal || 0) + Number(result.summary?.missing_in_books || 0)}</span></div><Link className="mt-3 inline-flex underline" href={`/reconcile/results/${result.id}`}>Open results</Link></div>}
       </Panel>
     </div>
   </AppShell>;
