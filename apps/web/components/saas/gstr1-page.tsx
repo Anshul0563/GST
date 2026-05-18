@@ -8,8 +8,6 @@ import { money, useWorkspace } from "@/components/saas/workspace";
 import { downloadUrl, generateGstr1 } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
-const expected = { taxable: 21565.87, igst: 628.95, cgst: 9.01, sgst: 9.01, gst: 646.97 };
-
 export function Gstr1Page() {
   const workspace = useWorkspace();
   const [downloads, setDownloads] = useState<{ download_json: string; download_excel: string } | null>(null);
@@ -20,6 +18,14 @@ export function Gstr1Page() {
     await workspace.refresh();
   }
   const summary = workspace.summary;
+  const previewTotals = (workspace.preview?.b2cs || []).reduce((total, row) => ({
+    taxable: total.taxable + money(row.txval),
+    igst: total.igst + money(row.iamt),
+    cgst: total.cgst + money(row.camt),
+    sgst: total.sgst + money(row.samt),
+    cess: total.cess + money(row.csamt)
+  }), { taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 });
+  const previewGst = previewTotals.igst + previewTotals.cgst + previewTotals.sgst + previewTotals.cess;
   const checks = [
     ["GST profile selected", Boolean(workspace.profile)],
     ["Transactions imported", workspace.transactions.length > 0],
@@ -45,8 +51,13 @@ export function Gstr1Page() {
           <Panel title="Validation checklist" subtitle="Generation readiness.">
             <div className="space-y-3">{checks.map(([label, ok]) => <div key={String(label)} className="flex items-center justify-between rounded-2xl bg-slate-50 p-3 text-sm dark:bg-white/5"><span>{label}</span><StatusPill status={ok ? "completed" : "pending"} /></div>)}</div>
             <div className="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              <b>Expected totals comparison</b>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs"><span>Taxable delta</span><b>{formatCurrency(money(summary?.total_taxable_value) - expected.taxable)}</b><span>GST delta</span><b>{formatCurrency(money(summary?.total_gst) - expected.gst)}</b></div>
+              <b>Backend preview reconciliation</b>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                <span>B2CS taxable</span><b>{formatCurrency(previewTotals.taxable)}</b>
+                <span>B2CS GST</span><b>{formatCurrency(previewGst)}</b>
+                <span>Dashboard taxable delta</span><b>{formatCurrency(money(summary?.total_taxable_value) - previewTotals.taxable)}</b>
+                <span>Dashboard GST delta</span><b>{formatCurrency(money(summary?.total_gst) - previewGst)}</b>
+              </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <button onClick={generate} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Generate final files</button>

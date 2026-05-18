@@ -8,7 +8,6 @@ import {
   Profile,
   TallyCompany,
   Transaction,
-  ensureDemoWorkspace,
   getCurrentUser,
   getGstrPreview,
   getSummary,
@@ -93,13 +92,11 @@ export function useWorkspace(): Workspace {
 
   useEffect(() => {
     const storedToken = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") : null;
-    const initializer = storedToken
-      ? loadWorkspace(storedToken).then(({ user, profiles, profile }) => ({ token: storedToken, user, profiles, profile }))
-      : ensureDemoWorkspace().then(async ({ token, profile }) => {
-          const user = await getCurrentUser(token);
-          const profiles = await listProfiles(token);
-          return { token, user, profiles, profile };
-        });
+    if (!storedToken) {
+      setLoading(false);
+      return;
+    }
+    const initializer = loadWorkspace(storedToken).then(({ user, profiles, profile }) => ({ token: storedToken, user, profiles, profile }));
     initializer
       .then(async ({ token, user, profiles, profile }) => {
         setToken(token);
