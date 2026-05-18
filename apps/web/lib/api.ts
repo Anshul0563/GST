@@ -86,6 +86,10 @@ export type ImportErrors = {
 export type TallyCompany = {
   id: number;
   company_name: string;
+  gstin?: string | null;
+  financial_year?: string | null;
+  state?: string | null;
+  auto_create_ledger?: boolean;
   tally_guid?: string | null;
 };
 
@@ -93,7 +97,49 @@ export type ReconcileReport = {
   id: number;
   status: string;
   categories?: string[];
-  summary?: Record<string, number>;
+  summary?: Record<string, number | string | unknown[]>;
+  rows?: ReconcileRow[];
+};
+
+export type ReconcileRow = {
+  id: number;
+  supplier_gstin: string | null;
+  invoice_no: string | null;
+  invoice_date: string | null;
+  taxable_value: number | string;
+  igst: number | string;
+  cgst: number | string;
+  sgst: number | string;
+  total_tax: number | string;
+  tax_difference: number | string;
+  match_score: number | string;
+  category: string;
+  mismatch_reason: string | null;
+};
+
+export type ReconcileHistoryItem = {
+  id: number;
+  profile_id: number;
+  status: string;
+  portal_rows: number;
+  book_rows: number;
+  matched_rows: number;
+  mismatch_rows: number;
+  tax_difference: number | string;
+  itc_risk_amount: number | string;
+  summary: Record<string, number | string | unknown[]>;
+  created_at: string;
+};
+
+export type TallyExportItem = {
+  id: number;
+  profile_id: number;
+  company_id: number;
+  period: string;
+  voucher_count: number;
+  status: string;
+  validation: Record<string, unknown>;
+  created_at: string;
 };
 
 export type BillingPlan = {
@@ -236,7 +282,7 @@ export function downloadUrl(path: string) {
   return `${API_BASE}${path}`;
 }
 
-export function createTallyCompany(token: string, payload: { profile_id: number; company_name: string; tally_guid?: string }) {
+export function createTallyCompany(token: string, payload: { profile_id: number; company_name: string; gstin?: string; financial_year?: string; state?: string; auto_create_ledger?: boolean; tally_guid?: string }) {
   return request<TallyCompany>("/tally/company", { method: "POST", body: JSON.stringify(payload) }, token);
 }
 
@@ -244,8 +290,8 @@ export function listTallyCompanies(token: string, profileId?: number) {
   return request<TallyCompany[]>(`/tally/companies${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
 }
 
-export function generateTallyXml(token: string, payload: { profile_id: number; period: string; company_id: number; ledger_mapping: Record<string, string> }) {
-  return request<{ id: string; download: string }>("/tally/generate-xml", { method: "POST", body: JSON.stringify(payload) }, token);
+export function generateTallyXml(token: string, payload: { profile_id: number; period: string; company_id: number; ledger_mapping: Record<string, string>; auto_create_ledgers?: boolean }) {
+  return request<{ id: number; voucher_count: number; validation: Record<string, unknown>; download: string; download_excel: string }>("/tally/generate", { method: "POST", body: JSON.stringify(payload) }, token);
 }
 
 export function uploadReconcileFiles(token: string, profileId: number, portalFile: File, booksFile: File) {
@@ -255,8 +301,30 @@ export function uploadReconcileFiles(token: string, profileId: number, portalFil
   return request<ReconcileReport>(`/reconcile/upload?profile_id=${profileId}`, { method: "POST", body: form }, token);
 }
 
+export function uploadReconcileFilesV2(token: string, profileId: number, portalFile: File, booksFile: File, settings: { tax_tolerance: string; date_tolerance_days: number; enable_date_tolerance: boolean; enable_fuzzy_invoice: boolean }) {
+  const form = new FormData();
+  form.append("portal_file", portalFile);
+  form.append("books_file", booksFile);
+  const params = new URLSearchParams({
+    profile_id: String(profileId),
+    tax_tolerance: settings.tax_tolerance,
+    date_tolerance_days: String(settings.date_tolerance_days),
+    enable_date_tolerance: String(settings.enable_date_tolerance),
+    enable_fuzzy_invoice: String(settings.enable_fuzzy_invoice)
+  });
+  return request<ReconcileReport>(`/reconcile/upload?${params.toString()}`, { method: "POST", body: form }, token);
+}
+
 export function getReconcileReport(token: string, batchId: number) {
   return request<ReconcileReport>(`/reconcile/report/${batchId}`, {}, token);
+}
+
+export function getReconcileResults(token: string, batchId: number, category?: string) {
+  return request<ReconcileReport>(`/reconcile/results/${batchId}${category ? `?category=${category}` : ""}`, {}, token);
+}
+
+export function getReconcileHistory(token: string, profileId?: number) {
+  return request<ReconcileHistoryItem[]>(`/reconcile/history${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
 }
 
 export function getReconcileDownloadUrl(batchId: number) {
@@ -277,4 +345,12 @@ export function createBillingOrder(token: string, payload: { plan_id: string; bi
 
 export function verifyBillingPayment(token: string, payload: { order_id: number; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) {
   return request<{ status: string; plan: string; subscription_status: string }>("/billing/verify", { method: "POST", body: JSON.stringify(payload) }, token);
+}
+
+export function getTallyHistory(token: string, profileId?: number) {
+  return request<TallyExportItem[]>(`/tally/history${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
+}
+
+export function getTallyExportUrl(exportId: number, format: "xml" | "xlsx" = "xml") {
+  return downloadUrl(`/tally/export/${exportId}${format === "xlsx" ? "?format=xlsx" : ""}`);
 }

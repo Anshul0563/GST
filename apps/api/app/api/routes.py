@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 import json
 import shutil
@@ -20,7 +21,11 @@ from app.models.entities import (
     PaymentOrder,
     PlatformImportBatch,
     ReconciliationBatch,
+    ReconciliationReport,
+    ReconciliationRow,
     TallyCompany,
+    TallyExport,
+    TallyVoucher,
     UploadedFile,
     User,
 )
@@ -34,6 +39,7 @@ from app.schemas.dto import (
     GenerateGSTR1In,
     LoginIn,
     RegisterIn,
+    ReconcileSettingsIn,
     TallyCompanyIn,
     TallyGenerateIn,
     Token,
@@ -44,7 +50,8 @@ from app.schemas.dto import (
 from app.services.billing import create_razorpay_order, plan_amount_paise, public_plans, verify_razorpay_signature
 from app.services.excel_export import write_gstr1_excel
 from app.services.gst import build_gstr1_json
-from app.services.tally import build_tally_xml
+from app.services.reconciliation import ReconSettings, normalize_rows, reconcile, write_reconciliation_excel
+from app.services.tally import build_tally_xml, build_vouchers, validate_tally_xml, write_voucher_excel
 from app.services.transaction_normalizer import finalize_transaction
 from app.services.validation import money, validate_gstin
 from app.utils.security import create_access_token, hash_password, verify_password
@@ -526,11 +533,21 @@ def tally_company(payload: TallyCompanyIn, user: User = Depends(get_current_user
     profile = db.get(GSTProfile, payload.profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
-    company = TallyCompany(user_id=user.id, profile_id=profile.id, company_name=payload.company_name, tally_guid=payload.tally_guid)
+    company = TallyCompany(
+        user_id=user.id,
+        profile_id=profile.id,
+        company_name=payload.company_name,
+        gstin=(payload.gstin or profile.gstin).upper(),
+        financial_year=payload.financial_year or profile.financial_year,
+        state=payload.state,
+        auto_create_ledger=1 if payload.auto_create_ledger else 0,
+        tally_guid=payload.tally_guid,
+    )
     db.add(company)
+    db.add(AuditLog(user_id=user.id, action="tally.company.create", entity_type="tally_company"))
     db.commit()
     db.refresh(company)
-    return {"id": company.id, "company_name": company.company_name}
+    return {"id": company.id, "company_name": company.company_name, "gstin": company.gstin, "financial_year": company.financial_year, "state": company.state, "auto_create_ledger": bool(company.auto_create_ledger)}
 
 
 @router.get("/tally/companies")
@@ -539,20 +556,75 @@ def tally_companies(profile_id: int | None = None, user: User = Depends(get_curr
     if profile_id:
         stmt = stmt.where(TallyCompany.profile_id == profile_id)
     companies = db.scalars(stmt.limit(50)).all()
-    return [{"id": company.id, "company_name": company.company_name, "tally_guid": company.tally_guid} for company in companies]
+    return [{"id": company.id, "company_name": company.company_name, "gstin": company.gstin, "financial_year": company.financial_year, "state": company.state, "auto_create_ledger": bool(company.auto_create_ledger), "tally_guid": company.tally_guid} for company in companies]
 
 
 @router.post("/tally/generate-xml")
+@router.post("/tally/generate")
 def tally_xml(payload: TallyGenerateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     company = db.get(TallyCompany, payload.company_id)
     if not company or company.user_id != user.id:
         raise HTTPException(404, "Company not found")
     rows = transaction_dicts(user.id, payload.profile_id, payload.period, db)
-    xml = build_tally_xml(company.company_name, rows, payload.ledger_mapping)
-    path = get_settings().export_dir / str(user.id) / f"tally-{payload.period}-{uuid4().hex}.xml"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(xml, encoding="utf-8")
-    return {"id": path.stem, "download": f"/tally/download-xml/{path.name}"}
+    vouchers = build_vouchers(rows, payload.ledger_mapping)
+    xml = build_tally_xml(company.company_name, rows, payload.ledger_mapping, payload.auto_create_ledgers)
+    validation = validate_tally_xml(xml, vouchers)
+    settings = get_settings()
+    base = settings.export_dir / str(user.id) / "tally" / payload.period
+    base.mkdir(parents=True, exist_ok=True)
+    xml_path = base / f"tally-{payload.period}-{uuid4().hex}.xml"
+    xml_path.write_text(xml, encoding="utf-8")
+    excel_path = write_voucher_excel(base / f"tally-vouchers-{payload.period}-{uuid4().hex}.xlsx", vouchers)
+    export = TallyExport(user_id=user.id, profile_id=payload.profile_id, company_id=company.id, period=payload.period, xml_path=str(xml_path), voucher_excel_path=str(excel_path), voucher_count=len(vouchers), validation_json=json.dumps(validation))
+    db.add(export)
+    db.flush()
+    for voucher in vouchers:
+        db.add(TallyVoucher(
+            user_id=user.id,
+            profile_id=payload.profile_id,
+            company_id=company.id,
+            transaction_id=voucher.get("source", {}).get("id"),
+            voucher_no=str(voucher["voucher_no"]),
+            voucher_type=str(voucher["voucher_type"]),
+            voucher_date=voucher.get("date"),
+            party_ledger=str(voucher["party_ledger"]),
+            taxable_value=money(voucher.get("taxable_value")),
+            total_tax=money(voucher.get("total_tax")),
+            amount=money(voucher.get("amount")),
+            status="ready" if validation["valid"] else "error",
+            raw_json=json.dumps(voucher, default=str),
+        ))
+    db.add(AuditLog(user_id=user.id, action="tally.export.generate", entity_type="tally_export", entity_id=str(export.id)))
+    db.commit()
+    return {"id": export.id, "voucher_count": len(vouchers), "validation": validation, "download": f"/tally/export/{export.id}", "download_excel": f"/tally/export/{export.id}?format=xlsx"}
+
+
+@router.post("/tally/generate-xml")
+def tally_xml_legacy(payload: TallyGenerateIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return tally_xml(payload, user, db)
+
+
+@router.get("/tally/history")
+def tally_history(profile_id: int | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(TallyExport).where(TallyExport.user_id == user.id).order_by(TallyExport.id.desc())
+    if profile_id:
+        stmt = stmt.where(TallyExport.profile_id == profile_id)
+    exports = db.scalars(stmt.limit(50)).all()
+    return [{"id": row.id, "profile_id": row.profile_id, "company_id": row.company_id, "period": row.period, "voucher_count": row.voucher_count, "status": row.status, "validation": json.loads(row.validation_json or "{}"), "created_at": row.created_at} for row in exports]
+
+
+@router.get("/tally/export/{export_id}")
+def tally_export_download(export_id: int, format: str = "xml", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    export = db.get(TallyExport, export_id)
+    if not export or export.user_id != user.id:
+        raise HTTPException(404, "Export not found")
+    if format == "xlsx":
+        if not export.voucher_excel_path:
+            raise HTTPException(404, "Voucher Excel not found")
+        return FileResponse(export.voucher_excel_path, filename=Path(export.voucher_excel_path).name)
+    if not export.xml_path:
+        raise HTTPException(404, "XML not found")
+    return FileResponse(export.xml_path, filename=Path(export.xml_path).name)
 
 
 @router.get("/tally/download-xml/{export_id}")
@@ -563,24 +635,118 @@ def tally_download(export_id: str, user: User = Depends(get_current_user)):
     return FileResponse(path, filename=export_id)
 
 
+def save_upload(upload: UploadFile, base: Path) -> Path:
+    suffix = Path(upload.filename or "").suffix.lower()
+    if suffix not in ALLOWED_EXTENSIONS and suffix != ".json":
+        raise HTTPException(422, f"Unsupported file type: {upload.filename}")
+    path = base / f"{uuid4().hex}{suffix}"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        shutil.copyfileobj(upload.file, handle)
+    return path
+
+
 @router.post("/reconcile/upload")
-async def reconcile_upload(profile_id: int, portal_file: UploadFile = File(...), books_file: UploadFile = File(...), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def reconcile_upload(
+    profile_id: int,
+    portal_file: UploadFile = File(...),
+    books_file: UploadFile = File(...),
+    tax_tolerance: Decimal = Decimal("1.00"),
+    date_tolerance_days: int = 3,
+    enable_date_tolerance: bool = True,
+    enable_fuzzy_invoice: bool = True,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     profile = db.get(GSTProfile, profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
-    batch = ReconciliationBatch(user_id=user.id, profile_id=profile.id, status="completed")
+    batch = ReconciliationBatch(user_id=user.id, profile_id=profile.id, status="processing")
     db.add(batch)
+    db.flush()
+    base = get_settings().upload_dir / str(user.id) / "reconcile" / str(batch.id)
+    portal_path = save_upload(portal_file, base / "portal")
+    books_path = save_upload(books_file, base / "books")
+    portal_rows, portal_errors = normalize_rows(portal_path, "portal")
+    book_rows, book_errors = normalize_rows(books_path, "books")
+    settings = ReconSettings(tax_tolerance=money(tax_tolerance), date_tolerance_days=date_tolerance_days, enable_date_tolerance=enable_date_tolerance, enable_fuzzy_invoice=enable_fuzzy_invoice)
+    result_rows, summary = reconcile(book_rows, portal_rows, settings)
+    report_path = get_settings().export_dir / str(user.id) / "reconcile" / f"reconcile-{batch.id}.xlsx"
+    write_reconciliation_excel(report_path, result_rows, {**summary, "parser_errors": json.dumps(portal_errors + book_errors)})
+    for row in result_rows:
+        db.add(ReconciliationRow(batch_id=batch.id, **row))
+    batch.status = "completed_with_errors" if portal_errors or book_errors else "completed"
+    batch.portal_rows = len(portal_rows)
+    batch.book_rows = len(book_rows)
+    batch.matched_rows = int(summary.get("matched", 0))
+    batch.mismatch_rows = int(summary.get("total_rows", 0)) - batch.matched_rows
+    batch.tax_difference = money(summary.get("tax_difference"))
+    batch.itc_risk_amount = money(summary.get("itc_risk_amount"))
+    batch.summary_json = json.dumps({**summary, "parser_errors": portal_errors + book_errors}, default=str)
+    batch.report_path = str(report_path)
+    db.add(ReconciliationReport(batch_id=batch.id, report_type="full", path=str(report_path)))
+    db.add(AuditLog(user_id=user.id, action="reconcile.upload", entity_type="reconciliation_batch", entity_id=str(batch.id)))
     db.commit()
     db.refresh(batch)
-    return {"id": batch.id, "status": "completed", "summary": {"matched": 0, "amount_mismatch": 0, "invoice_mismatch": 0, "missing_in_2b": 0, "missing_in_books": 0, "pending": 0}}
+    return {"id": batch.id, "status": batch.status, "summary": json.loads(batch.summary_json or "{}")}
+
+
+@router.get("/reconcile/results/{batch_id}")
+def reconcile_results(batch_id: int, category: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    batch = db.get(ReconciliationBatch, batch_id)
+    if not batch or batch.user_id != user.id:
+        raise HTTPException(404, "Batch not found")
+    stmt = select(ReconciliationRow).where(ReconciliationRow.batch_id == batch.id).order_by(ReconciliationRow.id.asc())
+    if category:
+        stmt = stmt.where(ReconciliationRow.category == category)
+    rows = db.scalars(stmt.limit(1000)).all()
+    return {
+        "id": batch.id,
+        "status": batch.status,
+        "summary": json.loads(batch.summary_json or "{}"),
+        "categories": ["matched", "partially_matched", "invoice_mismatch", "tax_mismatch", "gstin_mismatch", "missing_in_books", "missing_in_portal", "duplicate_invoice", "invalid_gstin"],
+        "rows": [{
+            "id": row.id,
+            "supplier_gstin": row.supplier_gstin,
+            "invoice_no": row.invoice_no,
+            "invoice_date": row.invoice_date,
+            "taxable_value": row.taxable_value,
+            "igst": row.igst,
+            "cgst": row.cgst,
+            "sgst": row.sgst,
+            "total_tax": row.total_tax,
+            "tax_difference": row.tax_difference,
+            "match_score": row.match_score,
+            "category": row.category,
+            "mismatch_reason": row.mismatch_reason,
+        } for row in rows],
+    }
 
 
 @router.get("/reconcile/report/{batch_id}")
 def reconcile_report(batch_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    batch = db.get(ReconciliationBatch, batch_id)
-    if not batch or batch.user_id != user.id:
-        raise HTTPException(404, "Batch not found")
-    return {"id": batch.id, "status": batch.status, "categories": ["Matched", "Amount mismatch", "Invoice mismatch", "Missing in 2B", "Missing in books", "Pending"]}
+    return reconcile_results(batch_id, None, user, db)
+
+
+@router.get("/reconcile/history")
+def reconcile_history(profile_id: int | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(ReconciliationBatch).where(ReconciliationBatch.user_id == user.id).order_by(ReconciliationBatch.id.desc())
+    if profile_id:
+        stmt = stmt.where(ReconciliationBatch.profile_id == profile_id)
+    batches = db.scalars(stmt.limit(50)).all()
+    return [{
+        "id": batch.id,
+        "profile_id": batch.profile_id,
+        "status": batch.status,
+        "portal_rows": batch.portal_rows,
+        "book_rows": batch.book_rows,
+        "matched_rows": batch.matched_rows,
+        "mismatch_rows": batch.mismatch_rows,
+        "tax_difference": batch.tax_difference,
+        "itc_risk_amount": batch.itc_risk_amount,
+        "summary": json.loads(batch.summary_json or "{}"),
+        "created_at": batch.created_at,
+    } for batch in batches]
 
 
 @router.get("/reconcile/download/{batch_id}")
@@ -588,4 +754,6 @@ def reconcile_download(batch_id: int, user: User = Depends(get_current_user), db
     batch = db.get(ReconciliationBatch, batch_id)
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
-    return JSONResponse({"message": "Reconciliation Excel generation hook is ready", "batch_id": batch.id})
+    if not batch.report_path:
+        raise HTTPException(404, "Report not found")
+    return FileResponse(batch.report_path, filename=f"reconciliation-{batch.id}.xlsx")
