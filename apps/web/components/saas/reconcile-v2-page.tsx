@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, FileSearch, UploadCloud } from "lucide-react";
+import { Download, FileSpreadsheet, FileSearch, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard, StatusPill } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
@@ -76,27 +76,63 @@ export function ReconcileUploadPage() {
       setBusy(false);
     }
   }
-  return <AppShell title="Reconcile Upload" subtitle="Upload GST portal 2A/2B and purchase register, then run the matching engine." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
-    {!workspace.profile ? <EmptyState title="GST profile required" body="Create or select a GST profile before uploading 2A/2B reconciliation files." /> : null}
-    <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-      <Panel title="Workflow" subtitle="Real parser + matching pipeline.">
-        {["Select GST profile and period", "Upload 2A/2B Excel or JSON", "Upload purchase register", "Normalize supplier invoices", "Run exact/fuzzy/tolerance matching", "Download Excel reports"].map((item, index) => <div key={item} className="mb-3 rounded-2xl bg-slate-50 p-4 text-sm font-bold dark:bg-white/5">{index + 1}. {item}</div>)}
-      </Panel>
-      <Panel title="Upload files" subtitle="Supports GST 2A/2B Excel/JSON and purchase register Excel/CSV templates.">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="text-sm font-bold">GSTIN<input readOnly value={workspace.profile?.gstin || ""} className="mt-2 w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>
-          <label className="text-sm font-bold">Period<input readOnly value={workspace.profile?.return_period || ""} className="mt-2 w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>
-          <label className="text-sm font-bold">2A/2B portal file<input type="file" onChange={(event) => setPortal(event.target.files?.[0] || null)} className="mt-2 w-full rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" /></label>
-          <label className="text-sm font-bold">Purchase register<input type="file" onChange={(event) => setBooks(event.target.files?.[0] || null)} className="mt-2 w-full rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" /></label>
-          <label className="text-sm font-bold">Tax tolerance<input value={taxTolerance} onChange={(event) => setTaxTolerance(event.target.value)} className="mt-2 w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>
-          <label className="text-sm font-bold">Date tolerance days<input type="number" value={dateTolerance} onChange={(event) => setDateTolerance(Number(event.target.value))} className="mt-2 w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>
+  const summary = result?.summary || {};
+  const tiles = [
+    ["Total 2B (In ₹)", summary.portal_rows || 0, "bg-cyan-500"],
+    ["Total Matched Entry", summary.matched || 0, "bg-sky-500"],
+    ["Matched", summary.matched || 0, "bg-emerald-500"],
+    ["Amount Mismatched", summary.tax_mismatch || 0, "bg-orange-300"],
+    ["Invoice Mismatched", summary.invoice_mismatch || 0, "bg-orange-400"],
+    ["Entry Missing", summary.missing_in_portal || 0, "bg-pink-500"],
+    ["Return Pending", summary.partially_matched || 0, "bg-rose-500"],
+    ["UnMatched", Number(summary.missing_in_books || 0) + Number(summary.invalid_gstin || 0), "bg-pink-600"],
+  ] as const;
+  return <ReconcileClassicShell profile={workspace.profile}>
+    <section className="rounded-md bg-white p-8 text-center shadow-xl shadow-slate-200/80">
+      <h2 className="text-xl font-black">2B/2A Reconcile</h2>
+      <p className="mt-1 text-xs text-slate-500">2A/2B Reconcile with Purchase data and provide query report.</p>
+      <p className="mx-auto mt-6 max-w-xl text-xs leading-5 text-slate-500">Please download the sample file for 2A & 2B verification sheet by clicking the button below, and fill in the GST portal 2A/2B data and the client purchase data in the client data sheet.</p>
+      <a href="data:text/csv;charset=utf-8,Supplier GSTIN,Invoice Number,Invoice Date,Taxable Value,IGST,CGST,SGST%0A" download="gst-bharat-2b-2a-sample.csv" className="mt-5 inline-flex items-center gap-2 rounded bg-[#2f72ff] px-5 py-3 text-xs font-bold text-white shadow-md">
+        <span className="grid size-8 place-items-center rounded bg-emerald-600"><FileSpreadsheet className="size-5" /></span> Sample File Download
+      </a>
+    </section>
+
+    <section className="rounded-md bg-white p-7 shadow-xl shadow-slate-200/80">
+      <h3 className="border-b border-slate-200 pb-4 text-base font-black">Upload File</h3>
+      {!workspace.profile ? <div className="mt-5"><EmptyState title="GST profile required" body="Create or select GST profile before uploading reconciliation files." /></div> : null}
+      <div className="mt-6 grid gap-5 md:grid-cols-[1fr_150px]">
+        <label className="text-xs font-bold text-slate-700">2A/2B Data Sheet
+          <input type="file" onChange={(event) => setPortal(event.target.files?.[0] || null)} className="mt-2 w-full rounded border border-slate-300 bg-white px-3 py-2 text-xs file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-bold" />
+        </label>
+        <label className="text-xs font-bold text-slate-700">Difference Ignore (₹)
+          <input value={taxTolerance} onChange={(event) => setTaxTolerance(event.target.value)} className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none" />
+        </label>
+        <label className="text-xs font-bold text-slate-700 md:col-span-2">Purchase Register / Client Data Sheet
+          <input type="file" onChange={(event) => setBooks(event.target.files?.[0] || null)} className="mt-2 w-full rounded border border-slate-300 bg-white px-3 py-2 text-xs file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-bold" />
+        </label>
+        <label className="text-xs font-bold text-slate-700">Date tolerance days
+          <input type="number" value={dateTolerance} onChange={(event) => setDateTolerance(Number(event.target.value))} className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none" />
+        </label>
+      </div>
+      <button onClick={submit} disabled={busy || !workspace.profile || !portal || !books} className="mt-5 rounded bg-[#2f72ff] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{busy ? "Processing..." : "Submit"}</button>
+      {error && <div className="mt-4 rounded bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</div>}
+
+      {result && <div className="mt-6">
+        <div className="grid grid-cols-2 text-center text-[11px] font-black text-white md:grid-cols-4 lg:grid-cols-8">
+          {tiles.map(([label, value, color]) => <div key={label} className={`${color} min-h-20 p-3`}>
+            <p>{label}</p>
+            <p className="mt-2 text-lg">{String(value)}</p>
+          </div>)}
         </div>
-        <button onClick={submit} disabled={busy || !workspace.profile} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"><FileSearch className="size-4" /> {busy ? "Reconciling..." : "Run reconciliation"}</button>
-        {error && <div className="mt-4 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
-        {result && <div className="mt-5 rounded-3xl bg-emerald-50 p-5 text-sm font-bold text-emerald-700"><div>Batch #{result.id} completed.</div><div className="mt-2 grid gap-2 md:grid-cols-3"><span>Matched: {result.summary?.matched || 0}</span><span>Tax mismatch: {result.summary?.tax_mismatch || 0}</span><span>Missing: {Number(result.summary?.missing_in_portal || 0) + Number(result.summary?.missing_in_books || 0)}</span></div><Link className="mt-3 inline-flex underline" href={`/reconcile/results/${result.id}`}>Open results</Link></div>}
-      </Panel>
-    </div>
-  </AppShell>;
+        <div className="mt-6 text-center">
+          <a href={getReconcileDownloadUrl(result.id)} className="inline-flex items-center gap-2 rounded bg-[#2f72ff] px-5 py-3 text-xs font-bold text-white shadow-md">
+            <span className="grid size-8 place-items-center rounded bg-emerald-600"><FileSpreadsheet className="size-5" /></span> Query Report Download
+          </a>
+          <Link href={`/reconcile/results/${result.id}`} className="ml-3 inline-flex rounded border border-[#2f72ff] px-5 py-3 text-xs font-bold text-[#2f72ff]">View Details</Link>
+        </div>
+      </div>}
+    </section>
+  </ReconcileClassicShell>;
 }
 
 export function ReconcileResultsPage({ id }: { id: number }) {
