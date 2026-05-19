@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 import json
@@ -60,6 +60,18 @@ from app.utils.security import create_access_token, hash_password, verify_passwo
 
 router = APIRouter()
 ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
+STALE_IMPORT_AFTER = timedelta(minutes=5)
+
+
+def settle_stale_import(batch: PlatformImportBatch, db: Session) -> None:
+    if batch.status not in {"queued", "processing"}:
+        return
+    if not batch.created_at or datetime.utcnow() - batch.created_at <= STALE_IMPORT_AFTER:
+        return
+    batch.status = "failed"
+    batch.error_report_json = json.dumps([{"error": "Import worker did not complete. Please retry upload."}])
+    batch.completed_at = datetime.utcnow()
+    db.commit()
 
 
 @router.post("/auth/register", response_model=Token)
@@ -362,6 +374,7 @@ def import_status(batch_id: int, user: User = Depends(get_current_user), db: Ses
     batch = db.get(PlatformImportBatch, batch_id)
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
+    settle_stale_import(batch, db)
     return BatchStatus(id=batch.id, platform=batch.platform, status=batch.status, parsed_rows=batch.parsed_rows, error_rows=batch.error_rows, errors=json.loads(batch.error_report_json or "[]"))
 
 
@@ -371,6 +384,8 @@ def list_imports(profile_id: int | None = None, user: User = Depends(get_current
     if profile_id:
         stmt = stmt.where(PlatformImportBatch.profile_id == profile_id)
     batches = db.scalars(stmt.limit(50)).all()
+    for batch in batches:
+        settle_stale_import(batch, db)
     return [
         BatchStatus(
             id=batch.id,
@@ -398,6 +413,7 @@ def delete_import_batch(batch_id: int, user: User = Depends(get_current_user), d
     batch = db.get(PlatformImportBatch, batch_id)
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
+    settle_stale_import(batch, db)
     if batch.status in {"queued", "processing"}:
         raise HTTPException(409, "Import is still processing")
 

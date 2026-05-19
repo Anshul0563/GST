@@ -39,7 +39,7 @@ class MarketplaceParser:
         raise NotImplementedError
 
     def normalize_row(self, row: dict[str, Any], source_file: str) -> dict:
-        buyer_state_code = first_value(row, ["buyer_state_code", "pos", "place of supply", "ship state", "billing state", "buyer billing state", "buyer delivery state", "state"])
+        buyer_state_code = first_value(row, ["buyer_state_code", "pos", "place of supply", "ship to state", "ship state", "billing state", "buyer billing state", "buyer delivery state", "state"])
         buyer_state_code = state_code_from_text(buyer_state_code)
         raw_date = first_value(row, ["invoice_date", "invoice date", "invoice generated date", "shipment date", "order date", "date"])
         doc_type = str(first_value(row, ["doc_type", "document type", "transaction type", "type"]) or "invoice").lower()
@@ -67,9 +67,9 @@ class MarketplaceParser:
             "qty": money(first_value(row, ["qty", "quantity", "item quantity"])),
             "taxable_value": money(first_value(row, ["taxable_value", "taxable value", "taxable amount", "tax exclusive gross", "taxable sales", "price before tax", "taxable turnover"])),
             "gst_rate": money(first_value(row, ["gst_rate", "gst rate", "tax rate", "igst rate", "total tax rate"])),
-            "igst": money(first_value(row, ["igst", "igst amount", "integrated tax"])),
-            "cgst": money(first_value(row, ["cgst", "cgst amount", "central tax"])),
-            "sgst": money(first_value(row, ["sgst", "sgst amount", "state tax"])),
+            "igst": money(first_value(row, ["igst tax", "igst amount", "integrated tax", "igst"])),
+            "cgst": money(first_value(row, ["cgst tax", "cgst amount", "central tax", "cgst"])),
+            "sgst": money(first_value(row, ["sgst tax", "sgst amount", "state tax", "sgst"])),
             "cess": money(first_value(row, ["cess", "cess amount"])),
             "tcs": money(first_value(row, ["tcs", "tcs amount"])),
             "tds": money(first_value(row, ["tds", "tds amount"])),
@@ -100,7 +100,9 @@ def text(value: object) -> str | None:
 def parse_date(value: object):
     if value in (None, ""):
         return None
-    parsed = pd.to_datetime(value, errors="coerce", dayfirst=True)
+    text_value = str(value).strip()
+    dayfirst = not bool(re.match(r"^\d{4}[-/]\d{1,2}[-/]\d{1,2}", text_value))
+    parsed = pd.to_datetime(text_value, errors="coerce", dayfirst=dayfirst)
     if pd.isna(parsed):
         return None
     return parsed.date()

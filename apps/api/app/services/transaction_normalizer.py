@@ -19,6 +19,8 @@ def _same_sign(value, sign: Decimal):
 
 def infer_rate(txn: dict) -> Decimal:
     rate = money(txn.get("gst_rate"))
+    if Decimal("0.00") < rate < Decimal("1.00"):
+        return round_money(rate * Decimal("100"))
     taxable = abs(money(txn.get("taxable_value")))
     tax = abs(money(txn.get("igst")) + money(txn.get("cgst")) + money(txn.get("sgst")) + money(txn.get("cess")))
     if rate == Decimal("0.00") and taxable > 0 and tax > 0:
@@ -78,7 +80,9 @@ def normalize_tax_split(txn: dict) -> dict:
 def finalize_transaction(txn: dict) -> dict:
     txn = normalize_tax_split(txn)
     if isinstance(txn.get("invoice_date"), str):
-        parsed = pd.to_datetime(txn["invoice_date"], errors="coerce", dayfirst=True)
+        text_value = txn["invoice_date"].strip()
+        dayfirst = not text_value[:4].isdigit()
+        parsed = pd.to_datetime(text_value, errors="coerce", dayfirst=dayfirst)
         txn["invoice_date"] = None if pd.isna(parsed) else parsed.date()
     errors = validate_transaction(txn)
     txn["validation_status"] = "error" if errors else "valid"
