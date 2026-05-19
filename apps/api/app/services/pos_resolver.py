@@ -5,6 +5,7 @@ from decimal import Decimal
 import json
 from typing import Any
 
+from app.services.validation import money, validate_gstin
 from app.services.validation import money
 from app.utils.states import STATE_CODES, normalize_state_text, state_code_from_pincode, state_code_from_text
 
@@ -183,7 +184,8 @@ def resolve_pos(raw_row: dict[str, Any], normalized_row: dict[str, Any], platfor
 
     cgst = money(normalized_row.get("cgst"))
     sgst = money(normalized_row.get("sgst"))
-    seller_state = state_code_from_text(str(seller_gstin or normalized_row.get("gstin") or "")[:2])
+    seller_gstin_value = str(seller_gstin or normalized_row.get("gstin") or "").strip().upper()
+    seller_state = seller_gstin_value[:2] if validate_gstin(seller_gstin_value) else None
     if (cgst != Decimal("0.00") or sgst != Decimal("0.00")) and seller_state:
         return PosResolution(seller_state, STATE_CODES.get(seller_state), "inferred_from_seller_state", "gstin", "POS inferred from seller GSTIN because CGST/SGST is present")
 
