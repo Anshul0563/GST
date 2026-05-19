@@ -167,6 +167,7 @@ export type BillingStatus = {
   role: string;
   plan: string;
   subscription_status: string;
+  subscription_expires_at?: string | null;
   free_access: boolean;
   free_access_reason?: string | null;
   latest_order?: {
@@ -246,7 +247,7 @@ export function registerUser(payload: { email: string; password: string; full_na
 }
 
 export function getCurrentUser(token: string) {
-  return request<{ id: number; email: string; full_name?: string | null; role?: string; plan?: string; subscription_status?: string; free_access_reason?: string | null }>("/auth/me", {}, token);
+  return request<{ id: number; email: string; full_name?: string | null; role?: string; plan?: string; subscription_status?: string; subscription_expires_at?: string | null; free_access_reason?: string | null }>("/auth/me", {}, token);
 }
 
 export async function loadWorkspace(token: string) {
@@ -421,7 +422,7 @@ export function createBillingOrder(token: string, payload: { plan_id: string; bi
 }
 
 export function verifyBillingPayment(token: string, payload: { order_id: number; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) {
-  return request<{ status: string; plan: string; subscription_status: string }>("/billing/verify", { method: "POST", body: JSON.stringify(payload) }, token);
+  return request<{ status: string; plan: string; subscription_status: string; subscription_expires_at?: string | null }>("/billing/verify", { method: "POST", body: JSON.stringify(payload) }, token);
 }
 
 export function getTallyHistory(token: string, profileId?: number) {

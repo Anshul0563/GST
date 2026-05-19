@@ -240,7 +240,7 @@ export function BillingPage() {
           <StatCard label="Role" value={status?.role || workspace.user?.role || "user"} />
           <StatCard label="Plan" value={status?.plan || workspace.user?.plan || "free"} tone={status?.free_access ? "green" : "blue"} />
           <StatCard label="Status" value={status?.subscription_status || workspace.user?.subscription_status || "inactive"} tone={status?.subscription_status === "active" ? "green" : "saffron"} />
-          <StatCard label="Billing cycle" value={cycle} />
+          <StatCard label="Renews/Expires" value={status?.subscription_expires_at ? new Date(status.subscription_expires_at).toLocaleDateString() : "--"} />
         </div>
         {status?.free_access && <div className="mt-5 rounded-3xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{status.free_access_reason || "This account has unrestricted free access."}</div>}
         {message && <div className="mt-5 rounded-3xl bg-blue-50 p-4 text-sm font-bold text-blue-700">{message}</div>}

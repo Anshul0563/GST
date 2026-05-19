@@ -53,7 +53,7 @@ export function TransactionsPage() {
   }
 
   return (
-    <AppShell requiresSubscription token={workspace.token} user={workspace.user} productName="GST Online Seller" title="Transactions" subtitle="Normalized transaction database with professional filters, inline correction and detail drawer." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Export CSV</button>}>
+    <AppShell requiresSubscription requiredPlan="online_seller" token={workspace.token} user={workspace.user} productName="GST Online Seller" title="Transactions" subtitle="Normalized transaction database with professional filters, inline correction and detail drawer." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Export CSV</button>}>
       {!workspace.token ? <EmptyState title="Login required" body="Transactions are loaded from the backend for your authenticated workspace." /> : !workspace.profile ? <EmptyState title="No GST profile selected" body="Create a GST profile before importing and managing transactions." /> : null}
       <Panel title="Merged transaction table" subtitle={`${rows.length} of ${workspace.transactions.length} rows visible`}>
         <div className="mb-5 grid gap-3 md:grid-cols-6">

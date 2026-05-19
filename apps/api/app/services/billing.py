@@ -22,26 +22,19 @@ class Plan:
 
 
 PLANS: dict[str, Plan] = {
-    "starter": Plan(
-        id="starter",
-        name="Starter",
-        monthly_paise=99900,
-        yearly_paise=999900,
-        features=("3 GST profiles", "Marketplace imports", "GSTR-1 JSON/Excel", "Email support"),
+    "online_seller": Plan(
+        id="online_seller",
+        name="GST Online Seller",
+        monthly_paise=7900,
+        yearly_paise=94800,
+        features=("Marketplace imports", "Manage normalized sales data", "GSTR-1 JSON export", "GSTR-1 Excel reports"),
     ),
-    "growth": Plan(
-        id="growth",
-        name="Growth",
-        monthly_paise=249900,
-        yearly_paise=2499000,
-        features=("10 GST profiles", "Tally XML", "2A/2B reconciliation", "Priority parser support"),
-    ),
-    "scale": Plan(
-        id="scale",
-        name="Scale",
-        monthly_paise=499900,
-        yearly_paise=4999000,
-        features=("Unlimited GST profiles", "Bulk imports", "Advanced audit logs", "Priority support"),
+    "ecom_tally": Plan(
+        id="ecom_tally",
+        name="eCom to Tally",
+        monthly_paise=19900,
+        yearly_paise=238800,
+        features=("Tally company setup", "Marketplace import", "Ledger mapping", "Tally XML and voucher Excel export"),
     ),
 }
 

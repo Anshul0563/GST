@@ -20,7 +20,7 @@ import {
 
 export type Workspace = {
   token: string;
-  user: { id: number; email: string; full_name?: string | null; role?: string; plan?: string; subscription_status?: string; free_access_reason?: string | null } | null;
+  user: { id: number; email: string; full_name?: string | null; role?: string; plan?: string; subscription_status?: string; subscription_expires_at?: string | null; free_access_reason?: string | null } | null;
   profile: Profile | null;
   profiles: Profile[];
   summary: DashboardSummary | null;

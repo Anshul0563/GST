@@ -68,14 +68,19 @@ type AppShellUser = {
   role?: string;
   plan?: string;
   subscription_status?: string;
+  subscription_expires_at?: string | null;
   free_access_reason?: string | null;
 } | null;
 
-function hasPaidAccess(user: AppShellUser) {
-  return Boolean(user && (user.role === "admin" || user.plan === "admin_free" || user.subscription_status === "active"));
+function hasPaidAccess(user: AppShellUser, requiredPlan?: string) {
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "super_admin" || user.plan === "admin_free") return true;
+  if (user.subscription_status !== "active") return false;
+  if (!requiredPlan) return true;
+  return user.plan === requiredPlan;
 }
 
-export function AppShell({ title, subtitle, profile, profiles, onProfileChange, actions, token, user, requiresSubscription = false, productName, children }: {
+export function AppShell({ title, subtitle, profile, profiles, onProfileChange, actions, token, user, requiresSubscription = false, requiredPlan, productName, children }: {
   title: string;
   subtitle?: string;
   profile: Profile | null;
@@ -85,11 +90,13 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   token?: string;
   user?: AppShellUser;
   requiresSubscription?: boolean;
+  requiredPlan?: string;
   productName?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const activeModule = pathname.startsWith("/modules/online-seller") ? "onlineSeller" : pathname.startsWith("/modules/reconcile") ? "reconcile" : pathname.startsWith("/modules/tally") ? "tally" : "";
   const activeModuleConfig = activeModule ? moduleNav[activeModule] : null;
   const currentItem = pathname === "/modules/online-seller/profile"
@@ -99,7 +106,14 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const pageContext = currentItem?.label || activeModuleConfig?.title || "Product Suite";
   const workspaceName = profile?.trade_name || profile?.legal_name || "Workspace";
   const workspaceInitial = workspaceName.trim().charAt(0).toUpperCase() || "G";
-  const locked = requiresSubscription && !hasPaidAccess(user ?? null);
+  const locked = requiresSubscription && !hasPaidAccess(user ?? null, requiredPlan);
+  function logout() {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("gst_bharat_token");
+    }
+    setProfileMenuOpen(false);
+    router.push("/login");
+  }
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 dark:bg-[#07111f] dark:text-white">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-200/60 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none lg:block">
@@ -183,13 +197,20 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase text-slate-500 dark:bg-white/10">{profile?.filing_frequency || "Mode"}</span>
               </Link>
               <button className="grid size-10 place-items-center rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900"><Moon className="size-4" /></button>
-              <Link href="/modules/online-seller/profile" className="hidden max-w-64 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-[#1746A2]/40 dark:border-white/10 dark:bg-slate-900 sm:flex">
-                <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-saffron to-rose-500 font-black text-white">{workspaceInitial}</span>
-                <span className="min-w-0 text-left">
-                  <span className="block truncate text-sm font-black">{workspaceName}</span>
-                  <span className="block truncate text-xs font-semibold text-slate-500">{profile?.gstin || "GSTIN not set"}</span>
-                </span>
-              </Link>
+              <div className="relative hidden sm:block">
+                <button onClick={() => setProfileMenuOpen((open) => !open)} className="flex max-w-64 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-[#1746A2]/40 dark:border-white/10 dark:bg-slate-900">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-saffron to-rose-500 font-black text-white">{workspaceInitial}</span>
+                  <span className="min-w-0 text-left">
+                    <span className="block truncate text-sm font-black">{workspaceName}</span>
+                    <span className="block truncate text-xs font-semibold text-slate-500">{profile?.gstin || user?.email || "GSTIN not set"}</span>
+                  </span>
+                </button>
+                {profileMenuOpen && <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70 dark:border-white/10 dark:bg-slate-950 dark:shadow-none">
+                  <Link onClick={() => setProfileMenuOpen(false)} href="/modules/online-seller/profile" className="block rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10">GST Profile</Link>
+                  <Link onClick={() => setProfileMenuOpen(false)} href="/billing" className="block rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10">Billing</Link>
+                  <button onClick={logout} className="block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10">Logout</button>
+                </div>}
+              </div>
             </div>
           </div>
         </header>
@@ -207,7 +228,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             </div>
             {!locked && actions}
           </div>
-          {locked ? <SubscriptionGate token={token || ""} user={user ?? null} productName={productName || activeModuleConfig?.title || title} /> : children}
+          {locked ? <SubscriptionGate token={token || ""} user={user ?? null} productName={productName || activeModuleConfig?.title || title} requiredPlan={requiredPlan} /> : children}
         </main>
       </div>
     </div>
@@ -218,17 +239,17 @@ function CalendarMini() {
   return <span className="grid size-7 shrink-0 place-items-center rounded-xl bg-[#1746A2]/10 text-[10px] font-black text-[#1746A2]">FP</span>;
 }
 
-function SubscriptionGate({ token, user, productName }: { token: string; user: AppShellUser; productName: string }) {
+function SubscriptionGate({ token, user, productName, requiredPlan }: { token: string; user: AppShellUser; productName: string; requiredPlan?: string }) {
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     if (!token) return;
     setLoading(true);
     getBillingPlans(token)
-      .then((result) => setPlans(result.plans))
+      .then((result) => setPlans(requiredPlan ? result.plans.filter((plan) => plan.id === requiredPlan) : result.plans))
       .catch(() => setPlans([]))
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [token, requiredPlan]);
 
   return (
     <div className="space-y-6">
@@ -253,6 +274,7 @@ function SubscriptionGate({ token, user, productName }: { token: string; user: A
               <AccessRow label="Email" value={user?.email || "Login required"} />
               <AccessRow label="Plan" value={user?.plan || "free"} />
               <AccessRow label="Status" value={user?.subscription_status || "inactive"} />
+              <AccessRow label="Renews/Expires" value={user?.subscription_expires_at ? new Date(user.subscription_expires_at).toLocaleDateString() : "--"} />
             </div>
           </div>
         </div>

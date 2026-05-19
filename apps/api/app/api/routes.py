@@ -63,6 +63,29 @@ ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
 STALE_IMPORT_AFTER = timedelta(minutes=5)
 
 
+def paid_until(order: PaymentOrder | None) -> datetime | None:
+    if not order or order.status != "paid" or not order.paid_at:
+        return None
+    days = 365 if order.billing_cycle == "yearly" else 30
+    return order.paid_at + timedelta(days=days)
+
+
+def refresh_subscription(user: User, db: Session) -> tuple[str, str, datetime | None]:
+    if getattr(user, "plan", "") == "admin_free" or getattr(user, "role", "") in {"admin", "super_admin"}:
+        user.subscription_status = "active"
+        db.commit()
+        return user.plan, user.subscription_status, None
+    latest_paid = db.scalar(select(PaymentOrder).where(PaymentOrder.user_id == user.id, PaymentOrder.status == "paid").order_by(PaymentOrder.paid_at.desc(), PaymentOrder.id.desc()))
+    expires_at = paid_until(latest_paid)
+    if latest_paid and expires_at and expires_at > datetime.utcnow():
+        user.plan = latest_paid.plan_id
+        user.subscription_status = "active"
+    else:
+        user.subscription_status = "inactive"
+    db.commit()
+    return getattr(user, "plan", "free"), getattr(user, "subscription_status", "inactive"), expires_at
+
+
 def settle_stale_import(batch: PlatformImportBatch, db: Session) -> None:
     if batch.status not in {"queued", "processing"}:
         return
@@ -107,14 +130,16 @@ def login(payload: LoginIn, db: Session = Depends(get_db)):
 
 
 @router.get("/auth/me")
-def me(user: User = Depends(get_current_user)):
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    plan, subscription_status, expires_at = refresh_subscription(user, db)
     return {
         "id": user.id,
         "email": user.email,
         "full_name": user.full_name,
         "role": getattr(user, "role", "user"),
-        "plan": getattr(user, "plan", "free"),
-        "subscription_status": getattr(user, "subscription_status", "inactive"),
+        "plan": plan,
+        "subscription_status": subscription_status,
+        "subscription_expires_at": expires_at,
         "free_access_reason": getattr(user, "free_access_reason", None),
     }
 
@@ -131,10 +156,12 @@ def billing_plans(user: User = Depends(get_current_user)):
 @router.get("/billing/status")
 def billing_status(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     latest = db.scalar(select(PaymentOrder).where(PaymentOrder.user_id == user.id).order_by(PaymentOrder.id.desc()))
+    plan, subscription_status, expires_at = refresh_subscription(user, db)
     return {
         "role": getattr(user, "role", "user"),
-        "plan": getattr(user, "plan", "free"),
-        "subscription_status": getattr(user, "subscription_status", "inactive"),
+        "plan": plan,
+        "subscription_status": subscription_status,
+        "subscription_expires_at": expires_at,
         "free_access": getattr(user, "plan", "") == "admin_free",
         "free_access_reason": getattr(user, "free_access_reason", None),
         "latest_order": {
@@ -205,7 +232,7 @@ def verify_payment(payload: VerifyPaymentIn, user: User = Depends(get_current_us
     user.subscription_status = "active"
     db.add(AuditLog(user_id=user.id, action="billing.payment.verified", entity_type="payment_order", entity_id=str(order.id)))
     db.commit()
-    return {"status": "paid", "plan": user.plan, "subscription_status": user.subscription_status}
+    return {"status": "paid", "plan": user.plan, "subscription_status": user.subscription_status, "subscription_expires_at": paid_until(order)}
 
 
 @router.post("/gst-profile", response_model=GSTProfileOut)
