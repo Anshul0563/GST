@@ -1,14 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, FileJson, FileSpreadsheet, ReceiptText, UploadCloud } from "lucide-react";
+import { Download, FileSpreadsheet, ReceiptText, SlidersHorizontal, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard, StatusPill } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { Profile, ReconcileHistoryItem, ReconcileReport, getReconcileDownloadUrl, getReconcileHistory, getReconcileResults, uploadReconcileFilesV2 } from "@/lib/api";
+import { ReconcileHistoryItem, ReconcileReport, getReconcileDownloadUrl, getReconcileHistory, getReconcileResults, uploadReconcileFilesV2 } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 const categories = ["matched", "partially_matched", "tax_mismatch", "invoice_mismatch", "missing_in_portal", "missing_in_books", "duplicate_invoice", "invalid_gstin"];
@@ -78,62 +77,71 @@ export function ReconcileUploadPage() {
     }
   }
   const summary = result?.summary || {};
-  const tiles = [
-    ["Total 2B (In ₹)", summary.portal_rows || 0, "bg-cyan-500"],
-    ["Total Matched Entry", summary.matched || 0, "bg-sky-500"],
-    ["Matched", summary.matched || 0, "bg-emerald-500"],
-    ["Amount Mismatched", summary.tax_mismatch || 0, "bg-orange-300"],
-    ["Invoice Mismatched", summary.invoice_mismatch || 0, "bg-orange-400"],
-    ["Entry Missing", summary.missing_in_portal || 0, "bg-pink-500"],
-    ["Return Pending", summary.partially_matched || 0, "bg-rose-500"],
-    ["UnMatched", Number(summary.missing_in_books || 0) + Number(summary.invalid_gstin || 0), "bg-pink-600"],
-  ] as const;
-  return <ReconcileClassicShell profile={workspace.profile}>
-    <section className="rounded-md bg-white p-8 text-center shadow-xl shadow-slate-200/80">
-      <h2 className="text-xl font-black">2B/2A Reconcile</h2>
-      <p className="mt-1 text-xs text-slate-500">2A/2B Reconcile with Purchase data and provide query report.</p>
-      <p className="mx-auto mt-6 max-w-xl text-xs leading-5 text-slate-500">Please download the sample file for 2A & 2B verification sheet by clicking the button below, and fill in the GST portal 2A/2B data and the client purchase data in the client data sheet.</p>
-      <a href="data:text/csv;charset=utf-8,Supplier GSTIN,Invoice Number,Invoice Date,Taxable Value,IGST,CGST,SGST%0A" download="gst-bharat-2b-2a-sample.csv" className="mt-5 inline-flex items-center gap-2 rounded bg-[#2f72ff] px-5 py-3 text-xs font-bold text-white shadow-md">
-        <span className="grid size-8 place-items-center rounded bg-emerald-600"><FileSpreadsheet className="size-5" /></span> Sample File Download
-      </a>
-    </section>
-
-    <section className="rounded-md bg-white p-7 shadow-xl shadow-slate-200/80">
-      <h3 className="border-b border-slate-200 pb-4 text-base font-black">Upload File</h3>
-      {!workspace.profile ? <div className="mt-5"><EmptyState title="GST profile required" body="Create or select GST profile before uploading reconciliation files." /></div> : null}
-      <div className="mt-6 grid gap-5 md:grid-cols-[1fr_150px]">
-        <label className="text-xs font-bold text-slate-700">2A/2B Data Sheet
-          <input type="file" onChange={(event) => setPortal(event.target.files?.[0] || null)} className="mt-2 w-full rounded border border-slate-300 bg-white px-3 py-2 text-xs file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-bold" />
-        </label>
-        <label className="text-xs font-bold text-slate-700">Difference Ignore (₹)
-          <input value={taxTolerance} onChange={(event) => setTaxTolerance(event.target.value)} className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none" />
-        </label>
-        <label className="text-xs font-bold text-slate-700 md:col-span-2">Purchase Register / Client Data Sheet
-          <input type="file" onChange={(event) => setBooks(event.target.files?.[0] || null)} className="mt-2 w-full rounded border border-slate-300 bg-white px-3 py-2 text-xs file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-bold" />
-        </label>
-        <label className="text-xs font-bold text-slate-700">Date tolerance days
-          <input type="number" value={dateTolerance} onChange={(event) => setDateTolerance(Number(event.target.value))} className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none" />
-        </label>
+  const summaryNumber = (key: string) => Number(summary[key] || 0);
+  const unmatched = summaryNumber("missing_in_books") + summaryNumber("invalid_gstin");
+  return <AppShell title="Upload & Reconcile" subtitle="Upload GST portal 2A/2B and purchase register files, tune tolerances, then generate match results." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<a href="data:text/csv;charset=utf-8,Supplier GSTIN,Invoice Number,Invoice Date,Taxable Value,IGST,CGST,SGST%0A" download="gst-bharat-2a-2b-sample.csv" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Sample CSV</a>}>
+    <div className="space-y-6">
+      {!workspace.token ? <EmptyState title="Login required" body="Login to upload 2A/2B and purchase register files." /> : !workspace.profile ? <EmptyState title="GST profile required" body="Create or select GST profile before uploading reconciliation files." /> : null}
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard label="GSTIN" value={workspace.profile?.gstin || "Not set"} />
+        <StatCard label="Return period" value={workspace.profile?.return_period || "--"} />
+        <StatCard label="2A/2B file" value={portal ? "Selected" : "Pending"} tone={portal ? "green" : "saffron"} />
+        <StatCard label="Purchase file" value={books ? "Selected" : "Pending"} tone={books ? "green" : "saffron"} />
       </div>
-      <button onClick={submit} disabled={busy || !workspace.profile || !portal || !books} className="mt-5 rounded bg-[#2f72ff] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{busy ? "Processing..." : "Submit"}</button>
-      {error && <div className="mt-4 rounded bg-rose-50 p-3 text-sm font-bold text-rose-700">{error}</div>}
-
-      {result && <div className="mt-6">
-        <div className="grid grid-cols-2 text-center text-[11px] font-black text-white md:grid-cols-4 lg:grid-cols-8">
-          {tiles.map(([label, value, color]) => <div key={label} className={`${color} min-h-20 p-3`}>
-            <p>{label}</p>
-            <p className="mt-2 text-lg">{String(value)}</p>
-          </div>)}
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr_0.8fr]">
+        <Panel title="Upload 2A/2B" subtitle="GST portal file with supplier invoice and tax data.">
+          <UploadBox title="GST portal 2A/2B file" file={portal} onFile={setPortal} />
+        </Panel>
+        <Panel title="Upload Purchase Register" subtitle="Books purchase register used for ITC matching.">
+          <UploadBox title="Purchase register file" file={books} onFile={setBooks} />
+        </Panel>
+        <Panel title="Reconcile settings" subtitle="Tolerance and fuzzy matching controls.">
+          <div className="space-y-4">
+            <label className="grid gap-2 text-sm font-bold">Tax difference ignore
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-900">
+                <span className="text-slate-400">INR</span>
+                <input value={taxTolerance} onChange={(event) => setTaxTolerance(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" />
+              </div>
+            </label>
+            <label className="grid gap-2 text-sm font-bold">Date tolerance days
+              <input type="number" min={0} value={dateTolerance} onChange={(event) => setDateTolerance(Number(event.target.value))} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" />
+            </label>
+            <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300">
+              <div className="mb-2 flex items-center gap-2 font-black text-slate-900 dark:text-white"><SlidersHorizontal className="size-4 text-[#1746A2]" /> Enabled checks</div>
+              <p>Date tolerance and fuzzy invoice matching are applied during backend reconciliation.</p>
+            </div>
+          </div>
+        </Panel>
+      </div>
+      <Panel title="Run reconcile" subtitle="Both files are required. Results are saved as a reconciliation batch with downloadable Excel.">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="grid gap-3 text-sm md:grid-cols-3">
+            <Readiness label="GST profile" ready={Boolean(workspace.profile)} />
+            <Readiness label="2A/2B upload" ready={Boolean(portal)} />
+            <Readiness label="Purchase register" ready={Boolean(books)} />
+          </div>
+          <button onClick={submit} disabled={busy || !workspace.profile || !portal || !books} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-6 py-4 text-sm font-bold text-white shadow-xl shadow-blue-950/20 disabled:cursor-not-allowed disabled:opacity-45">
+            <UploadCloud className="size-4" /> {busy ? "Reconciling..." : "Reconcile now"}
+          </button>
         </div>
-        <div className="mt-6 text-center">
-          <a href={getReconcileDownloadUrl(result.id)} className="inline-flex items-center gap-2 rounded bg-[#2f72ff] px-5 py-3 text-xs font-bold text-white shadow-md">
-            <span className="grid size-8 place-items-center rounded bg-emerald-600"><FileSpreadsheet className="size-5" /></span> Query Report Download
-          </a>
-          <Link href={`/modules/reconcile/results/${result.id}`} className="ml-3 inline-flex rounded border border-[#2f72ff] px-5 py-3 text-xs font-bold text-[#2f72ff]">View Details</Link>
+        {error && <div className="mt-5 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
+      </Panel>
+      {result && <Panel title={`Match results batch #${result.id}`} subtitle="Open explorer for row-level mismatch reasons or download Excel report.">
+        <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-6">
+          <StatCard label="Portal rows" value={String(summaryNumber("portal_rows"))} />
+          <StatCard label="Matched" value={String(summaryNumber("matched"))} tone="green" />
+          <StatCard label="Tax mismatch" value={String(summaryNumber("tax_mismatch"))} tone="saffron" />
+          <StatCard label="Invoice mismatch" value={String(summaryNumber("invoice_mismatch"))} tone="saffron" />
+          <StatCard label="Unmatched" value={String(unmatched)} tone={unmatched ? "red" : "green"} />
+          <StatCard label="ITC risk" value={formatCurrency(summaryNumber("itc_risk_amount"))} tone={summaryNumber("itc_risk_amount") ? "red" : "green"} />
         </div>
-      </div>}
-    </section>
-  </ReconcileClassicShell>;
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link href={`/modules/reconcile/results/${result.id}`} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><ReceiptText className="size-4" /> Match Results</Link>
+          <a href={getReconcileDownloadUrl(result.id)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Download Excel</a>
+        </div>
+      </Panel>}
+    </div>
+  </AppShell>;
 }
 
 export function ReconcileResultsPage({ id }: { id: number }) {
