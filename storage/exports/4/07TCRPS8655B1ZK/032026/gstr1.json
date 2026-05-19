@@ -225,10 +225,10 @@
           {
             "num": 2,
             "from": "FAWRLX2600000080",
-            "to": "LWABOG7260000005",
-            "totnum": 33,
+            "to": "FAWRLX2600000107",
+            "totnum": 28,
             "cancel": 0,
-            "net_issue": 33
+            "net_issue": 28
           },
           {
             "num": 3,
@@ -245,6 +245,14 @@
             "totnum": 3,
             "cancel": 0,
             "net_issue": 3
+          },
+          {
+            "num": 5,
+            "from": "LWABOG7260000001",
+            "to": "LWABOG7260000005",
+            "totnum": 5,
+            "cancel": 0,
+            "net_issue": 5
           }
         ]
       },
@@ -287,10 +295,10 @@
           {
             "num": 5,
             "from": "CANQ1W2600000013",
-            "to": "LYAA9U7260000001",
-            "totnum": 8,
+            "to": "CANQ1W2600000019",
+            "totnum": 7,
             "cancel": 0,
-            "net_issue": 8
+            "net_issue": 7
           },
           {
             "num": 6,
@@ -302,11 +310,27 @@
           },
           {
             "num": 7,
-            "from": "MFABNVY260000001",
-            "to": "RAT6SO2600000034",
-            "totnum": 9,
+            "from": "LYAA9U7260000001",
+            "to": "LYAA9U7260000001",
+            "totnum": 1,
             "cancel": 0,
-            "net_issue": 9
+            "net_issue": 1
+          },
+          {
+            "num": 8,
+            "from": "MFABNVY260000001",
+            "to": "MFABNVY260000002",
+            "totnum": 2,
+            "cancel": 0,
+            "net_issue": 2
+          },
+          {
+            "num": 9,
+            "from": "RAT6SO2600000028",
+            "to": "RAT6SO2600000034",
+            "totnum": 7,
+            "cancel": 0,
+            "net_issue": 7
           }
         ]
       },
@@ -317,10 +341,18 @@
           {
             "num": 1,
             "from": "DAL84U2600000005",
-            "to": "LZAA9B7260000001",
-            "totnum": 2,
+            "to": "DAL84U2600000005",
+            "totnum": 1,
             "cancel": 0,
-            "net_issue": 2
+            "net_issue": 1
+          },
+          {
+            "num": 2,
+            "from": "LZAA9B7260000001",
+            "to": "LZAA9B7260000001",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
           }
         ]
       }
