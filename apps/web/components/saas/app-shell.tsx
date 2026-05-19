@@ -83,7 +83,9 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const router = useRouter();
   const activeModule = pathname.startsWith("/modules/online-seller") ? "onlineSeller" : pathname.startsWith("/modules/reconcile") ? "reconcile" : pathname.startsWith("/modules/tally") ? "tally" : "";
   const activeModuleConfig = activeModule ? moduleNav[activeModule] : null;
-  const currentItem = activeModuleConfig?.items.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+  const currentItem = pathname === "/modules/online-seller/profile"
+    ? { href: "/modules/online-seller/profile" as Route, label: "GST Profile", icon: ShieldCheck }
+    : activeModuleConfig?.items.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
   const ActiveModuleIcon = activeModuleConfig?.icon;
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 dark:bg-[#07111f] dark:text-white">
@@ -187,64 +189,4 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
       </div>
     </div>
   );
-}
-
-export function ClassicToolShell({ title, crumb, active, profile, children }: {
-  title: string;
-  crumb: string;
-  active: "dashboard" | "profile" | "imports" | "manage" | "gstr1";
-  profile: Profile | null;
-  children: React.ReactNode;
-}) {
-  const sideItems: Array<{ key: typeof active; href: Route; label: string; icon: typeof Home }> = [
-    { key: "imports", href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", icon: UploadCloud },
-    { key: "manage", href: "/modules/online-seller/manage-data", label: "Manage Data", icon: ReceiptText },
-    { key: "gstr1", href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson }
-  ];
-  return <div className="min-h-screen bg-[#f3f7fc] text-slate-950">
-    <header className="h-14 border-b border-slate-200 bg-white">
-      <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-5">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-2xl font-black tracking-tight text-[#10244d]">GST</span>
-          <span className="-ml-1 rounded-sm bg-saffron px-1.5 py-0.5 text-xs font-black text-white">BHARAT</span>
-        </Link>
-        <nav className="hidden items-center gap-8 text-xs font-bold text-slate-500 md:flex">
-          <Link className={active === "dashboard" ? "text-rose-500" : ""} href="/dashboard">Dashboard</Link>
-          <Link href="/modules/online-seller/marketplaces">Marketplace Upload</Link>
-          <Link href="/modules/online-seller/manage-data">Manage Data</Link>
-          <Link href="/settings">Support</Link>
-          <span className="grid size-8 place-items-center rounded-full bg-rose-500 font-black text-white">P</span>
-        </nav>
-      </div>
-    </header>
-    <section className="relative bg-[#162d59] text-white">
-      <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(135deg,rgba(255,255,255,.2)_1px,transparent_1px)] [background-size:32px_32px]" />
-      <div className="relative mx-auto flex min-h-44 max-w-6xl items-start justify-between px-5 py-8">
-        <div>
-          <h1 className="text-2xl font-black">{title}</h1>
-          <p className="mt-3 text-sm font-semibold text-white/85">Home <span className="px-2 text-white/45">/</span> Dashboard <span className="px-2 text-white/45">/</span> <span className="text-blue-300">{crumb}</span></p>
-        </div>
-        {profile && <div className="hidden rounded bg-white/10 px-5 py-3 text-xs font-bold md:block">
-          <div>GSTIN: {profile.gstin}</div>
-          <div className="mt-1">Period: {profile.return_period}</div>
-        </div>}
-      </div>
-    </section>
-    <main className="mx-auto -mt-9 grid max-w-6xl gap-5 px-5 pb-12 md:grid-cols-[215px_1fr]">
-      <aside className="h-fit rounded-md bg-white p-7 shadow-xl shadow-slate-200/80">
-        <Link href="/modules/online-seller" className={`mb-5 block border-b border-slate-200 pb-5 text-center text-base font-black ${active === "dashboard" ? "text-[#2f72ff]" : "text-slate-600"}`}>GST Online Seller</Link>
-        <p className="mb-4 text-xs font-black uppercase text-slate-800">GST Online Seller</p>
-        <nav className="space-y-1">
-          {sideItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = active === item.key;
-            return <Link key={item.key} href={item.href} className={`flex items-center gap-3 border-l-2 px-3 py-2 text-sm font-semibold ${isActive ? "border-[#2f72ff] bg-blue-50 text-[#2f72ff]" : "border-transparent text-slate-700 hover:bg-slate-50"}`}>
-              <Icon className="size-4 text-slate-400" /> {item.label}
-            </Link>;
-          })}
-        </nav>
-      </aside>
-      <div className="space-y-6">{children}</div>
-    </main>
-  </div>;
 }
