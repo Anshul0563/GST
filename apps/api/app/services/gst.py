@@ -166,7 +166,7 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
         if amounts["txval"] == Decimal("0.00") and total_tax == Decimal("0.00"):
             continue
-        if rate == Decimal("0.00"):
+        if amounts["txval"] < Decimal("0.00"):
             continue
         base = {
             "sply_ty": sply_ty,
@@ -186,26 +186,6 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             base["csamt"] = json_amount(amounts["csamt"])
         output.append(base)
     return output
-
-
-def valid_for_b2cs(row):
-    if row.get("validation_status") != "valid":
-        return False
-    if not row.get("buyer_state_code") or not row.get("invoice_no"):
-        return False
-    rate = money(row.get("gst_rate"))
-    taxable = money(row.get("taxable_value"))
-    total_tax = (
-        money(row.get("igst"))
-        + money(row.get("cgst"))
-        + money(row.get("sgst"))
-        + money(row.get("cess"))
-    )
-    return rate != Decimal("0.00") and not (taxable == 0 and total_tax == 0)
-
-
-def valid_for_supeco(row):
-    return valid_for_b2cs(row) and bool(row.get("etin"))
 
 
 def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -407,6 +387,18 @@ def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
     return errors
 
 
+b2cs_total = sum(money(x.get("txval")) for x in payload.get("b2cs", []))
+
+supeco_total = sum(
+    money(x.get("suppval")) for x in payload.get("supeco", {}).get("clttx", [])
+)
+
+if abs(b2cs_total - supeco_total) > Decimal("0.01"):
+    errors.append(
+        f"B2CS taxable {b2cs_total} does not match SUPECO taxable {supeco_total}"
+    )
+
+
 def gstr1_generation_report(
     payload: dict[str, Any], source_rows: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -474,12 +466,24 @@ def gstr1_generation_report(
 
 def build_gstr1_json(gstin: str, period: str, rows: list[dict]) -> dict:
     valid_rows = [row for row in rows if valid_for_b2cs(row)]
+
+    b2cs = build_b2cs(gstin, valid_rows)
+    supeco_rows = build_supeco(valid_rows)
+
+    b2cs_txval = sum(money(x.get("txval")) for x in b2cs)
+    eco_txval = sum(money(x.get("suppval")) for x in supeco_rows)
+
+    if abs(b2cs_txval - eco_txval) > Decimal("0.01"):
+        raise ValueError(
+            f"B2CS taxable {b2cs_txval} does not match SUPECO taxable {eco_txval}"
+        )
+
     return {
         "gstin": gstin,
         "fp": period,
         "version": GST_VERSION,
         "hash": "hash",
-        "b2cs": build_b2cs(gstin, valid_rows),
-        "supeco": {"clttx": build_supeco(valid_rows)},
+        "b2cs": b2cs,
+        "supeco": {"clttx": supeco_rows},
         "doc_issue": build_doc_issue(valid_rows),
     }
