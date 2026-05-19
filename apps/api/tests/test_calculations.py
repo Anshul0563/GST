@@ -3,8 +3,11 @@ from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import pandas as pd
+
 from app.parsers.amazon import AmazonParser
 from app.parsers.flipkart import FlipkartParser
+from app.parsers.meesho import MeeshoParser
 from app.services.gst import build_gstr1_json, gstr1_generation_report
 from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
@@ -262,7 +265,53 @@ class GstCalculationTests(unittest.TestCase):
         etins = [item["etin"] for item in payload["supeco"]["clttx"]]
         report = gstr1_generation_report(payload, rows)
         self.assertNotIn("07AARCM9332R1CQ", etins)
-        self.assertIn("No valid Meesho rows for 042026", report["warnings"])
+        self.assertIn("No valid Meesho rows found for period 042026", report["warnings"])
+
+    def test_meesho_parser_joins_financial_rows_with_invoice_metadata(self):
+        with TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            sales = base / "tcs_sales.xlsx"
+            returns = base / "tcs_sales_return.xlsx"
+            invoice = base / "Tax_invoice_details.xlsx"
+            pd.DataFrame([{
+                "sub order num": "SO-1",
+                "order date": "2026-03-22",
+                "hsn code": "711790",
+                "quantity": 1,
+                "gst rate": 3,
+                "total taxable sale value": 100,
+                "tax amount": 3,
+                "total invoice value": 103,
+                "end customer state new": "TELANGANA",
+                "eco tcs gstin": "07AARCM9332R1CQ",
+            }]).to_excel(sales, index=False)
+            pd.DataFrame([{
+                "sub order num": "SO-2",
+                "order date": "2026-03-23",
+                "hsn code": "711790",
+                "quantity": 1,
+                "gst rate": 3,
+                "total taxable sale value": 50,
+                "tax amount": 1.5,
+                "total invoice value": 51.5,
+                "end customer state new": "KARNATAKA",
+                "eco tcs gstin": "07AARCM9332R1CQ",
+            }]).to_excel(returns, index=False)
+            pd.DataFrame([
+                {"type": "INVOICE", "order date": "2026-03-22", "suborder no.": "SO-1", "product description": "Jewellery", "hsn": "711790", "invoice no.": "6p5kc26244"},
+                {"type": "CREDIT", "order date": "2026-03-23", "suborder no.": "SO-2", "product description": "Jewellery", "hsn": "711790", "invoice no.": "6p5kcC26244"},
+            ]).to_excel(invoice, sheet_name="Invoice_Info", index=False)
+
+            result = MeeshoParser("07TCRPS8655B1ZK", "032026").parse([sales, returns, invoice])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 2)
+        invoices = {txn["invoice_no"]: txn for txn in result.transactions}
+        self.assertEqual(invoices["6p5kc26244"]["validation_status"], "valid")
+        self.assertEqual(invoices["6p5kc26244"]["buyer_state_code"], "36")
+        self.assertEqual(invoices["6p5kc26244"]["taxable_value"], Decimal("100.00"))
+        self.assertEqual(invoices["6p5kcC26244"]["doc_type"], "credit_note")
+        self.assertEqual(invoices["6p5kcC26244"]["taxable_value"], Decimal("-50.00"))
 
     def test_real_marketplace_files_match_official_summary(self):
         paths = {

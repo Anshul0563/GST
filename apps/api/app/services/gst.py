@@ -213,17 +213,30 @@ def gstr1_generation_report(payload: dict[str, Any], source_rows: list[dict[str,
         platform: sum(1 for row in valid_rows if row.get("platform") == platform)
         for platform in uploaded_platforms
     }
-    warnings = [
-        f"No valid {platform.title()} rows for {payload.get('fp')}"
-        for platform, count in valid_by_platform.items()
-        if count == 0
-    ]
+    supeco_etins = [row.get("etin") for row in payload.get("supeco", {}).get("clttx", [])]
+    warnings = []
+    for platform, count in valid_by_platform.items():
+        if count == 0:
+            if platform == "meesho":
+                warnings.append(f"No valid Meesho rows found for period {payload.get('fp')}")
+            else:
+                warnings.append(f"No valid {platform.title()} rows found for period {payload.get('fp')}")
+
+    errors = validate_doc_issue_ranges(payload.get("doc_issue", {}))
+    valid_etins = sorted({str(row.get("etin")) for row in valid_rows if row.get("etin")})
+    missing_etins = [etin for etin in valid_etins if etin not in supeco_etins]
+    for etin in missing_etins:
+        platforms = sorted({str(row.get("platform")) for row in valid_rows if str(row.get("etin")) == etin})
+        errors.append(f"Valid rows for {', '.join(platforms)} have ETIN {etin}, but SUPECO clttx is missing it")
+    if "meesho" in uploaded_platforms and valid_by_platform.get("meesho", 0) > 0 and "07AARCM9332R1CQ" not in supeco_etins:
+        errors.append("Uploaded Meesho rows are valid, but Meesho SUPECO summary is missing")
+
     return {
         "uploaded_platforms": uploaded_platforms,
         "valid_rows_per_platform": valid_by_platform,
-        "supeco_etins": [row.get("etin") for row in payload.get("supeco", {}).get("clttx", [])],
+        "supeco_etins": supeco_etins,
         "warnings": warnings,
-        "errors": validate_doc_issue_ranges(payload.get("doc_issue", {})),
+        "errors": errors,
     }
 
 

@@ -650,17 +650,18 @@ def generate_gstr1(payload: GenerateGSTR1In, user: User = Depends(get_current_us
     blockers = validation_error_count(user.id, profile.id, payload.period, db)
     if blockers:
         raise HTTPException(422, f"Resolve {blockers} validation error rows before generating GSTR-1 JSON")
-    rows = transaction_dicts(user.id, profile.id, payload.period, db)
+    rows = transaction_dicts(user.id, profile.id, payload.period, db, valid_only=False)
     gstr = build_gstr1_json(profile.gstin, payload.period, rows)
     generation_report = gstr1_generation_report(gstr, rows)
     if generation_report["errors"]:
         raise HTTPException(422, {"message": "GSTR-1 document issue validation failed", "errors": generation_report["errors"]})
+    export_rows = [row for row in rows if row.get("validation_status") == "valid"]
     settings = get_settings()
     base = settings.export_dir / str(user.id) / profile.gstin / payload.period
     base.mkdir(parents=True, exist_ok=True)
     json_path = base / "gstr1.json"
     json_path.write_text(json.dumps(gstr, indent=2), encoding="utf-8")
-    excel_path = write_gstr1_excel(base / "gstr1.xlsx", gstr, rows)
+    excel_path = write_gstr1_excel(base / "gstr1.xlsx", gstr, export_rows)
     export = GSTR1JsonExport(user_id=user.id, profile_id=profile.id, period=payload.period, json_path=str(json_path), excel_path=str(excel_path))
     db.add(export)
     db.add(AuditLog(user_id=user.id, action="gstr1.generate", entity_type="gstr1_json_exports"))
