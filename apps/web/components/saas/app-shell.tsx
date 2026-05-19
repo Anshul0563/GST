@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, UploadCloud } from "lucide-react";
-import { Profile } from "@/lib/api";
+import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, UploadCloud } from "lucide-react";
+import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
 
 const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
