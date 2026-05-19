@@ -74,6 +74,18 @@ def settle_stale_import(batch: PlatformImportBatch, db: Session) -> None:
     db.commit()
 
 
+def read_import_report(batch: PlatformImportBatch) -> tuple[list[dict], dict]:
+    try:
+        raw = json.loads(batch.error_report_json or "[]")
+    except json.JSONDecodeError:
+        return [{"error": batch.error_report_json or "Invalid import report"}], {}
+    if isinstance(raw, dict):
+        errors = raw.get("parser_errors", [])
+        debug = raw.get("debug", {})
+        return (errors if isinstance(errors, list) else []), (debug if isinstance(debug, dict) else {})
+    return (raw if isinstance(raw, list) else []), {}
+
+
 @router.post("/auth/register", response_model=Token)
 def register(payload: RegisterIn, db: Session = Depends(get_db)):
     existing = db.scalar(select(User).where(User.email == payload.email.lower()))
@@ -339,6 +351,7 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         result = parser.parse([Path(path) for path in file_paths])
         seen_keys: set[tuple[int, str | None, str | None, str | None]] = set()
         inserted_rows = 0
+        validation_error_rows = 0
         for txn in result.transactions:
             key = (batch.profile_id, txn.get("platform"), txn.get("invoice_no"), txn.get("order_item_id"))
             duplicate = key in seen_keys or db.scalar(select(NormalizedTransaction).where(
@@ -352,10 +365,11 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
             seen_keys.add(key)
             db.add(NormalizedTransaction(user_id=batch.user_id, profile_id=batch.profile_id, batch_id=batch.id, **txn))
             inserted_rows += 1
+            validation_error_rows += 1 if txn.get("validation_status") == "error" else 0
         batch.parsed_rows = inserted_rows
-        batch.error_rows = len(result.errors) + sum(1 for txn in result.transactions if txn.get("validation_status") == "error")
-        batch.error_report_json = json.dumps(result.errors)
-        batch.status = "completed" if not result.errors else "completed_with_errors"
+        batch.error_rows = len(result.errors) + validation_error_rows
+        batch.error_report_json = json.dumps({"parser_errors": result.errors, "debug": result.debug}, default=str)
+        batch.status = "completed" if batch.error_rows == 0 else "completed_with_errors"
         batch.completed_at = datetime.utcnow()
         db.add(AuditLog(user_id=batch.user_id, action="import.processed", entity_type="platform_import_batch", entity_id=str(batch.id)))
         db.commit()
@@ -376,7 +390,8 @@ def import_status(batch_id: int, user: User = Depends(get_current_user), db: Ses
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
     settle_stale_import(batch, db)
-    return BatchStatus(id=batch.id, platform=batch.platform, status=batch.status, parsed_rows=batch.parsed_rows, error_rows=batch.error_rows, errors=json.loads(batch.error_report_json or "[]"))
+    parser_errors, debug = read_import_report(batch)
+    return BatchStatus(id=batch.id, platform=batch.platform, status=batch.status, parsed_rows=batch.parsed_rows, error_rows=batch.error_rows, errors=parser_errors, debug=debug)
 
 
 @router.get("/imports", response_model=list[BatchStatus])
@@ -388,14 +403,15 @@ def list_imports(profile_id: int | None = None, user: User = Depends(get_current
     for batch in batches:
         settle_stale_import(batch, db)
     return [
-        BatchStatus(
+        (lambda report: BatchStatus(
             id=batch.id,
             platform=batch.platform,
             status=batch.status,
             parsed_rows=batch.parsed_rows,
             error_rows=batch.error_rows,
-            errors=json.loads(batch.error_report_json or "[]"),
-        )
+            errors=report[0],
+            debug=report[1],
+        ))(read_import_report(batch))
         for batch in batches
     ]
 
@@ -405,8 +421,9 @@ def import_errors(batch_id: int, user: User = Depends(get_current_user), db: Ses
     batch = db.get(PlatformImportBatch, batch_id)
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
+    parser_errors, debug = read_import_report(batch)
     rows = db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.batch_id == batch_id, NormalizedTransaction.validation_status == "error")).all()
-    return {"parser_errors": json.loads(batch.error_report_json or "[]"), "row_errors": [TransactionOut.model_validate(row).model_dump(mode="json") for row in rows]}
+    return {"parser_errors": parser_errors, "parser_debug": debug, "row_errors": [TransactionOut.model_validate(row).model_dump(mode="json") for row in rows]}
 
 
 @router.delete("/imports/{batch_id}")
@@ -533,11 +550,24 @@ def transaction_dicts(user_id: int, profile_id: int, period: str, db: Session) -
     return [TransactionOut.model_validate(row).model_dump(mode="json") for row in rows]
 
 
+def validation_error_count(user_id: int, profile_id: int, period: str, db: Session) -> int:
+    rows = db.scalars(select(NormalizedTransaction).where(
+        NormalizedTransaction.user_id == user_id,
+        NormalizedTransaction.profile_id == profile_id,
+        NormalizedTransaction.filing_period == period,
+        NormalizedTransaction.validation_status == "error",
+    )).all()
+    return len(rows)
+
+
 @router.post("/gstr1/generate")
 def generate_gstr1(payload: GenerateGSTR1In, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     profile = db.get(GSTProfile, payload.profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
+    blockers = validation_error_count(user.id, profile.id, payload.period, db)
+    if blockers:
+        raise HTTPException(422, f"Resolve {blockers} validation error rows before generating GSTR-1 JSON")
     rows = transaction_dicts(user.id, profile.id, payload.period, db)
     gstr = build_gstr1_json(profile.gstin, payload.period, rows)
     settings = get_settings()

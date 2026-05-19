@@ -122,6 +122,7 @@ class BatchStatus(BaseModel):
     parsed_rows: int
     error_rows: int
     errors: list[dict[str, Any]] = []
+    debug: dict[str, Any] = {}
 
 
 class GenerateGSTR1In(BaseModel):

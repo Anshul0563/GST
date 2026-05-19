@@ -76,10 +76,12 @@ export type BatchStatus = {
   parsed_rows: number;
   error_rows: number;
   errors?: Array<Record<string, unknown>>;
+  debug?: Record<string, unknown>;
 };
 
 export type ImportErrors = {
   parser_errors: Array<Record<string, unknown>>;
+  parser_debug?: Record<string, unknown>;
   row_errors: Transaction[];
 };
 

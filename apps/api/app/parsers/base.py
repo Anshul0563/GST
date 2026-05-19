@@ -7,8 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from app.services.pos_resolver import apply_pos_resolution
 from app.services.validation import money
-from app.utils.states import STATE_CODES, state_code_from_text
 
 
 ETINS = {
@@ -26,6 +26,7 @@ ETINS = {
 class ParseResult:
     transactions: list[dict] = field(default_factory=list)
     errors: list[dict] = field(default_factory=list)
+    debug: dict = field(default_factory=dict)
 
 
 class MarketplaceParser:
@@ -39,8 +40,6 @@ class MarketplaceParser:
         raise NotImplementedError
 
     def normalize_row(self, row: dict[str, Any], source_file: str) -> dict:
-        buyer_state_code = first_value(row, ["buyer_state_code", "pos", "place of supply", "ship to state", "ship state", "billing state", "buyer billing state", "buyer delivery state", "state"])
-        buyer_state_code = state_code_from_text(buyer_state_code)
         raw_date = first_value(row, ["invoice_date", "invoice date", "invoice generated date", "shipment date", "order date", "date"])
         doc_type = str(first_value(row, ["doc_type", "document type", "transaction type", "type"]) or "invoice").lower()
         if "refund" in doc_type or "return" in doc_type or "credit" in doc_type:
@@ -49,7 +48,7 @@ class MarketplaceParser:
             doc_type = "debit_note"
         else:
             doc_type = "invoice"
-        return {
+        txn = {
             "platform": self.platform,
             "gstin": self.gstin,
             "etin": first_value(row, ["etin", "ecommerce gstin", "operator gstin"]) or ETINS.get(self.platform),
@@ -59,8 +58,8 @@ class MarketplaceParser:
             "invoice_no": text(first_value(row, ["invoice_no", "invoice number", "invoice id", "invoice no", "tax invoice no"])),
             "invoice_date": parse_date(raw_date),
             "doc_type": doc_type,
-            "buyer_state_code": buyer_state_code,
-            "buyer_state_name": STATE_CODES.get(buyer_state_code or ""),
+            "buyer_state_code": text(first_value(row, ["buyer_state_code", "state code", "gst state code"])),
+            "buyer_state_name": text(first_value(row, ["buyer_state_name", "state name", "gst state"])),
             "hsn": text(first_value(row, ["hsn", "hsn code", "hsn/sac"])),
             "product_name": text(first_value(row, ["product_name", "product title", "product name", "sku title", "item description"])),
             "sku": text(first_value(row, ["sku", "seller sku", "fsn", "merchant sku"])),
@@ -80,6 +79,8 @@ class MarketplaceParser:
             "source_file": source_file,
             "raw_row_json": json.dumps(row, default=str),
         }
+        apply_pos_resolution(row, txn, self.platform)
+        return txn
 
 
 def clean_column(value: object) -> str:

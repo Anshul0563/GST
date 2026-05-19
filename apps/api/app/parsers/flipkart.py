@@ -4,6 +4,7 @@ from openpyxl import load_workbook
 import pandas as pd
 
 from app.parsers.base import MarketplaceParser, ParseResult, clean_column, detect_header_row_frame, should_skip_transaction, unique_headers
+from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
 from app.services.transaction_normalizer import finalize_transaction
 
 
@@ -12,6 +13,7 @@ class FlipkartParser(MarketplaceParser):
 
     def parse(self, files: list[Path]) -> ParseResult:
         result = ParseResult()
+        result.debug = new_pos_debug(self.platform)
         for path in files:
             try:
                 workbook = load_workbook(path, data_only=True, read_only=False)
@@ -21,19 +23,21 @@ class FlipkartParser(MarketplaceParser):
                         continue
                     frame = pd.DataFrame(rows)
                     header_index = detect_header_row_frame(frame, ["order", "invoice", "taxable", "igst", "cgst", "sgst"])
+                    result.debug["header_rows"].append({"file": path.name, "sheet": sheet.title, "header_row": int(header_index) + 1})
                     headers = unique_headers([clean_column(value) or f"column {idx}" for idx, value in enumerate(frame.iloc[header_index].tolist())])
                     data = frame.iloc[header_index + 1:].copy()
                     data.columns = headers
                     data = data.dropna(how="all")
                     if data.empty:
                         continue
-                    for _, series in data.iterrows():
+                    for index, series in data.iterrows():
                         txn = self.normalize_row(series.to_dict(), f"{path.name}:{sheet.title}")
                         blob = " ".join(str(value) for value in series.to_dict().values()).lower()
                         if "credit note" in blob or "return" in blob:
                             txn["doc_type"] = "credit_note"
                         elif "debit note" in blob:
                             txn["doc_type"] = "debit_note"
+                        observe_pos_debug(result.debug, int(index) + 1, resolve_pos(series.to_dict(), txn, self.platform), series.to_dict())
                         if should_skip_transaction(txn):
                             continue
                         result.transactions.append(finalize_transaction(txn))
