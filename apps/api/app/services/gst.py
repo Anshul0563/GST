@@ -384,19 +384,18 @@ def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
                 errors.append(
                     f"doc_issue net_issue mismatch for {doc.get('from')} to {doc.get('to')}"
                 )
+                b2cs_total = sum(money(x.get("txval")) for x in payload.get("b2cs", []))
+
+
+        supeco_total = sum(
+            money(x.get("suppval")) for x in payload.get("supeco", {}).get("clttx", [])
+        )
+
+        if abs(b2cs_total - supeco_total) > Decimal("0.01"):
+            errors.append(
+                f"B2CS taxable {b2cs_total} does not match SUPECO taxable {supeco_total}"
+            )
     return errors
-
-
-b2cs_total = sum(money(x.get("txval")) for x in payload.get("b2cs", []))
-
-supeco_total = sum(
-    money(x.get("suppval")) for x in payload.get("supeco", {}).get("clttx", [])
-)
-
-if abs(b2cs_total - supeco_total) > Decimal("0.01"):
-    errors.append(
-        f"B2CS taxable {b2cs_total} does not match SUPECO taxable {supeco_total}"
-    )
 
 
 def gstr1_generation_report(
