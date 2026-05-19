@@ -35,6 +35,14 @@ export function ReconcileDashboardPage() {
         <StatCard label="Matched" value={`${latest?.summary?.matched_percent || 0}%`} tone="green" />
         <StatCard label="Open mismatches" value={String(totalMismatches)} tone={totalMismatches ? "red" : "green"} />
       </div>
+      <Panel title="Active reconcile workspace" subtitle="The dashboard follows the selected GST profile and return period.">
+        <div className="grid gap-3 text-sm md:grid-cols-4">
+          <Readiness label="GSTIN" ready={Boolean(workspace.profile?.gstin)} value={workspace.profile?.gstin || "No GST profile"} />
+          <Readiness label="Return period" ready={Boolean(workspace.profile?.return_period)} value={workspace.profile?.return_period || "--"} />
+          <Readiness label="Frequency" ready={Boolean(workspace.profile?.filing_frequency)} value={workspace.profile?.filing_frequency || "--"} />
+          <Link href="/modules/online-seller/profile" className="rounded-2xl bg-[#10244d] px-4 py-3 text-center text-sm font-bold text-white">Change period</Link>
+        </div>
+      </Panel>
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Panel title="Reconcile trend" subtitle="Matched vs mismatch rows by batch.">
           {chart.length ? <div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="matched" fill="#0F9F6E" radius={[10, 10, 0, 0]} /><Bar dataKey="mismatch" fill="#F58220" radius={[10, 10, 0, 0]} /></BarChart></ResponsiveContainer></div> : <EmptyState title="No reconciliation yet" body="Upload portal and books files to create your first result." />}
@@ -70,6 +78,7 @@ export function ReconcileUploadPage() {
     try {
       const upload = await uploadReconcileFilesV2(workspace.token, workspace.profile.id, portal, books, { tax_tolerance: taxTolerance, date_tolerance_days: dateTolerance, enable_date_tolerance: true, enable_fuzzy_invoice: true });
       setResult(upload);
+      await workspace.refresh();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Reconciliation failed");
     } finally {
@@ -203,9 +212,9 @@ function UploadBox({ title, file, onFile }: { title: string; file: File | null; 
   </label>;
 }
 
-function Readiness({ label, ready }: { label: string; ready: boolean }) {
+function Readiness({ label, ready, value }: { label: string; ready: boolean; value?: string }) {
   return <div className={`rounded-2xl px-4 py-3 font-bold ${ready ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"}`}>
     <span className="text-xs uppercase tracking-wide">{label}</span>
-    <p className="mt-1 text-sm">{ready ? "Ready" : "Pending"}</p>
+    <p className="mt-1 break-words text-sm">{value || (ready ? "Ready" : "Pending")}</p>
   </div>;
 }

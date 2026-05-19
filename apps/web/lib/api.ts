@@ -133,6 +133,16 @@ export type ReconcileHistoryItem = {
   created_at: string;
 };
 
+export type Gstr1ExportItem = {
+  id: number;
+  profile_id: number;
+  period: string;
+  status: string;
+  created_at: string;
+  download_json: string;
+  download_excel: string;
+};
+
 export type TallyExportItem = {
   id: number;
   profile_id: number;
@@ -304,6 +314,10 @@ export function generateGstr1(token: string, profile: Profile) {
     method: "POST",
     body: JSON.stringify({ profile_id: profile.id, period: profile.return_period })
   }, token);
+}
+
+export function getGstr1History(token: string, profileId?: number) {
+  return request<Gstr1ExportItem[]>(`/gstr1/history${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
 }
 
 export function downloadUrl(path: string) {

@@ -502,8 +502,14 @@ def dashboard_summary(profile_id: int | None = None, period: str | None = None, 
         state_totals[state]["taxable_value"] += taxable
         state_totals[state]["gst"] += row_gst
         state_totals[state]["rows"] += 1
-    uploaded_files = len(db.scalars(select(UploadedFile).where(UploadedFile.user_id == user.id)).all())
-    latest_export = db.scalar(select(GSTR1JsonExport).where(GSTR1JsonExport.user_id == user.id).order_by(GSTR1JsonExport.id.desc()))
+    uploaded_file_stmt = select(UploadedFile).where(UploadedFile.user_id == user.id)
+    uploaded_files = len(db.scalars(uploaded_file_stmt).all())
+    export_stmt = select(GSTR1JsonExport).where(GSTR1JsonExport.user_id == user.id)
+    if profile_id:
+        export_stmt = export_stmt.where(GSTR1JsonExport.profile_id == profile_id)
+    if period:
+        export_stmt = export_stmt.where(GSTR1JsonExport.period == period)
+    latest_export = db.scalar(export_stmt.order_by(GSTR1JsonExport.id.desc()))
     return DashboardSummary(
         total_sales=money(total_sales),
         total_taxable_value=money(total_taxable),
@@ -580,7 +586,43 @@ def generate_gstr1(payload: GenerateGSTR1In, user: User = Depends(get_current_us
     db.add(export)
     db.add(AuditLog(user_id=user.id, action="gstr1.generate", entity_type="gstr1_json_exports"))
     db.commit()
-    return {"status": "generated", "json": gstr, "download_json": f"/gstr1/download-json/{payload.period}?profile_id={profile.id}", "download_excel": f"/gstr1/download-excel/{payload.period}?profile_id={profile.id}"}
+    db.refresh(export)
+    return {"status": "generated", "json": gstr, "download_json": f"/gstr1/export/{export.id}", "download_excel": f"/gstr1/export/{export.id}?format=xlsx"}
+
+
+@router.get("/gstr1/history")
+def gstr1_history(profile_id: int | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    stmt = select(GSTR1JsonExport).where(GSTR1JsonExport.user_id == user.id).order_by(GSTR1JsonExport.id.desc())
+    if profile_id:
+        stmt = stmt.where(GSTR1JsonExport.profile_id == profile_id)
+    exports = db.scalars(stmt.limit(50)).all()
+    return [{
+        "id": export.id,
+        "profile_id": export.profile_id,
+        "period": export.period,
+        "status": export.status,
+        "created_at": export.created_at,
+        "download_json": f"/gstr1/export/{export.id}",
+        "download_excel": f"/gstr1/export/{export.id}?format=xlsx",
+    } for export in exports]
+
+
+@router.get("/gstr1/export/{export_id}")
+def gstr1_export_download(export_id: int, format: str = "json", user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    export = db.get(GSTR1JsonExport, export_id)
+    if not export or export.user_id != user.id:
+        raise HTTPException(404, "Export not found")
+    if format == "xlsx":
+        if not export.excel_path:
+            raise HTTPException(404, "GSTR-1 Excel not found")
+        export.status = "downloaded"
+        db.commit()
+        return FileResponse(export.excel_path, filename=Path(export.excel_path).name)
+    if not export.json_path:
+        raise HTTPException(404, "GSTR-1 JSON not found")
+    export.status = "downloaded"
+    db.commit()
+    return FileResponse(export.json_path, filename=Path(export.json_path).name)
 
 
 @router.get("/gstr1/preview/{period}")
@@ -597,6 +639,8 @@ def download_json(period: str, profile_id: int, user: User = Depends(get_current
     export = db.scalar(select(GSTR1JsonExport).where(GSTR1JsonExport.user_id == user.id, GSTR1JsonExport.profile_id == profile_id, GSTR1JsonExport.period == period).order_by(GSTR1JsonExport.id.desc()))
     if not export or not export.json_path:
         raise HTTPException(404, "Export not found")
+    export.status = "downloaded"
+    db.commit()
     return FileResponse(export.json_path, filename=f"gstr1-{period}.json")
 
 
@@ -605,6 +649,8 @@ def download_excel(period: str, profile_id: int, user: User = Depends(get_curren
     export = db.scalar(select(GSTR1JsonExport).where(GSTR1JsonExport.user_id == user.id, GSTR1JsonExport.profile_id == profile_id, GSTR1JsonExport.period == period).order_by(GSTR1JsonExport.id.desc()))
     if not export or not export.excel_path:
         raise HTTPException(404, "Export not found")
+    export.status = "downloaded"
+    db.commit()
     return FileResponse(export.excel_path, filename=f"gstr1-{period}.xlsx")
 
 
@@ -729,9 +775,13 @@ def tally_export_download(export_id: int, format: str = "xml", user: User = Depe
     if format == "xlsx":
         if not export.voucher_excel_path:
             raise HTTPException(404, "Voucher Excel not found")
+        export.status = "downloaded"
+        db.commit()
         return FileResponse(export.voucher_excel_path, filename=Path(export.voucher_excel_path).name)
     if not export.xml_path:
         raise HTTPException(404, "XML not found")
+    export.status = "downloaded"
+    db.commit()
     return FileResponse(export.xml_path, filename=Path(export.xml_path).name)
 
 

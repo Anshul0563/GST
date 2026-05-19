@@ -1,21 +1,49 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Download, FileJson, FileSpreadsheet } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard, StatusPill } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { downloadUrl, generateGstr1 } from "@/lib/api";
+import { Gstr1ExportItem, downloadUrl, generateGstr1, getGstr1History } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 export function Gstr1Page() {
   const workspace = useWorkspace();
   const [downloads, setDownloads] = useState<{ download_json: string; download_excel: string } | null>(null);
+  const [history, setHistory] = useState<Gstr1ExportItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const loadHistory = useCallback(async () => {
+    if (!workspace.token) return;
+    setLoadingHistory(true);
+    try {
+      const items = await getGstr1History(workspace.token, workspace.profile?.id);
+      setHistory(items);
+    } catch {
+      setHistory([]);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, [workspace.token, workspace.profile?.id]);
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
   async function generate() {
     if (!workspace.token || !workspace.profile) return;
-    const result = await generateGstr1(workspace.token, workspace.profile);
-    setDownloads({ download_json: result.download_json, download_excel: result.download_excel });
-    await workspace.refresh();
+    setBusy(true);
+    setError("");
+    try {
+      const result = await generateGstr1(workspace.token, workspace.profile);
+      setDownloads({ download_json: result.download_json, download_excel: result.download_excel });
+      await workspace.refresh();
+      await loadHistory();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Could not generate GSTR-1 files");
+    } finally {
+      setBusy(false);
+    }
   }
   const summary = workspace.summary;
   const previewTotals = (workspace.preview?.b2cs || []).reduce((total, row) => ({
@@ -35,7 +63,7 @@ export function Gstr1Page() {
   ];
 
   return (
-    <AppShell title="GSTR-1 Filing Studio" subtitle="Preview B2CS, SUPECO and document issue summaries before generating GST portal-compatible files." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<button onClick={generate} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileJson className="size-4" /> Generate JSON</button>}>
+    <AppShell title="GSTR-1 Filing Studio" subtitle="Preview B2CS, SUPECO and document issue summaries before generating GST portal-compatible files." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<button onClick={generate} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileJson className="size-4" /> {busy ? "Generating..." : "Generate JSON"}</button>}>
       <div className="space-y-6">
         {!workspace.token ? <EmptyState title="Login required" body="GSTR-1 preview and generation use authenticated backend APIs." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="GSTR-1 generation needs GSTIN, filing frequency and return period." /> : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -61,15 +89,24 @@ export function Gstr1Page() {
               </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
-              <button onClick={generate} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Generate final files</button>
+              <button onClick={generate} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Generating files..." : "Generate final files"}</button>
               {downloads && <><a href={downloadUrl(downloads.download_json)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> JSON</a><a href={downloadUrl(downloads.download_excel)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Excel</a></>}
             </div>
+            {error && <div className="mt-5 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
           </Panel>
         </div>
         <div className="grid gap-6 xl:grid-cols-2">
           <Panel title="SUPECO preview" subtitle="Ecommerce operator level summary."><pre className="max-h-80 overflow-auto rounded-3xl bg-slate-950 p-5 text-xs text-slate-100">{JSON.stringify(workspace.preview?.supeco || {}, null, 2)}</pre></Panel>
           <Panel title="Document issue preview" subtitle="Invoice, credit note and debit note ranges."><pre className="max-h-80 overflow-auto rounded-3xl bg-slate-950 p-5 text-xs text-slate-100">{JSON.stringify(workspace.preview?.doc_issue || {}, null, 2)}</pre></Panel>
         </div>
+        <Panel title="Generated file history" subtitle="JSON and Excel exports are saved by backend export ID.">
+          {loadingHistory ? <EmptyState title="Loading exports" body="Fetching generated GSTR-1 files." /> : history.length ? <div className="space-y-3">{history.map((item) => <div key={item.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]">
+            <div><b>Export #{item.id}</b><p className="text-xs text-slate-500">{item.period} / {new Date(item.created_at).toLocaleString()}</p></div>
+            <StatusPill status={item.status} />
+            <a href={downloadUrl(item.download_json)} className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">JSON</a>
+            <a href={downloadUrl(item.download_excel)} className="rounded-xl bg-[#1746A2] px-3 py-2 text-center text-xs font-bold text-white">Excel</a>
+          </div>)}</div> : <EmptyState title="No generated files" body="Generated JSON and Excel files will appear here." />}
+        </Panel>
       </div>
     </AppShell>
   );

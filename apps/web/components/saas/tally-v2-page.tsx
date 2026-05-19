@@ -209,6 +209,7 @@ export function TallyExportPage() {
     try {
       const response = await generateTallyXml(workspace.token, { profile_id: workspace.profile.id, period: workspace.profile.return_period, company_id: Number(companyId), ledger_mapping: mapping, auto_create_ledgers: true });
       setResult(response);
+      await workspace.refresh();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Could not generate Tally XML");
     } finally {
