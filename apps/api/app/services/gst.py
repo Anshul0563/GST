@@ -188,6 +188,26 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return output
 
 
+def valid_for_b2cs(row):
+    if row.get("validation_status") != "valid":
+        return False
+    if not row.get("buyer_state_code") or not row.get("invoice_no"):
+        return False
+    rate = money(row.get("gst_rate"))
+    taxable = money(row.get("taxable_value"))
+    total_tax = (
+        money(row.get("igst"))
+        + money(row.get("cgst"))
+        + money(row.get("sgst"))
+        + money(row.get("cess"))
+    )
+    return rate != Decimal("0.00") and not (taxable == 0 and total_tax == 0)
+
+
+def valid_for_supeco(row):
+    return valid_for_b2cs(row) and bool(row.get("etin"))
+
+
 def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Decimal]] = defaultdict(
         lambda: {
