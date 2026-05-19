@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Up
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from app.services.gstr1_validator import validate_gstr1_export
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
@@ -658,7 +659,7 @@ def generate_gstr1(payload: GenerateGSTR1In, user: User = Depends(get_current_us
     blockers = validation_error_count(user.id, profile.id, payload.period, db)
     if blockers:
         raise HTTPException(422, f"Resolve {blockers} validation error rows before generating GSTR-1 JSON")
-    rows = transaction_dicts(user.id, profile.id, payload.period, db, valid_only=False)
+    rows = transaction_dicts(user.id, profile.id, payload.period, db, valid_only=True)
     gstr = build_gstr1_json(profile.gstin, payload.period, rows)
     generation_report = gstr1_generation_report(gstr, rows)
     if generation_report["errors"]:
@@ -714,12 +715,43 @@ def gstr1_export_download(export_id: int, format: str = "json", user: User = Dep
 
 
 @router.get("/gstr1/preview/{period}")
-def preview_gstr1(period: str, profile_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def preview_gstr1(
+    period: str,
+    profile_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     profile = db.get(GSTProfile, profile_id)
+
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
-    rows = transaction_dicts(user.id, profile.id, period, db, valid_only=True)
-    return build_gstr1_json(profile.gstin, period, rows)
+
+    rows = transaction_dicts(
+        user.id,
+        profile.id,
+        period,
+        db,
+        valid_only=True,
+    )
+
+    blockers = validation_error_count(
+        user.id,
+        profile.id,
+        period,
+        db,
+    )
+
+    preview = build_gstr1_json(
+        profile.gstin,
+        period,
+        rows,
+    )
+
+    return {
+        "can_generate": blockers == 0,
+        "validation_blockers": blockers,
+        "preview": preview,
+    }
 
 
 @router.get("/gstr1/download-json/{period}")
