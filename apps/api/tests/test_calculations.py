@@ -1,6 +1,9 @@
 import unittest
 from decimal import Decimal
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
+from app.parsers.amazon import AmazonParser
 from app.services.gst import build_gstr1_json
 from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
@@ -8,6 +11,24 @@ from app.services.validation import money
 
 
 class GstCalculationTests(unittest.TestCase):
+    def test_amazon_mtr_fraction_rate_and_iso_dates_parse_correctly(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "amazon.csv"
+            path.write_text(
+                '"Seller Gstin","Invoice Number","Invoice Date","Transaction Type","Order Id","Shipment Item Id","Quantity","Item Description","Hsn/sac","Sku","Ship To State","Invoice Amount","Tax Exclusive Gross","Igst Rate","Igst Tax","Tcs Igst Amount"\n'
+                '07TCRPS8655B1ZK,IN-5,"2026-03-08 00:07:35",Shipment,406-0120907-7622716,556012092046,1,"Jhumka Earrings",7117,SKU-1,ODISHA,209,202.91,0.03,6.09,1.01\n'
+            )
+            result = AmazonParser("07TCRPS8655B1ZK", "032026").parse([path])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 1)
+        txn = result.transactions[0]
+        self.assertEqual(str(txn["invoice_date"]), "2026-03-08")
+        self.assertEqual(txn["buyer_state_code"], "21")
+        self.assertEqual(txn["gst_rate"], Decimal("3.00"))
+        self.assertEqual(txn["igst"], Decimal("6.09"))
+        self.assertEqual(txn["validation_status"], "valid")
+
     def test_inter_state_invoice_uses_igst(self):
         txn = finalize_transaction({
             "platform": "meesho",
