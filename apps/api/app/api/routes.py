@@ -325,16 +325,19 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         db.commit()
         parser = get_parser(batch.platform)(profile.gstin, profile.return_period)
         result = parser.parse([Path(path) for path in file_paths])
+        seen_keys: set[tuple[int, str | None, str | None, str | None]] = set()
         for txn in result.transactions:
-            duplicate = db.scalar(select(NormalizedTransaction).where(
-                NormalizedTransaction.profile_id == batch.profile_id,
-                NormalizedTransaction.platform == txn.get("platform"),
-                NormalizedTransaction.invoice_no == txn.get("invoice_no"),
-                NormalizedTransaction.order_item_id == txn.get("order_item_id"),
+            key = (batch.profile_id, txn.get("platform"), txn.get("invoice_no"), txn.get("order_item_id"))
+            duplicate = key in seen_keys or db.scalar(select(NormalizedTransaction).where(
+                NormalizedTransaction.profile_id == key[0],
+                NormalizedTransaction.platform == key[1],
+                NormalizedTransaction.invoice_no == key[2],
+                NormalizedTransaction.order_item_id == key[3],
             ))
             if duplicate:
                 result.errors.append({"error": "Duplicate invoice/order item skipped", "invoice_no": txn.get("invoice_no"), "order_item_id": txn.get("order_item_id")})
                 continue
+            seen_keys.add(key)
             db.add(NormalizedTransaction(user_id=batch.user_id, profile_id=batch.profile_id, batch_id=batch.id, **txn))
         batch.parsed_rows = len(result.transactions)
         batch.error_rows = len(result.errors) + sum(1 for txn in result.transactions if txn.get("validation_status") == "error")
@@ -344,6 +347,7 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         db.add(AuditLog(user_id=batch.user_id, action="import.processed", entity_type="platform_import_batch", entity_id=str(batch.id)))
         db.commit()
     except Exception as exc:
+        db.rollback()
         batch = db.get(PlatformImportBatch, batch_id)
         if batch:
             batch.status = "failed"
