@@ -138,7 +138,7 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
     )
     for row in rows:
-        if not valid_for_gstr(row):
+        if not valid_for_b2cs(row):
             continue
         sply_ty = classify_supply(gstin, row.get("buyer_state_code"))
         key = (
@@ -195,7 +195,7 @@ def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
     )
     for row in rows:
-        if not valid_for_gstr(row):
+        if not valid_for_supeco(row):
             continue
         etin = str(row.get("etin"))
         groups[etin]["suppval"] += money(row.get("taxable_value"))
