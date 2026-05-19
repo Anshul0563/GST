@@ -1,2 +1,5 @@
-export { default } from "../../../marketplaces/page";
+import { ImportsPage } from "@/components/saas/imports-page";
 
+export default function Page() {
+  return <ImportsPage />;
+}

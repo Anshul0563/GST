@@ -184,10 +184,10 @@ export function ClassicToolShell({ title, crumb, active, profile, children }: {
   children: React.ReactNode;
 }) {
   const sideItems: Array<{ key: typeof active; href: Route; label: string; icon: typeof Home }> = [
-    { key: "profile", href: "/profile", label: "GST Profile", icon: UserCircle },
-    { key: "imports", href: "/marketplaces", label: "Import Data", icon: UploadCloud },
-    { key: "manage", href: "/transactions", label: "Manage Data", icon: ReceiptText },
-    { key: "gstr1", href: "/gstr1", label: "GSTR1 Report", icon: FileJson }
+    { key: "profile", href: "/modules/online-seller/profile", label: "GST Profile", icon: UserCircle },
+    { key: "imports", href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", icon: UploadCloud },
+    { key: "manage", href: "/modules/online-seller/manage-data", label: "Manage Data", icon: ReceiptText },
+    { key: "gstr1", href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson }
   ];
   return <div className="min-h-screen bg-[#f3f7fc] text-slate-950">
     <header className="h-14 border-b border-slate-200 bg-white">
@@ -198,8 +198,8 @@ export function ClassicToolShell({ title, crumb, active, profile, children }: {
         </Link>
         <nav className="hidden items-center gap-8 text-xs font-bold text-slate-500 md:flex">
           <Link className={active === "dashboard" ? "text-rose-500" : ""} href="/dashboard">Dashboard</Link>
-          <Link href="/marketplaces">Our Tools</Link>
-          <Link href="/transactions">Screenshot</Link>
+          <Link href="/modules/online-seller/marketplaces">Marketplace Upload</Link>
+          <Link href="/modules/online-seller/manage-data">Manage Data</Link>
           <Link href="/settings">Support</Link>
           <span className="grid size-8 place-items-center rounded-full bg-rose-500 font-black text-white">P</span>
         </nav>
@@ -220,7 +220,7 @@ export function ClassicToolShell({ title, crumb, active, profile, children }: {
     </section>
     <main className="mx-auto -mt-9 grid max-w-6xl gap-5 px-5 pb-12 md:grid-cols-[215px_1fr]">
       <aside className="h-fit rounded-md bg-white p-7 shadow-xl shadow-slate-200/80">
-        <Link href="/dashboard" className={`mb-5 block border-b border-slate-200 pb-5 text-center text-base font-black ${active === "dashboard" ? "text-[#2f72ff]" : "text-slate-600"}`}>Dashboard</Link>
+        <Link href="/modules/online-seller" className={`mb-5 block border-b border-slate-200 pb-5 text-center text-base font-black ${active === "dashboard" ? "text-[#2f72ff]" : "text-slate-600"}`}>GST Online Seller</Link>
         <p className="mb-4 text-xs font-black uppercase text-slate-800">GST Online Seller</p>
         <nav className="space-y-1">
           {sideItems.map((item) => {

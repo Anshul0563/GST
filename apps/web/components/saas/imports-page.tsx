@@ -55,7 +55,7 @@ export function ImportsPage() {
   }
 
   return (
-    <AppShell title="Guided Import Flow" subtitle="Select profile, platform, required files and track parser progress from upload to normalized transactions." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+    <AppShell title="Marketplace Upload" subtitle="Select profile, platform, required files and track parser progress from upload to normalized transactions." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
       {!workspace.token ? <EmptyState title="Login required" body="Imports are connected to secure backend APIs. Login before uploading marketplace files." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="Uploads require a GST profile and return period so normalized rows are stored against the correct GSTIN." /> : null}
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Panel title="Import steps" subtitle="A production upload flow with profile, period and parser feedback.">

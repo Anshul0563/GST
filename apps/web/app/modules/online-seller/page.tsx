@@ -1,6 +1,5 @@
-import { DashboardSaasPage } from "@/components/saas/dashboard-page";
+import { OnlineSellerDashboardPage } from "@/components/saas/dashboard-page";
 
 export default function Page() {
-  return <DashboardSaasPage />;
+  return <OnlineSellerDashboardPage />;
 }
-

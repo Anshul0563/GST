@@ -1,6 +1,6 @@
 import { ReconcileResultsPage } from "@/components/saas/reconcile-v2-page";
 
-export default function Page({ params }: { params: { id: string } }) {
-  return <ReconcileResultsPage id={Number(params.id)} />;
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  return <ReconcileResultsPage id={Number(id)} />;
 }
-

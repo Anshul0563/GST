@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Download, FileJson, FileSpreadsheet, ReceiptText, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
@@ -26,7 +26,7 @@ export function ReconcileDashboardPage() {
   const chart = history.slice(0, 8).reverse().map((item) => ({ name: `#${item.id}`, matched: item.matched_rows, mismatch: item.mismatch_rows }));
   const totalRuns = history.length;
   const totalMismatches = history.reduce((sum, item) => sum + item.mismatch_rows, 0);
-  return <AppShell title="2B/2A Reconcile v2.0" subtitle="Professional ITC reconciliation across GST portal 2A/2B and purchase books." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/reconcile/upload" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> New reconcile</Link>}>
+  return <AppShell title="2A/2B Reconcile" subtitle="Professional ITC reconciliation across GST portal 2A/2B and purchase books." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/modules/reconcile/upload" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> New reconcile</Link>}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Reconciliation history is loaded from authenticated backend APIs." /> : null}
       <div className="grid gap-4 md:grid-cols-5">
@@ -129,7 +129,7 @@ export function ReconcileUploadPage() {
           <a href={getReconcileDownloadUrl(result.id)} className="inline-flex items-center gap-2 rounded bg-[#2f72ff] px-5 py-3 text-xs font-bold text-white shadow-md">
             <span className="grid size-8 place-items-center rounded bg-emerald-600"><FileSpreadsheet className="size-5" /></span> Query Report Download
           </a>
-          <Link href={`/reconcile/results/${result.id}`} className="ml-3 inline-flex rounded border border-[#2f72ff] px-5 py-3 text-xs font-bold text-[#2f72ff]">View Details</Link>
+          <Link href={`/modules/reconcile/results/${result.id}`} className="ml-3 inline-flex rounded border border-[#2f72ff] px-5 py-3 text-xs font-bold text-[#2f72ff]">View Details</Link>
         </div>
       </div>}
     </section>
@@ -180,7 +180,7 @@ export function ReconcileHistoryPage() {
 }
 
 function HistoryList({ history }: { history: ReconcileHistoryItem[] }) {
-  return history.length ? <div className="space-y-3">{history.map((item) => <div key={item.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]"><div><b>Batch #{item.id}</b><p className="text-xs text-slate-500">{item.portal_rows} portal / {item.book_rows} books</p></div><StatusPill status={item.status} /><Link href={`/reconcile/results/${item.id}`} className="rounded-xl bg-[#1746A2] px-3 py-2 text-xs font-bold text-white">Open</Link><a href={getReconcileDownloadUrl(item.id)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Download</a></div>)}</div> : <EmptyState title="No history" body="Completed reconciliation batches will appear here." />;
+  return history.length ? <div className="space-y-3">{history.map((item) => <div key={item.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]"><div><b>Batch #{item.id}</b><p className="text-xs text-slate-500">{item.portal_rows} portal / {item.book_rows} books</p></div><StatusPill status={item.status} /><Link href={`/modules/reconcile/results/${item.id}`} className="rounded-xl bg-[#1746A2] px-3 py-2 text-xs font-bold text-white">Open</Link><a href={getReconcileDownloadUrl(item.id)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Download</a></div>)}</div> : <EmptyState title="No history" body="Completed reconciliation batches will appear here." />;
 }
 
 function ReconcileClassicShell({ profile, children }: { profile: Profile | null; children: ReactNode }) {
@@ -193,7 +193,7 @@ function ReconcileClassicShell({ profile, children }: { profile: Profile | null;
         </Link>
         <nav className="hidden items-center gap-8 text-xs font-bold text-slate-500 md:flex">
           <Link className="text-rose-500" href="/dashboard">Dashboard</Link>
-          <Link href="/marketplaces">Our Tools</Link>
+          <Link href="/modules/reconcile/upload">Upload</Link>
           <Link href="/billing">Pricing</Link>
           <Link href="/settings">Support</Link>
           <span className="grid size-8 place-items-center rounded-full bg-rose-500 font-black text-white">P</span>
@@ -211,9 +211,11 @@ function ReconcileClassicShell({ profile, children }: { profile: Profile | null;
       <aside className="h-fit rounded-md bg-white p-7 shadow-xl shadow-slate-200/80">
         <Link href="/dashboard" className="mb-5 block border-b border-slate-200 pb-5 text-center text-base font-black text-[#2f72ff]">Dashboard</Link>
         <nav className="space-y-1 text-sm font-semibold">
-          <Link href="/reconcile/upload" className="flex items-center gap-3 border-l-2 border-[#2f72ff] bg-blue-50 px-3 py-2 text-[#2f72ff]"><FileSpreadsheet className="size-4" /> 2B/2A Reconcile</Link>
-          <Link href="/dashboard" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><ReceiptText className="size-4 text-slate-400" /> Online Seller Tool</Link>
-          <Link href="/gstr1" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><FileJson className="size-4 text-slate-400" /> GSTR1</Link>
+          <Link href="/modules/reconcile" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><ReceiptText className="size-4 text-slate-400" /> Mini Dashboard</Link>
+          <Link href="/modules/reconcile/upload" className="flex items-center gap-3 border-l-2 border-[#2f72ff] bg-blue-50 px-3 py-2 text-[#2f72ff]"><FileSpreadsheet className="size-4" /> Upload 2A/2B</Link>
+          <Link href="/modules/reconcile/upload" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><FileJson className="size-4 text-slate-400" /> Purchase Register</Link>
+          <Link href="/modules/reconcile/results" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><ReceiptText className="size-4 text-slate-400" /> Match Results</Link>
+          <Link href="/modules/reconcile/reports" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><FileSpreadsheet className="size-4 text-slate-400" /> Reports</Link>
         </nav>
         {profile && <div className="mt-5 rounded bg-slate-50 p-3 text-[11px] font-bold text-slate-600">
           <p>{profile.gstin}</p>

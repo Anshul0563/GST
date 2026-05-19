@@ -52,6 +52,7 @@ declare namespace __next_route_internal_types__ {
     | `/modules/tally`
     | `/modules/tally/company`
     | `/modules/tally/export`
+    | `/modules/tally/history`
     | `/modules/tally/import`
     | `/modules/tally/mapping`
     | `/profile`

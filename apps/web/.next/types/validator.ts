@@ -207,6 +207,15 @@ type LayoutConfig<Route extends LayoutRoutes = LayoutRoutes> = {
   type __Unused = __Check
 }
 
+// Validate ../../app/modules/tally/history/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/modules/tally/history">> = Specific
+  const handler = {} as typeof import("../../app/modules/tally/history/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/modules/tally/import/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/modules/tally/import">> = Specific

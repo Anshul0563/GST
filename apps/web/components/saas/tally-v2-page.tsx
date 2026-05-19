@@ -25,7 +25,7 @@ const defaultMapping = {
   stock_item: "Marketplace Item",
   uqc: "NOS",
 };
-const tallyWorkflows: Array<[string, Route]> = [["Company setup", "/tally/company"], ["Import marketplace data", "/tally/import"], ["Ledger mapping", "/tally/mapping"], ["Generate export", "/tally/export"], ["Export history", "/tally/history"]];
+const tallyWorkflows: Array<[string, Route]> = [["Company setup", "/modules/tally/company"], ["Import marketplace data", "/modules/tally/import"], ["Ledger mapping", "/modules/tally/mapping"], ["Generate export", "/modules/tally/export"], ["Export history", "/modules/tally/history"]];
 const ledgerFields = Object.keys(defaultMapping) as Array<keyof typeof defaultMapping>;
 
 export function TallyDashboardPage() {
@@ -42,7 +42,7 @@ export function TallyDashboardPage() {
   const readyTransactions = workspace.transactions.filter((row) => row.validation_status !== "error").length;
   const generatedVouchers = history.reduce((sum, item) => sum + item.voucher_count, 0);
   const latestValid = latest?.validation?.valid === true;
-  return <AppShell title="eCom to Tally" subtitle="Convert normalized marketplace transactions into Tally-compatible XML vouchers." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/tally/export" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileArchive className="size-4" /> Generate XML</Link>}>
+  return <AppShell title="eCom to Tally" subtitle="Convert normalized marketplace transactions into Tally-compatible XML vouchers." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/modules/tally/export" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileArchive className="size-4" /> Generate XML</Link>}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Tally companies, imports and XML history are loaded from authenticated backend APIs." /> : null}
       <div className="grid gap-4 md:grid-cols-5">
