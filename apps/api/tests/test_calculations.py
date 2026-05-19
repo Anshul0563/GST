@@ -8,6 +8,7 @@ import pandas as pd
 from app.parsers.amazon import AmazonParser
 from app.parsers.flipkart import FlipkartParser
 from app.parsers.meesho import MeeshoParser
+from app.services.excel_export import write_gstr1_excel
 from app.services.gst import build_gstr1_json, gstr1_generation_report
 from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
@@ -312,6 +313,49 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(invoices["6p5kc26244"]["taxable_value"], Decimal("100.00"))
         self.assertEqual(invoices["6p5kcC26244"]["doc_type"], "credit_note")
         self.assertEqual(invoices["6p5kcC26244"]["taxable_value"], Decimal("-50.00"))
+
+    def test_gstr1_json_contract_matches_offline_tool_structure(self):
+        rows = [
+            finalize_transaction({
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
+                "invoice_no": "IN-1", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+            }),
+            finalize_transaction({
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
+                "invoice_no": "CN-1", "doc_type": "credit_note", "buyer_state_code": "27", "taxable_value": 10, "gst_rate": 3, "igst": 0.3,
+            }),
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+
+        self.assertEqual(list(payload.keys()), ["gstin", "fp", "version", "hash", "b2cs", "supeco", "doc_issue"])
+        self.assertEqual(payload["hash"], "hash")
+        self.assertEqual(set(payload["supeco"].keys()), {"clttx"})
+        self.assertNotIn("supeco_det", payload["supeco"])
+        self.assertEqual(set(payload["b2cs"][0].keys()), {"sply_ty", "rt", "typ", "pos", "txval", "iamt", "csamt"})
+        self.assertTrue(all(set(section.keys()) == {"doc_num", "doc_typ", "docs"} for section in payload["doc_issue"]["doc_det"]))
+        self.assertTrue(all(set(doc.keys()) == {"num", "from", "to", "totnum", "cancel", "net_issue"} for section in payload["doc_issue"]["doc_det"] for doc in section["docs"]))
+
+    def test_gstr1_excel_contract_matches_offline_tool_sheet_layout(self):
+        rows = [
+            finalize_transaction({
+                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "042026",
+                "invoice_no": "6p5kc271", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+            })
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        with TemporaryDirectory() as temp_dir:
+            path = write_gstr1_excel(Path(temp_dir) / "gstr1.xlsx", payload, rows)
+            xl = pd.ExcelFile(path)
+            self.assertEqual(xl.sheet_names, ["b2b,sez,de", "b2cl", "b2cs", "cdnr", "hsn", "hsn(b2b)", "hsn(b2c)", "exemp", "eco", "docs"])
+            b2cs = pd.read_excel(path, sheet_name="b2cs", header=None, dtype=object)
+            eco = pd.read_excel(path, sheet_name="eco", header=None, dtype=object)
+            docs = pd.read_excel(path, sheet_name="docs", header=None, dtype=object)
+
+        self.assertEqual(list(b2cs.iloc[3, :7]), ["Type", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"])
+        self.assertEqual(b2cs.iloc[4, 1], "37-Andhra Pradesh")
+        self.assertEqual(list(eco.iloc[3, :8]), ["Nature of Supply", "GSTIN of E-Commerce Operator", "E-Commerce Operator Name", "Net value of supplies", "Integrated tax", "Central tax", "State/UT tax", "Cess"])
+        self.assertEqual(eco.iloc[4, 1], "07AARCM9332R1CQ")
+        self.assertEqual(list(docs.iloc[3, :5]), ["Nature of Document", "Sr. No. From", "Sr. No. To", "Total Number", "Cancelled"])
 
     def test_real_marketplace_files_match_official_summary(self):
         paths = {
