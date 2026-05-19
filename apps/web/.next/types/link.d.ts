@@ -39,6 +39,21 @@ declare namespace __next_route_internal_types__ {
     | `/imports`
     | `/login`
     | `/marketplaces`
+    | `/modules/online-seller`
+    | `/modules/online-seller/gstr1`
+    | `/modules/online-seller/manage-data`
+    | `/modules/online-seller/marketplaces`
+    | `/modules/online-seller/profile`
+    | `/modules/online-seller/reports`
+    | `/modules/reconcile`
+    | `/modules/reconcile/reports`
+    | `/modules/reconcile/results`
+    | `/modules/reconcile/upload`
+    | `/modules/tally`
+    | `/modules/tally/company`
+    | `/modules/tally/export`
+    | `/modules/tally/import`
+    | `/modules/tally/mapping`
     | `/profile`
     | `/reconcile`
     | `/reconcile/history`
@@ -54,6 +69,7 @@ declare namespace __next_route_internal_types__ {
     | `/tally/mapping`
     | `/transactions`
   type DynamicRoutes<T extends string = string> = 
+    | `/modules/reconcile/results/${SafeSlug<T>}`
     | `/reconcile/results/${SafeSlug<T>}`
 
   type RouteImpl<T> = 
