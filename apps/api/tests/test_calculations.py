@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 
 from app.parsers.amazon import AmazonParser
 from app.parsers.flipkart import FlipkartParser
-from app.services.gst import build_gstr1_json
+from app.services.gst import build_gstr1_json, gstr1_generation_report
 from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
 from app.services.validation import money
@@ -232,6 +232,37 @@ class GstCalculationTests(unittest.TestCase):
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
         invoice_doc = next(item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1)
         self.assertEqual(len(invoice_doc["docs"]), 2)
+
+    def test_document_series_with_gaps_splits_ranges(self):
+        rows = [
+            finalize_transaction({
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
+                "invoice_no": invoice_no, "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+            })
+            for invoice_no in ("IN-5", "IN-6", "IN-8", "IN-9")
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        invoice_doc = next(item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1)
+        ranges = [(item["from"], item["to"], item["totnum"]) for item in invoice_doc["docs"]]
+        self.assertEqual(ranges, [("IN-5", "IN-6", 2), ("IN-8", "IN-9", 2)])
+        self.assertEqual(gstr1_generation_report(payload, rows)["errors"], [])
+
+    def test_uploaded_platform_without_valid_rows_warns_without_zero_supeco(self):
+        rows = [
+            finalize_transaction({
+                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "042026",
+                "invoice_no": "6p5kc26133", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 0, "gst_rate": 0, "igst": 0,
+            }),
+            finalize_transaction({
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
+                "invoice_no": "IN-5", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+            }),
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        etins = [item["etin"] for item in payload["supeco"]["clttx"]]
+        report = gstr1_generation_report(payload, rows)
+        self.assertNotIn("07AARCM9332R1CQ", etins)
+        self.assertIn("No valid Meesho rows for 042026", report["warnings"])
 
     def test_real_marketplace_files_match_official_summary(self):
         paths = {

@@ -50,7 +50,7 @@ from app.schemas.dto import (
 )
 from app.services.billing import create_razorpay_order, plan_amount_paise, public_plans, verify_razorpay_signature
 from app.services.excel_export import write_gstr1_excel
-from app.services.gst import build_gstr1_json
+from app.services.gst import build_gstr1_json, gstr1_generation_report
 from app.services.reconciliation import ReconSettings, normalize_rows, reconcile, write_reconciliation_excel
 from app.services.tally import build_tally_xml, build_vouchers, validate_tally_xml, write_voucher_excel
 from app.services.transaction_normalizer import finalize_transaction
@@ -652,6 +652,9 @@ def generate_gstr1(payload: GenerateGSTR1In, user: User = Depends(get_current_us
         raise HTTPException(422, f"Resolve {blockers} validation error rows before generating GSTR-1 JSON")
     rows = transaction_dicts(user.id, profile.id, payload.period, db)
     gstr = build_gstr1_json(profile.gstin, payload.period, rows)
+    generation_report = gstr1_generation_report(gstr, rows)
+    if generation_report["errors"]:
+        raise HTTPException(422, {"message": "GSTR-1 document issue validation failed", "errors": generation_report["errors"]})
     settings = get_settings()
     base = settings.export_dir / str(user.id) / profile.gstin / payload.period
     base.mkdir(parents=True, exist_ok=True)
@@ -663,7 +666,7 @@ def generate_gstr1(payload: GenerateGSTR1In, user: User = Depends(get_current_us
     db.add(AuditLog(user_id=user.id, action="gstr1.generate", entity_type="gstr1_json_exports"))
     db.commit()
     db.refresh(export)
-    return {"status": "generated", "json": gstr, "download_json": f"/gstr1/export/{export.id}", "download_excel": f"/gstr1/export/{export.id}?format=xlsx"}
+    return {"status": "generated", "json": gstr, "report": generation_report, "download_json": f"/gstr1/export/{export.id}", "download_excel": f"/gstr1/export/{export.id}?format=xlsx"}
 
 
 @router.get("/gstr1/history")

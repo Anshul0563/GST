@@ -61,6 +61,30 @@ def document_sort_key(invoice_no: str) -> tuple[str, int, str]:
     return (document_series_key(text), number, text)
 
 
+def document_number(invoice_no: str) -> int | None:
+    match = re.search(r"(\d+)(?!.*\d)", str(invoice_no))
+    return int(match.group(1)) if match else None
+
+
+def split_document_ranges(values: list[str]) -> list[list[str]]:
+    if not values:
+        return []
+    ordered = sorted(values, key=document_sort_key)
+    ranges: list[list[str]] = []
+    current = [ordered[0]]
+    previous_number = document_number(ordered[0])
+    for value in ordered[1:]:
+        current_number = document_number(value)
+        if previous_number is not None and current_number is not None and current_number == previous_number + 1:
+            current.append(value)
+        else:
+            ranges.append(current)
+            current = [value]
+        previous_number = current_number
+    ranges.append(current)
+    return ranges
+
+
 def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[tuple[str, Decimal, str, str], dict[str, Decimal]] = defaultdict(lambda: {
         "txval": Decimal("0.00"),
@@ -153,18 +177,54 @@ def build_doc_issue(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
         if not series:
             continue
         docs = []
-        for index, (_key, values) in enumerate(sorted(series, key=lambda item: document_sort_key(item[1][0])), start=1):
-            docs.append({
-                "num": index,
-                "from": values[0],
-                "to": values[-1],
-                "totnum": len(values),
-                "cancel": 0,
-                "net_issue": len(values),
-            })
+        for _key, values in sorted(series, key=lambda item: document_sort_key(item[1][0])):
+            for item_range in split_document_ranges(values):
+                docs.append({
+                    "num": len(docs) + 1,
+                    "from": item_range[0],
+                    "to": item_range[-1],
+                    "totnum": len(item_range),
+                    "cancel": 0,
+                    "net_issue": len(item_range),
+                })
         doc_det.append({"doc_num": DOC_NUM[doc_type], "doc_typ": DOC_TYP[doc_type], "docs": docs})
     doc_det.sort(key=lambda item: [1, 5, 4].index(item["doc_num"]))
     return {"doc_det": doc_det}
+
+
+def validate_doc_issue_ranges(doc_issue: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    for section in doc_issue.get("doc_det", []):
+        for doc in section.get("docs", []):
+            start = document_number(str(doc.get("from") or ""))
+            end = document_number(str(doc.get("to") or ""))
+            totnum = int(doc.get("totnum") or 0)
+            if start is not None and end is not None and end >= start:
+                implied = end - start + 1
+                if implied != totnum:
+                    errors.append(f"Document range {doc.get('from')} to {doc.get('to')} implies {implied} documents but totnum is {totnum}")
+    return errors
+
+
+def gstr1_generation_report(payload: dict[str, Any], source_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    uploaded_platforms = sorted({str(row.get("platform") or "unknown") for row in source_rows if row.get("platform")})
+    valid_rows = [row for row in source_rows if valid_for_gstr(row)]
+    valid_by_platform = {
+        platform: sum(1 for row in valid_rows if row.get("platform") == platform)
+        for platform in uploaded_platforms
+    }
+    warnings = [
+        f"No valid {platform.title()} rows for {payload.get('fp')}"
+        for platform, count in valid_by_platform.items()
+        if count == 0
+    ]
+    return {
+        "uploaded_platforms": uploaded_platforms,
+        "valid_rows_per_platform": valid_by_platform,
+        "supeco_etins": [row.get("etin") for row in payload.get("supeco", {}).get("clttx", [])],
+        "warnings": warnings,
+        "errors": validate_doc_issue_ranges(payload.get("doc_issue", {})),
+    }
 
 
 def build_gstr1_json(gstin: str, period: str, rows: list[dict]) -> dict:

@@ -311,7 +311,7 @@ export function deleteTransaction(token: string, transactionId: number) {
 }
 
 export function generateGstr1(token: string, profile: Profile) {
-  return request<{ status: string; json: Gstr1Payload; download_json: string; download_excel: string }>("/gstr1/generate", {
+  return request<{ status: string; json: Gstr1Payload; report?: Record<string, unknown>; download_json: string; download_excel: string }>("/gstr1/generate", {
     method: "POST",
     body: JSON.stringify({ profile_id: profile.id, period: profile.return_period })
   }, token);
