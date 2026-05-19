@@ -191,46 +191,21 @@ function HistoryList({ history }: { history: ReconcileHistoryItem[] }) {
   return history.length ? <div className="space-y-3">{history.map((item) => <div key={item.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]"><div><b>Batch #{item.id}</b><p className="text-xs text-slate-500">{item.portal_rows} portal / {item.book_rows} books</p></div><StatusPill status={item.status} /><Link href={`/modules/reconcile/results/${item.id}`} className="rounded-xl bg-[#1746A2] px-3 py-2 text-xs font-bold text-white">Open</Link><a href={getReconcileDownloadUrl(item.id)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Download</a></div>)}</div> : <EmptyState title="No history" body="Completed reconciliation batches will appear here." />;
 }
 
-function ReconcileClassicShell({ profile, children }: { profile: Profile | null; children: ReactNode }) {
-  return <div className="min-h-screen bg-[#f3f7fc] text-slate-950">
-    <header className="h-14 border-b border-slate-200 bg-white">
-      <div className="mx-auto flex h-full max-w-6xl items-center justify-between px-5">
-        <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="text-2xl font-black tracking-tight text-[#10244d]">GST</span>
-          <span className="-ml-1 rounded-sm bg-saffron px-1.5 py-0.5 text-xs font-black text-white">BHARAT</span>
-        </Link>
-        <nav className="hidden items-center gap-8 text-xs font-bold text-slate-500 md:flex">
-          <Link className="text-rose-500" href="/dashboard">Dashboard</Link>
-          <Link href="/modules/reconcile/upload">Upload</Link>
-          <Link href="/billing">Pricing</Link>
-          <Link href="/settings">Support</Link>
-          <span className="grid size-8 place-items-center rounded-full bg-rose-500 font-black text-white">P</span>
-        </nav>
-      </div>
-    </header>
-    <section className="relative bg-[#162d59] text-white">
-      <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(135deg,rgba(255,255,255,.2)_1px,transparent_1px)] [background-size:32px_32px]" />
-      <div className="relative mx-auto min-h-44 max-w-6xl px-5 py-8">
-        <h1 className="text-2xl font-black">2B/2A Reconcile</h1>
-        <p className="mt-3 text-sm font-semibold text-white/85">Home <span className="px-2 text-white/45">/</span> Dashboard <span className="px-2 text-white/45">/</span> <span className="text-blue-300">2B/2A Reconcile</span></p>
-      </div>
-    </section>
-    <main className="mx-auto -mt-9 grid max-w-6xl gap-5 px-5 pb-12 md:grid-cols-[215px_1fr]">
-      <aside className="h-fit rounded-md bg-white p-7 shadow-xl shadow-slate-200/80">
-        <Link href="/dashboard" className="mb-5 block border-b border-slate-200 pb-5 text-center text-base font-black text-[#2f72ff]">Dashboard</Link>
-        <nav className="space-y-1 text-sm font-semibold">
-          <Link href="/modules/reconcile" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><ReceiptText className="size-4 text-slate-400" /> Mini Dashboard</Link>
-          <Link href="/modules/reconcile/upload" className="flex items-center gap-3 border-l-2 border-[#2f72ff] bg-blue-50 px-3 py-2 text-[#2f72ff]"><FileSpreadsheet className="size-4" /> Upload 2A/2B</Link>
-          <Link href="/modules/reconcile/upload" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><FileJson className="size-4 text-slate-400" /> Purchase Register</Link>
-          <Link href="/modules/reconcile/results" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><ReceiptText className="size-4 text-slate-400" /> Match Results</Link>
-          <Link href="/modules/reconcile/reports" className="flex items-center gap-3 border-l-2 border-transparent px-3 py-2 text-slate-700 hover:bg-slate-50"><FileSpreadsheet className="size-4 text-slate-400" /> Reports</Link>
-        </nav>
-        {profile && <div className="mt-5 rounded bg-slate-50 p-3 text-[11px] font-bold text-slate-600">
-          <p>{profile.gstin}</p>
-          <p className="mt-1">Period: {profile.return_period}</p>
-        </div>}
-      </aside>
-      <div className="space-y-5">{children}</div>
-    </main>
+function UploadBox({ title, file, onFile }: { title: string; file: File | null; onFile: (file: File | null) => void }) {
+  return <label className="group flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center transition hover:border-[#1746A2] hover:bg-blue-50/60 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
+    <div className="grid size-14 place-items-center rounded-2xl bg-white text-[#1746A2] shadow-sm transition group-hover:scale-105 dark:bg-slate-900">
+      <FileSpreadsheet className="size-6" />
+    </div>
+    <h3 className="mt-4 text-base font-black">{title}</h3>
+    <p className="mt-2 max-w-xs text-sm text-slate-500">{file ? file.name : "Choose CSV, XLS or XLSX file"}</p>
+    <span className="mt-4 rounded-2xl bg-[#10244d] px-4 py-2 text-xs font-bold text-white">{file ? "Replace file" : "Select file"}</span>
+    <input type="file" accept=".csv,.xls,.xlsx" className="sr-only" onChange={(event) => onFile(event.target.files?.[0] || null)} />
+  </label>;
+}
+
+function Readiness({ label, ready }: { label: string; ready: boolean }) {
+  return <div className={`rounded-2xl px-4 py-3 font-bold ${ready ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300" : "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300"}`}>
+    <span className="text-xs uppercase tracking-wide">{label}</span>
+    <p className="mt-1 text-sm">{ready ? "Ready" : "Pending"}</p>
   </div>;
 }
