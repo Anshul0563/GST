@@ -69,14 +69,18 @@ def document_series_key(invoice_no: str) -> str:
     text = str(invoice_no or "").strip()
     if not text:
         return ""
-    prefix = re.match(r"^[A-Za-z]+", text)
+
+    prefix = re.match(
+        r"^[A-Za-z0-9]+(?:[-_/][A-Za-z0-9]+)?",
+        text,
+    )
+
     if prefix:
         return prefix.group(0).upper()
-    alnum_prefix = re.match(r"^[A-Za-z0-9]+?(?=[-_/])", text)
-    if alnum_prefix:
-        return alnum_prefix.group(0).upper()
+
     if len(text) >= 5:
         return text[:5].upper()
+
     return text.upper()
 
 
@@ -208,8 +212,8 @@ def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "etin": etin,
             "suppval": json_amount(amounts["suppval"]),
             "igst": json_amount(amounts["igst"]),
-            "cgst": json_amount(split_tax_evenly(amounts["cgst"] + amounts["sgst"])[0]),
-            "sgst": json_amount(split_tax_evenly(amounts["cgst"] + amounts["sgst"])[1]),
+            "cgst": json_amount(amounts["cgst"]),
+            "sgst": json_amount(amounts["sgst"]),
             "cess": json_amount(amounts["cess"]),
             "flag": "N",
         }
@@ -393,7 +397,7 @@ def gstr1_generation_report(
             if row.get("platform")
         }
     )
-    valid_rows = [row for row in source_rows if valid_for_gstr(row)]
+    valid_rows = [row for row in source_rows if valid_for_b2cs(row)]
     valid_by_platform = {
         platform: sum(1 for row in valid_rows if row.get("platform") == platform)
         for platform in uploaded_platforms
@@ -449,7 +453,7 @@ def gstr1_generation_report(
 
 
 def build_gstr1_json(gstin: str, period: str, rows: list[dict]) -> dict:
-    valid_rows = [row for row in rows if valid_for_gstr(row)]
+    valid_rows = [row for row in rows if valid_for_b2cs(row)]
     return {
         "gstin": gstin,
         "fp": period,
