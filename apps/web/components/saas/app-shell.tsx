@@ -3,36 +3,60 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
-import { Bell, Building2, ChevronDown, CreditCard, FileJson, Home, Menu, Moon, PackageSearch, ReceiptText, Repeat2, Search, Settings, ShieldCheck, UploadCloud, UserCircle } from "lucide-react";
+import { Bell, Building2, ChevronDown, CreditCard, FileJson, FileSpreadsheet, Home, Menu, Moon, ReceiptText, Repeat2, Search, Settings, ShieldCheck, UploadCloud, UserCircle } from "lucide-react";
 import { Profile } from "@/lib/api";
 
 const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
-  { href: "/marketplaces", label: "Marketplaces", icon: PackageSearch },
-  { href: "/imports", label: "Imports", icon: UploadCloud },
-  { href: "/transactions", label: "Transactions", icon: ReceiptText },
-  { href: "/gstr1", label: "GSTR-1", icon: FileJson },
-  { href: "/reconcile", label: "2A/2B Reconcile", icon: Repeat2 },
-  { href: "/tally", label: "eCom to Tally", icon: Building2 },
-  { href: "/profile", label: "GST Profiles", icon: UserCircle },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/billing", label: "Billing", icon: CreditCard }
 ];
 
-const moduleNav: Record<string, Array<{ href: Route; label: string }>> = {
-  reconcile: [
-    { href: "/reconcile", label: "Dashboard" },
-    { href: "/reconcile/upload", label: "Upload" },
-    { href: "/reconcile/history", label: "History" }
-  ],
-  tally: [
-    { href: "/tally", label: "Dashboard" },
-    { href: "/tally/company", label: "Company" },
-    { href: "/tally/import", label: "Import" },
-    { href: "/tally/mapping", label: "Mapping" },
-    { href: "/tally/export", label: "Export" },
-    { href: "/tally/history", label: "History" }
-  ]
+const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array<{ href: Route; label: string; icon: typeof Home }> }> = {
+  onlineSeller: {
+    title: "GST Online Seller",
+    icon: ReceiptText,
+    items: [
+      { href: "/modules/online-seller", label: "Mini Dashboard", icon: Home },
+      { href: "/modules/online-seller/profile", label: "GST Profile", icon: UserCircle },
+      { href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", icon: UploadCloud },
+      { href: "/modules/online-seller/manage-data", label: "Manage Data", icon: ReceiptText },
+      { href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson },
+      { href: "/modules/online-seller/gstr1", label: "JSON Export", icon: FileJson },
+      { href: "/modules/online-seller/gstr1", label: "Excel Export", icon: FileSpreadsheet },
+      { href: "/modules/online-seller/reports", label: "Reports", icon: FileSpreadsheet },
+      { href: "/modules/online-seller/marketplaces", label: "Upload History", icon: UploadCloud }
+    ]
+  },
+  reconcile: {
+    title: "2A/2B Reconcile",
+    icon: Repeat2,
+    items: [
+      { href: "/modules/reconcile", label: "Mini Dashboard", icon: Home },
+      { href: "/modules/reconcile/upload", label: "Upload 2A/2B", icon: UploadCloud },
+      { href: "/modules/reconcile/upload", label: "Upload Purchase Register", icon: FileSpreadsheet },
+      { href: "/modules/reconcile/upload", label: "Reconcile", icon: Repeat2 },
+      { href: "/modules/reconcile/results", label: "Match Results", icon: ReceiptText },
+      { href: "/modules/reconcile/results", label: "Mismatch Explorer", icon: Search },
+      { href: "/modules/reconcile/reports", label: "ITC Risk Report", icon: ShieldCheck },
+      { href: "/modules/reconcile/reports", label: "Download Excel", icon: FileSpreadsheet },
+      { href: "/modules/reconcile/reports", label: "Reconciliation History", icon: ReceiptText }
+    ]
+  },
+  tally: {
+    title: "eCom to Tally",
+    icon: Building2,
+    items: [
+      { href: "/modules/tally", label: "Mini Dashboard", icon: Home },
+      { href: "/modules/tally/company", label: "Tally Company", icon: Building2 },
+      { href: "/modules/tally/import", label: "Marketplace Import", icon: UploadCloud },
+      { href: "/modules/tally/mapping", label: "Ledger Mapping", icon: ReceiptText },
+      { href: "/modules/tally/export", label: "Voucher Preview", icon: FileSpreadsheet },
+      { href: "/modules/tally/export", label: "XML Generate", icon: FileJson },
+      { href: "/modules/tally/export", label: "XML Download", icon: FileSpreadsheet },
+      { href: "/modules/tally/history", label: "Export History", icon: ReceiptText }
+    ]
+  }
 };
 
 export function LogoMark() {
@@ -57,7 +81,10 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const activeModule = pathname.startsWith("/reconcile") || pathname.startsWith("/reconciliation") ? "reconcile" : pathname.startsWith("/tally") ? "tally" : "";
+  const activeModule = pathname.startsWith("/modules/online-seller") ? "onlineSeller" : pathname.startsWith("/modules/reconcile") ? "reconcile" : pathname.startsWith("/modules/tally") ? "tally" : "";
+  const activeModuleConfig = activeModule ? moduleNav[activeModule] : null;
+  const currentItem = activeModuleConfig?.items.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
+  const ActiveModuleIcon = activeModuleConfig?.icon;
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 dark:bg-[#07111f] dark:text-white">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-200/60 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none lg:block">
@@ -91,6 +118,22 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             );
           })}
         </nav>
+        {activeModuleConfig && <div className="mt-7 rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
+          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+            {ActiveModuleIcon && <ActiveModuleIcon className="size-4 text-[#1746A2]" />}
+            {activeModuleConfig.title}
+          </div>
+          <nav className="space-y-1">
+            {activeModuleConfig.items.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return <Link key={`${item.href}-${item.label}`} href={item.href} className={`group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-white text-[#10244d] shadow-sm dark:bg-slate-900 dark:text-white" : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900"}`}>
+                <Icon className={`size-4 ${active ? "text-saffron" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
+                {item.label}
+              </Link>;
+            })}
+          </nav>
+        </div>}
       </aside>
       <div className="lg:pl-72">
         <header className="sticky top-0 z-20 border-b border-white/70 bg-white/75 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/70">
@@ -113,12 +156,11 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
           </div>
         </header>
         <main className="px-5 py-7 lg:px-8">
-          {activeModule && <div className="mb-6 flex gap-2 overflow-x-auto rounded-3xl border border-white/70 bg-white/80 p-2 shadow-sm dark:border-white/10 dark:bg-slate-950/70">
-            {moduleNav[activeModule].map((item) => {
-              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return <Link key={item.href} href={item.href} className={`whitespace-nowrap rounded-2xl px-4 py-2 text-sm font-bold ${active ? "bg-[#10244d] text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>{item.label}</Link>;
-            })}
-          </div>}
+          <div className="mb-5 flex flex-wrap items-center gap-2 text-sm font-bold text-slate-500">
+            <Link href="/dashboard" className="text-[#1746A2]">Dashboard</Link>
+            {activeModuleConfig && <><span>/</span><Link href={activeModuleConfig.items[0].href} className="text-[#1746A2]">{activeModuleConfig.title}</Link></>}
+            {activeModuleConfig && currentItem && currentItem.href !== activeModuleConfig.items[0].href && <><span>/</span><span>{currentItem.label}</span></>}
+          </div>
           <div className="mb-7 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#1746A2] dark:text-sky-300">GST Bharat Workspace</p>
