@@ -78,14 +78,14 @@ class MeeshoParser(MarketplaceParser):
                 if is_return and txn["doc_type"] == "invoice":
                     txn["doc_type"] = "credit_note"
                 if not txn.get("invoice_no"):
-                    result.errors.append({
+                    txn["invoice_no"] = suborder
+                    result.debug.setdefault("warnings", []).append({
                         "file": path.name,
                         "sheet": sheet_name,
                         "row": int(index) + 2,
                         "suborder": suborder,
-                        "error": "Missing Meesho invoice metadata for financial row",
+                        "warning": "Missing Meesho invoice metadata; suborder used as document number fallback",
                     })
-                    continue
                 observe_pos_debug(result.debug, int(index) + 2, resolve_pos(row, txn, self.platform), row)
                 if should_skip_transaction(txn):
                     continue

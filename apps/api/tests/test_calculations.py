@@ -314,6 +314,39 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(invoices["6p5kcC26244"]["doc_type"], "credit_note")
         self.assertEqual(invoices["6p5kcC26244"]["taxable_value"], Decimal("-50.00"))
 
+    def test_meesho_parser_uses_suborder_fallback_when_invoice_metadata_is_missing(self):
+        with TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            returns = base / "tcs_sales_return.xlsx"
+            invoice = base / "Tax_invoice_details.xlsx"
+            pd.DataFrame([{
+                "sub order num": "SO-MISSING",
+                "order date": "2026-03-23",
+                "hsn code": "711790",
+                "quantity": 1,
+                "gst rate": 3,
+                "total taxable sale value": 50,
+                "tax amount": 1.5,
+                "total invoice value": 51.5,
+                "end customer state new": "KARNATAKA",
+                "eco tcs gstin": "07AARCM9332R1CQ",
+            }]).to_excel(returns, index=False)
+            pd.DataFrame([{
+                "type": "INVOICE",
+                "order date": "2026-03-22",
+                "suborder no.": "OTHER",
+                "hsn": "711790",
+                "invoice no.": "6p5kc26244",
+            }]).to_excel(invoice, sheet_name="Invoice_Info", index=False)
+
+            result = MeeshoParser("07TCRPS8655B1ZK", "032026").parse([returns, invoice])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(result.transactions[0]["invoice_no"], "SO-MISSING")
+        self.assertEqual(result.transactions[0]["doc_type"], "credit_note")
+        self.assertEqual(result.transactions[0]["validation_status"], "valid")
+
     def test_gstr1_json_contract_matches_offline_tool_structure(self):
         rows = [
             finalize_transaction({
