@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname } from "next/navigation";
-import { Bell, Building2, ChevronDown, CreditCard, FileJson, FileSpreadsheet, Home, Menu, Moon, ReceiptText, Repeat2, Search, Settings, ShieldCheck, UploadCloud, UserCircle } from "lucide-react";
+import { Bell, Building2, ChevronDown, CreditCard, FileJson, FileSpreadsheet, Home, Menu, Moon, ReceiptText, Repeat2, Search, Settings, ShieldCheck, UploadCloud } from "lucide-react";
 import { Profile } from "@/lib/api";
 
 const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
@@ -18,7 +18,6 @@ const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array
     icon: ReceiptText,
     items: [
       { href: "/modules/online-seller", label: "Mini Dashboard", icon: Home },
-      { href: "/modules/online-seller/profile", label: "GST Profile", icon: UserCircle },
       { href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", icon: UploadCloud },
       { href: "/modules/online-seller/manage-data", label: "Manage Data", icon: ReceiptText },
       { href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson },
@@ -184,7 +183,6 @@ export function ClassicToolShell({ title, crumb, active, profile, children }: {
   children: React.ReactNode;
 }) {
   const sideItems: Array<{ key: typeof active; href: Route; label: string; icon: typeof Home }> = [
-    { key: "profile", href: "/modules/online-seller/profile", label: "GST Profile", icon: UserCircle },
     { key: "imports", href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", icon: UploadCloud },
     { key: "manage", href: "/modules/online-seller/manage-data", label: "Manage Data", icon: ReceiptText },
     { key: "gstr1", href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson }

@@ -285,6 +285,10 @@ export function getImportErrors(token: string, batchId: number) {
   return request<ImportErrors>(`/imports/${batchId}/errors`, {}, token);
 }
 
+export function deleteImportBatch(token: string, batchId: number) {
+  return request<{ ok: boolean }>(`/imports/${batchId}`, { method: "DELETE" }, token);
+}
+
 export function updateTransaction(token: string, transactionId: number, payload: Partial<Transaction>) {
   return request<Transaction>(`/transactions/${transactionId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
 }

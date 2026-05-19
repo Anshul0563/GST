@@ -389,6 +389,34 @@ def import_errors(batch_id: int, user: User = Depends(get_current_user), db: Ses
     return {"parser_errors": json.loads(batch.error_report_json or "[]"), "row_errors": [TransactionOut.model_validate(row).model_dump(mode="json") for row in rows]}
 
 
+@router.delete("/imports/{batch_id}")
+def delete_import_batch(batch_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    batch = db.get(PlatformImportBatch, batch_id)
+    if not batch or batch.user_id != user.id:
+        raise HTTPException(404, "Batch not found")
+    if batch.status in {"queued", "processing"}:
+        raise HTTPException(409, "Import is still processing")
+
+    files = db.scalars(select(UploadedFile).where(UploadedFile.batch_id == batch.id, UploadedFile.user_id == user.id)).all()
+    for txn in db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.batch_id == batch.id, NormalizedTransaction.user_id == user.id)).all():
+        db.delete(txn)
+    for uploaded in files:
+        db.delete(uploaded)
+    db.add(AuditLog(user_id=user.id, action="import.delete", entity_type="platform_import_batch", entity_id=str(batch.id)))
+    db.delete(batch)
+    db.commit()
+
+    for uploaded in files:
+        if uploaded.stored_path:
+            path = Path(uploaded.stored_path)
+            if path.exists():
+                path.unlink()
+            parent = path.parent
+            if parent.exists() and not any(parent.iterdir()):
+                shutil.rmtree(parent, ignore_errors=True)
+    return {"ok": True}
+
+
 @router.get("/transactions", response_model=list[TransactionOut])
 def transactions(profile_id: int | None = None, period: str | None = None, platform: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     stmt = select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id)
