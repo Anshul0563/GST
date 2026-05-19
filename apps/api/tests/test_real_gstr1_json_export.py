@@ -31,6 +31,10 @@ class RealGstr1JsonExportTests(unittest.TestCase):
         self.assertEqual(checks["invoice_count"], 190)
         self.assertEqual(checks["credit_note_count"], 46)
         self.assertEqual(checks["debit_note_count"], 2)
+        self.assertEqual(payload["hash"], "hash")
+        self.assertIn("clttx", payload["supeco"])
+        self.assertNotIn("supeco_det", payload["supeco"])
+        self.assertTrue(all("doc_typ" in doc for doc in payload["doc_issue"]["doc_det"]))
 
 
 if __name__ == "__main__":

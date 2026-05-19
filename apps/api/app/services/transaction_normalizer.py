@@ -20,9 +20,6 @@ def _same_sign(value, sign: Decimal):
 
 def infer_rate(txn: dict) -> Decimal:
     resolution = resolve_gst_rate(txn)
-    txn["gst_rate_confidence"] = resolution.confidence
-    if resolution.warning:
-        txn["gst_rate_warning"] = resolution.warning
     if resolution.rate is None:
         return money(txn.get("gst_rate"))
     return resolution.rate
@@ -78,6 +75,7 @@ def normalize_tax_split(txn: dict) -> dict:
 
 
 def finalize_transaction(txn: dict) -> dict:
+    txn["doc_type"] = str(txn.get("doc_type") or "invoice").lower()
     txn = normalize_tax_split(txn)
     if isinstance(txn.get("invoice_date"), str):
         text_value = txn["invoice_date"].strip()

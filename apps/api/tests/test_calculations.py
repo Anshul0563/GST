@@ -170,8 +170,68 @@ class GstCalculationTests(unittest.TestCase):
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
         self.assertEqual(payload["b2cs"][0]["txval"], 900.0)
         self.assertEqual(payload["b2cs"][0]["iamt"], 27.0)
-        self.assertEqual(payload["supeco"]["supeco_det"][0]["suppval"], 900.0)
+        self.assertEqual(payload["supeco"]["clttx"][0]["suppval"], 900.0)
         self.assertEqual(len(payload["doc_issue"]["doc_det"]), 2)
+        self.assertEqual(payload["hash"], "hash")
+        self.assertEqual(payload["doc_issue"]["doc_det"][0]["doc_typ"], "Invoices for outward supply")
+
+    def test_gstr1_excludes_invalid_and_zero_b2cs_rows(self):
+        rows = [
+            finalize_transaction({
+                "platform": "amazon",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "07AAICA3918J1CV",
+                "filing_period": "042026",
+                "invoice_no": "IN-1",
+                "doc_type": "invoice",
+                "buyer_state_code": "27",
+                "taxable_value": 100,
+                "gst_rate": 3,
+                "igst": 3,
+            }),
+            finalize_transaction({
+                "platform": "amazon",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "07AAICA3918J1CV",
+                "filing_period": "042026",
+                "invoice_no": "IN-ZERO",
+                "doc_type": "invoice",
+                "buyer_state_code": "27",
+                "taxable_value": 0,
+                "gst_rate": 0,
+                "igst": 0,
+            }),
+            finalize_transaction({
+                "platform": "amazon",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "07AAICA3918J1CV",
+                "filing_period": "042026",
+                "invoice_no": "IN-NOPOS",
+                "doc_type": "invoice",
+                "taxable_value": 100,
+                "gst_rate": 3,
+                "igst": 3,
+            }),
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        self.assertEqual(len(payload["b2cs"]), 1)
+        self.assertEqual(payload["b2cs"][0]["rt"], 3)
+        self.assertNotIn("supeco_det", payload["supeco"])
+
+    def test_document_series_grouping_keeps_platform_prefixes_separate(self):
+        rows = [
+            finalize_transaction({
+                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "042026",
+                "invoice_no": "6p5kc26133", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+            }),
+            finalize_transaction({
+                "platform": "flipkart", "gstin": "07ABCDE1234F1Z5", "etin": "07AACCF0683K1CU", "filing_period": "042026",
+                "invoice_no": "LWABOG7260000005", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+            }),
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        invoice_doc = next(item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1)
+        self.assertEqual(len(invoice_doc["docs"]), 2)
 
     def test_real_marketplace_files_match_official_summary(self):
         paths = {

@@ -109,6 +109,37 @@ def read_import_report(batch: PlatformImportBatch) -> tuple[list[dict], dict]:
     return (raw if isinstance(raw, list) else []), {}
 
 
+def validation_summary(transactions: list[dict], parser_errors: list[dict]) -> dict:
+    summary = {
+        "total_rows": len(transactions),
+        "valid_rows": 0,
+        "invalid_rows": 0,
+        "warning_rows": 0,
+        "skipped_rows": 0,
+        "unresolved_pos": 0,
+        "unsupported_rate": 0,
+        "missing_invoice": 0,
+        "zero_amount_rows": 0,
+        "parser_errors": len(parser_errors),
+    }
+    for txn in transactions:
+        errors = str(txn.get("validation_errors") or "")
+        if txn.get("validation_status") == "valid":
+            summary["valid_rows"] += 1
+        else:
+            summary["invalid_rows"] += 1
+        if "Missing POS" in errors:
+            summary["unresolved_pos"] += 1
+        if "Unsupported GST rate" in errors:
+            summary["unsupported_rate"] += 1
+        if "Missing invoice number" in errors:
+            summary["missing_invoice"] += 1
+        if "Zero amount row" in errors or "Zero rate and zero taxable row" in errors:
+            summary["zero_amount_rows"] += 1
+            summary["skipped_rows"] += 1
+    return summary
+
+
 @router.post("/auth/register", response_model=Token)
 def register(payload: RegisterIn, db: Session = Depends(get_db)):
     existing = db.scalar(select(User).where(User.email == payload.email.lower()))
@@ -395,6 +426,7 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
             validation_error_rows += 1 if txn.get("validation_status") == "error" else 0
         batch.parsed_rows = inserted_rows
         batch.error_rows = len(result.errors) + validation_error_rows
+        result.debug["validation_summary"] = validation_summary(result.transactions, result.errors)
         batch.error_report_json = json.dumps({"parser_errors": result.errors, "debug": result.debug}, default=str)
         batch.status = "completed" if batch.error_rows == 0 else "completed_with_errors"
         batch.completed_at = datetime.utcnow()
@@ -450,7 +482,20 @@ def import_errors(batch_id: int, user: User = Depends(get_current_user), db: Ses
         raise HTTPException(404, "Batch not found")
     parser_errors, debug = read_import_report(batch)
     rows = db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.batch_id == batch_id, NormalizedTransaction.validation_status == "error")).all()
-    return {"parser_errors": parser_errors, "parser_debug": debug, "row_errors": [TransactionOut.model_validate(row).model_dump(mode="json") for row in rows]}
+    row_errors = []
+    for row in rows:
+        item = TransactionOut.model_validate(row).model_dump(mode="json")
+        reason = item.get("validation_errors") or "Validation failed"
+        item["reason"] = reason
+        item["suggested_fix"] = (
+            "Map or enter buyer POS/state" if "Missing POS" in reason else
+            "Map invoice/document number column" if "Missing invoice number" in reason else
+            "Check GST rate/taxable/tax columns" if "GST rate" in reason or "Tax mismatch" in reason else
+            "Review source row and correct normalized values"
+        )
+        item["raw_column_source"] = item.get("source_file")
+        row_errors.append(item)
+    return {"parser_errors": parser_errors, "parser_debug": debug, "row_errors": row_errors}
 
 
 @router.delete("/imports/{batch_id}")
@@ -574,12 +619,15 @@ def delete_transaction(transaction_id: int, user: User = Depends(get_current_use
     return {"ok": True}
 
 
-def transaction_dicts(user_id: int, profile_id: int, period: str, db: Session) -> list[dict]:
-    rows = db.scalars(select(NormalizedTransaction).where(
+def transaction_dicts(user_id: int, profile_id: int, period: str, db: Session, valid_only: bool = True) -> list[dict]:
+    stmt = select(NormalizedTransaction).where(
         NormalizedTransaction.user_id == user_id,
         NormalizedTransaction.profile_id == profile_id,
         NormalizedTransaction.filing_period == period,
-    )).all()
+    )
+    if valid_only:
+        stmt = stmt.where(NormalizedTransaction.validation_status == "valid")
+    rows = db.scalars(stmt).all()
     return [TransactionOut.model_validate(row).model_dump(mode="json") for row in rows]
 
 
@@ -657,7 +705,7 @@ def preview_gstr1(period: str, profile_id: int, user: User = Depends(get_current
     profile = db.get(GSTProfile, profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
-    rows = transaction_dicts(user.id, profile.id, period, db)
+    rows = transaction_dicts(user.id, profile.id, period, db, valid_only=True)
     return build_gstr1_json(profile.gstin, period, rows)
 
 
@@ -751,7 +799,7 @@ def tally_xml(payload: TallyGenerateIn, user: User = Depends(get_current_user), 
     company = db.get(TallyCompany, payload.company_id)
     if not company or company.user_id != user.id:
         raise HTTPException(404, "Company not found")
-    rows = transaction_dicts(user.id, payload.profile_id, payload.period, db)
+    rows = transaction_dicts(user.id, payload.profile_id, payload.period, db, valid_only=True)
     vouchers = build_vouchers(rows, payload.ledger_mapping)
     xml = build_tally_xml(company.company_name, rows, payload.ledger_mapping, payload.auto_create_ledgers)
     validation = validate_tally_xml(xml, vouchers)

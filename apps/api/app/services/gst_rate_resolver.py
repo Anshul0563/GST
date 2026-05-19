@@ -28,7 +28,7 @@ def resolve_gst_rate(row: dict[str, Any]) -> GstRateResolution:
         slab = nearest_supported_rate(round_money(source_rate * Decimal("100")))
         if slab is not None:
             return GstRateResolution(slab, "source_fraction_rate")
-    if source_rate in SUPPORTED_RATES:
+    if source_rate in SUPPORTED_RATES and source_rate != Decimal("0.00"):
         return GstRateResolution(source_rate, "source_rate")
 
     taxable = abs(money(row.get("taxable_value")))

@@ -81,12 +81,13 @@ export function Gstr1Page() {
     cess: total.cess + money(row.csamt)
   }), { taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 });
   const previewGst = previewTotals.igst + previewTotals.cgst + previewTotals.sgst + previewTotals.cess;
+  const supecoRows = workspace.preview?.supeco?.clttx || workspace.preview?.supeco?.supeco_det || [];
   const checks = [
     ["GST profile selected", Boolean(workspace.profile)],
     ["Transactions imported", workspace.transactions.length > 0],
     ["No validation blockers", !summary?.pending_errors],
     ["B2CS preview generated", Boolean(workspace.preview?.b2cs.length)],
-    ["SUPECO preview generated", Boolean(workspace.preview?.supeco?.supeco_det?.length)]
+    ["SUPECO preview generated", Boolean(supecoRows.length)]
   ];
 
   return (

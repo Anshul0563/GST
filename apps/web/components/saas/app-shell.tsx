@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, UploadCloud } from "lucide-react";
+import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud } from "lucide-react";
 import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
 
 const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
@@ -97,6 +97,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const pathname = usePathname();
   const router = useRouter();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const activeModule = pathname.startsWith("/modules/online-seller") ? "onlineSeller" : pathname.startsWith("/modules/reconcile") ? "reconcile" : pathname.startsWith("/modules/tally") ? "tally" : "";
   const activeModuleConfig = activeModule ? moduleNav[activeModule] : null;
   const currentItem = pathname === "/modules/online-seller/profile"
@@ -113,6 +114,19 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
     }
     setProfileMenuOpen(false);
     router.push("/login");
+  }
+  useEffect(() => {
+    const stored = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_theme") : null;
+    const nextTheme = stored === "dark" ? "dark" : "light";
+    setTheme(nextTheme);
+    document.documentElement.classList.toggle("dark", nextTheme === "dark");
+  }, []);
+
+  function toggleTheme() {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    document.documentElement.classList.toggle("dark", nextTheme === "dark");
+    window.localStorage.setItem("gst_bharat_theme", nextTheme);
   }
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 dark:bg-[#07111f] dark:text-white">
@@ -196,7 +210,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
                 <span>{profile?.return_period || "Set period"}</span>
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-black uppercase text-slate-500 dark:bg-white/10">{profile?.filing_frequency || "Mode"}</span>
               </Link>
-              <button className="grid size-10 place-items-center rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900"><Moon className="size-4" /></button>
+              <button onClick={toggleTheme} aria-label="Toggle color theme" className="grid size-10 place-items-center rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-white/10 dark:bg-slate-900">{theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}</button>
               <div className="relative hidden sm:block">
                 <button onClick={() => setProfileMenuOpen((open) => !open)} className="flex max-w-64 items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-[#1746A2]/40 dark:border-white/10 dark:bg-slate-900">
                   <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-saffron to-rose-500 font-black text-white">{workspaceInitial}</span>

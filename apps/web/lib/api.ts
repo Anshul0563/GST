@@ -65,7 +65,7 @@ export type Gstr1Payload = {
   version: string;
   hash: string;
   b2cs: Array<{ sply_ty: string; rt: number; typ: string; pos: string; txval: number; iamt: number; camt: number; samt: number; csamt: number }>;
-  supeco: { supeco_det: Array<Record<string, string | number>> };
+  supeco: { clttx?: Array<Record<string, string | number>>; supeco_det?: Array<Record<string, string | number>> };
   doc_issue: { doc_det: Array<Record<string, unknown>> };
 };
 

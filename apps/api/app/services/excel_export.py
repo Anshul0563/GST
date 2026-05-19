@@ -16,7 +16,7 @@ def safe_excel_value(value):
 def write_gstr1_excel(path: Path, payload: dict, rows: list[dict], errors: list[dict] | None = None) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     b2cs = pd.DataFrame(payload.get("b2cs", []))
-    supeco = pd.DataFrame(payload.get("supeco", {}).get("supeco_det", []))
+    supeco = pd.DataFrame(payload.get("supeco", {}).get("clttx", payload.get("supeco", {}).get("supeco_det", [])))
     doc_rows = []
     for group in payload.get("doc_issue", {}).get("doc_det", []):
         for doc in group.get("docs", []):
@@ -35,4 +35,3 @@ def write_gstr1_excel(path: Path, payload: dict, rows: list[dict], errors: list[
         platform_summary.to_excel(writer, sheet_name="Platform Summary", index=False)
         state_summary.to_excel(writer, sheet_name="State Summary", index=False)
     return path
-
