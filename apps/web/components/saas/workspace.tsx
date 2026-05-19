@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import {
   BatchStatus,
   DashboardSummary,
@@ -14,8 +15,7 @@ import {
   getTransactions,
   listImportBatches,
   listProfiles,
-  listTallyCompanies,
-  loadWorkspace
+  listTallyCompanies
 } from "@/lib/api";
 
 export type Workspace = {
@@ -35,6 +35,7 @@ export type Workspace = {
 };
 
 export function useWorkspace(): Workspace {
+  const pathname = usePathname();
   const [token, setToken] = useState("");
   const [user, setUser] = useState<Workspace["user"]>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -47,7 +48,24 @@ export function useWorkspace(): Workspace {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const refreshWorkspace = useCallback(async (activeToken: string, activeProfile: Profile | null | undefined) => {
+  const needs = useMemo(() => {
+    const path = pathname || "";
+    const isDashboard = path === "/dashboard";
+    const isOnlineSeller = path.startsWith("/modules/online-seller");
+    const isTally = path.startsWith("/modules/tally");
+    const isImport = path.includes("/marketplaces") || path.includes("/import") || isDashboard || path === "/modules/online-seller" || path === "/modules/tally";
+    const isGstr = path.includes("/gstr1") || path === "/modules/online-seller" || isDashboard;
+    const isTransactions = isOnlineSeller || isTally || isDashboard;
+    return {
+      summary: isOnlineSeller || isTally || isDashboard,
+      transactions: isTransactions,
+      batches: isImport || isOnlineSeller || isTally || isDashboard,
+      preview: isGstr,
+      companies: isTally || isDashboard,
+    };
+  }, [pathname]);
+
+  const refreshWorkspace = useCallback(async (activeToken: string, activeProfile: Profile | null | undefined, base?: { user: Workspace["user"]; profiles: Profile[] }) => {
     if (!activeToken) return;
     setLoading(true);
     try {
@@ -65,13 +83,13 @@ export function useWorkspace(): Workspace {
         return;
       }
       const [nextUser, nextProfiles, nextSummary, nextRows, nextBatches, nextPreview, nextCompanies] = await Promise.all([
-        getCurrentUser(activeToken),
-        listProfiles(activeToken),
-        getSummary(activeToken, activeProfile),
-        getTransactions(activeToken, activeProfile),
-        listImportBatches(activeToken, activeProfile.id),
-        getGstrPreview(activeToken, activeProfile),
-        listTallyCompanies(activeToken, activeProfile.id)
+        base ? Promise.resolve(base.user) : getCurrentUser(activeToken),
+        base ? Promise.resolve(base.profiles) : listProfiles(activeToken),
+        needs.summary ? getSummary(activeToken, activeProfile) : Promise.resolve(null),
+        needs.transactions ? getTransactions(activeToken, activeProfile) : Promise.resolve([]),
+        needs.batches ? listImportBatches(activeToken, activeProfile.id) : Promise.resolve([]),
+        needs.preview ? getGstrPreview(activeToken, activeProfile) : Promise.resolve(null),
+        needs.companies ? listTallyCompanies(activeToken, activeProfile.id) : Promise.resolve([])
       ]);
       setUser(nextUser);
       setProfiles(nextProfiles);
@@ -86,7 +104,7 @@ export function useWorkspace(): Workspace {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [needs]);
 
   const refresh = useCallback(async (profileOverride?: Profile) => {
     const activeToken = token || (typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") || "" : "");
@@ -100,14 +118,19 @@ export function useWorkspace(): Workspace {
       setLoading(false);
       return;
     }
-    const initializer = loadWorkspace(storedToken).then(({ user, profiles, profile }) => ({ token: storedToken, user, profiles, profile }));
+    const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken)])
+      .then(([user, profiles]) => ({ token: storedToken, user, profiles, profile: profiles[0] ?? null }));
     initializer
       .then(async ({ token, user, profiles, profile }) => {
         setToken(token);
         setUser(user);
         setProfiles(profiles);
         setProfile(profile);
-        await refreshWorkspace(token, profile);
+        if (profile) {
+          await refreshWorkspace(token, profile, { user, profiles });
+        } else {
+          setLoading(false);
+        }
       })
       .catch((exc) => {
         setError(exc instanceof Error ? exc.message : "Could not initialize workspace");
