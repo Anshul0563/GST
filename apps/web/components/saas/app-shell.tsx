@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { usePathname, useRouter } from "next/navigation";
-import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, Menu, Moon, ReceiptText, Repeat2, Search, Settings, ShieldCheck, UploadCloud } from "lucide-react";
+import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, UploadCloud } from "lucide-react";
 import { Profile } from "@/lib/api";
 
 const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
@@ -29,13 +29,8 @@ const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array
     icon: Repeat2,
     items: [
       { href: "/modules/reconcile", label: "Mini Dashboard", icon: Home },
-      { href: "/modules/reconcile/upload", label: "Upload 2A/2B", icon: UploadCloud },
-      { href: "/modules/reconcile/upload", label: "Upload Purchase Register", icon: FileSpreadsheet },
-      { href: "/modules/reconcile/upload", label: "Reconcile", icon: Repeat2 },
+      { href: "/modules/reconcile/upload", label: "Upload & Reconcile", icon: UploadCloud },
       { href: "/modules/reconcile/results", label: "Match Results", icon: ReceiptText },
-      { href: "/modules/reconcile/results", label: "Mismatch Explorer", icon: Search },
-      { href: "/modules/reconcile/reports", label: "ITC Risk Report", icon: ShieldCheck },
-      { href: "/modules/reconcile/reports", label: "Download Excel", icon: FileSpreadsheet },
       { href: "/modules/reconcile/reports", label: "Reconciliation History", icon: ReceiptText }
     ]
   },
@@ -47,9 +42,7 @@ const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array
       { href: "/modules/tally/company", label: "Tally Company", icon: Building2 },
       { href: "/modules/tally/import", label: "Marketplace Import", icon: UploadCloud },
       { href: "/modules/tally/mapping", label: "Ledger Mapping", icon: ReceiptText },
-      { href: "/modules/tally/export", label: "Voucher Preview", icon: FileSpreadsheet },
-      { href: "/modules/tally/export", label: "XML Generate", icon: FileJson },
-      { href: "/modules/tally/export", label: "XML Download", icon: FileSpreadsheet },
+      { href: "/modules/tally/export", label: "Voucher Preview & XML", icon: FileSpreadsheet },
       { href: "/modules/tally/history", label: "Export History", icon: ReceiptText }
     ]
   }
