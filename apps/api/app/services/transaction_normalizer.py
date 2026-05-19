@@ -37,6 +37,14 @@ def infer_taxable(txn: dict) -> Decimal:
 
 
 def apply_doc_sign(txn: dict) -> dict:
+    if txn.get("_preserve_source_sign"):
+        txn["taxable_value"] = infer_taxable(txn)
+        for field in TAX_FIELDS + VALUE_FIELDS:
+            if field == "taxable_value":
+                continue
+            txn[field] = money(txn.get(field))
+        txn["qty"] = money(txn.get("qty"))
+        return txn
     doc_type = str(txn.get("doc_type") or "invoice").lower()
     sign = Decimal("-1") if "credit" in doc_type or "refund" in doc_type or "return" in doc_type else Decimal("1")
     txn["taxable_value"] = _same_sign(infer_taxable(txn), sign)
@@ -75,8 +83,12 @@ def normalize_tax_split(txn: dict) -> dict:
 
 
 def finalize_transaction(txn: dict) -> dict:
+    preserve_source_sign = bool(txn.pop("_preserve_source_sign", False))
     txn["doc_type"] = str(txn.get("doc_type") or "invoice").lower()
+    if preserve_source_sign:
+        txn["_preserve_source_sign"] = True
     txn = normalize_tax_split(txn)
+    txn.pop("_preserve_source_sign", None)
     if isinstance(txn.get("invoice_date"), str):
         text_value = txn["invoice_date"].strip()
         dayfirst = not text_value[:4].isdigit()

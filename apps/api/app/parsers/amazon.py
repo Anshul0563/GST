@@ -21,7 +21,12 @@ class AmazonParser(MarketplaceParser):
                     row = series.to_dict()
                     txn = self.normalize_row(row, path.name)
                     type_blob = " ".join(str(row.get(key, "")) for key in row.keys()).lower()
-                    if any(word in type_blob for word in ["refund", "cancel"]):
+                    if "refund" in type_blob:
+                        txn["doc_type"] = "credit_note"
+                        credit_note_no = row.get("credit note no") or row.get("credit note number")
+                        if credit_note_no not in (None, "") and str(credit_note_no).lower() != "nan":
+                            txn["invoice_no"] = str(credit_note_no).strip()
+                    elif "cancel" in type_blob:
                         txn["doc_type"] = "credit_note"
                     observe_pos_debug(result.debug, int(index) + 2, resolve_pos(row, txn, self.platform), row)
                     if should_skip_transaction(txn):

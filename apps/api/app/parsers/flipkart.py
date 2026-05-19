@@ -38,6 +38,10 @@ class FlipkartParser(MarketplaceParser):
                             txn["doc_type"] = "debit_note"
                         elif document_no.startswith(("LYAA", "CAN")) or "credit note" in blob or "return" in blob:
                             txn["doc_type"] = "credit_note"
+                        if "cash back report" in sheet.title.lower():
+                            txn["_preserve_source_sign"] = True
+                            if document_no.startswith("DAL"):
+                                txn["doc_type"] = "debit_note"
                         observe_pos_debug(result.debug, int(index) + 1, resolve_pos(series.to_dict(), txn, self.platform), series.to_dict())
                         if should_skip_transaction(txn):
                             continue

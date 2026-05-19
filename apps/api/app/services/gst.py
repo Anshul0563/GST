@@ -44,6 +44,14 @@ def valid_for_gstr(row: dict[str, Any]) -> bool:
     return True
 
 
+def valid_for_doc_issue(row: dict[str, Any]) -> bool:
+    if row.get("validation_status") not in {"valid", "skipped"}:
+        return False
+    if not row.get("invoice_no"):
+        return False
+    return str(row.get("doc_type") or "").lower() in DOC_NUM
+
+
 def document_series_key(invoice_no: str) -> str:
     text = str(invoice_no or "").strip()
     if not text:
@@ -88,6 +96,18 @@ def split_document_ranges(values: list[str]) -> list[list[str]]:
         previous_number = current_number
     ranges.append(current)
     return ranges
+
+
+def document_group_key(row: dict[str, Any], invoice_no: str) -> str:
+    platform = str(row.get("platform") or "unknown").lower()
+    doc_type = str(row.get("doc_type") or "invoice").lower()
+    source = str(row.get("source_file") or "").lower()
+    if platform == "flipkart":
+        if "sales report" in source:
+            return f"flipkart:sales:{doc_type}"
+        if "cash back report" in source:
+            return f"flipkart:cashback:{doc_type}"
+    return f"{platform}:{document_series_key(invoice_no)}"
 
 
 def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -167,7 +187,7 @@ def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def build_doc_issue(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     grouped: dict[tuple[str, str, str], set[str]] = defaultdict(set)
     for row in rows:
-        if not valid_for_gstr(row):
+        if not valid_for_doc_issue(row):
             continue
         doc_type = str(row.get("doc_type") or "invoice").lower()
         if doc_type not in DOC_NUM:
@@ -176,7 +196,7 @@ def build_doc_issue(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
         if not invoice_no:
             continue
         platform = str(row.get("platform") or "unknown").lower()
-        grouped[(doc_type, platform, document_series_key(invoice_no))].add(invoice_no)
+        grouped[(doc_type, platform, document_group_key(row, invoice_no))].add(invoice_no)
 
     doc_det: list[dict[str, Any]] = []
     for doc_type in ("invoice", "credit_note", "debit_note"):
@@ -184,8 +204,9 @@ def build_doc_issue(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
         if not series:
             continue
         docs = []
-        for _key, values in sorted(series, key=lambda item: document_sort_key(item[1][0])):
-            for item_range in split_document_ranges(values):
+        for key, values in sorted(series, key=lambda item: document_sort_key(item[1][0])):
+            ranges = [values] if str(key[2]).startswith("flipkart:") else split_document_ranges(values)
+            for item_range in ranges:
                 docs.append({
                     "num": len(docs) + 1,
                     "from": item_range[0],
@@ -206,7 +227,7 @@ def validate_doc_issue_ranges(doc_issue: dict[str, Any]) -> list[str]:
             start = document_number(str(doc.get("from") or ""))
             end = document_number(str(doc.get("to") or ""))
             totnum = int(doc.get("totnum") or 0)
-            if start is not None and end is not None and end >= start:
+            if document_series_key(str(doc.get("from") or "")) == document_series_key(str(doc.get("to") or "")) and start is not None and end is not None and end >= start:
                 implied = end - start + 1
                 if implied != totnum:
                     errors.append(f"Document range {doc.get('from')} to {doc.get('to')} implies {implied} documents but totnum is {totnum}")
