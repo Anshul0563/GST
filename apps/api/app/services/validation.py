@@ -1,5 +1,5 @@
 import re
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from app.utils.states import STATE_CODES
 
@@ -21,7 +21,10 @@ def money(value: object) -> Decimal:
         cleaned = cleaned.strip("()")
         multiplier = Decimal("-1") if is_parenthesized_negative or cleaned.upper().endswith(("CR", "DR")) and cleaned.startswith("-") else Decimal("1")
         cleaned = cleaned.upper().replace("CR", "").replace("DR", "").strip()
-        decimal_value = Decimal(cleaned)
+        try:
+            decimal_value = Decimal(cleaned)
+        except InvalidOperation:
+            return Decimal("0.00")
         decimal_value *= multiplier
     return round_money(decimal_value)
 
