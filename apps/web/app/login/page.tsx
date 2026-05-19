@@ -12,8 +12,18 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   async function submit(event: FormEvent) {
     event.preventDefault();
+    const nextEmail = email.trim().toLowerCase();
+    if (!nextEmail || !nextEmail.includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      setError("Enter your password.");
+      return;
+    }
     try {
-      const token = await loginUser({ email, password });
+      setError("");
+      const token = await loginUser({ email: nextEmail, password });
       window.localStorage.setItem("gst_bharat_token", token.access_token);
       router.push("/dashboard");
     } catch (exc) {
@@ -31,8 +41,8 @@ export default function LoginPage() {
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#1746A2]">GST Bharat</p>
           <h1 className="mt-3 text-4xl font-black tracking-tight">Login</h1>
           <p className="mt-2 text-slate-500">Use your GST Bharat account credentials.</p>
-          <label className="mt-8 block text-sm font-bold">Email<input value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-slate-200 px-4 outline-none focus:border-[#1746A2]" /></label>
-          <label className="mt-5 block text-sm font-bold">Password<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-slate-200 px-4 outline-none focus:border-[#1746A2]" /></label>
+          <label className="mt-8 block text-sm font-bold">Email<input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-slate-200 px-4 outline-none focus:border-[#1746A2]" /></label>
+          <label className="mt-5 block text-sm font-bold">Password<input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-slate-200 px-4 outline-none focus:border-[#1746A2]" /></label>
           {error && <div className="mt-4 rounded-2xl bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
           <button className="mt-6 h-12 w-full rounded-2xl bg-[#10244d] font-bold text-white shadow-xl shadow-blue-950/20">Login</button>
           <p className="mt-5 text-center text-sm text-slate-500">New to GST Bharat? <Link className="font-bold text-[#1746A2]" href="/register">Create account</Link></p>

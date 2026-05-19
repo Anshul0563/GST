@@ -192,9 +192,31 @@ export async function request<T>(path: string, options: RequestInit = {}, token?
     }
   });
   if (!response.ok) {
-    throw new Error(await response.text());
+    const body = await response.text();
+    throw new Error(readApiError(body));
   }
   return response.json();
+}
+
+function readApiError(body: string) {
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown };
+    if (Array.isArray(parsed.detail)) {
+      return parsed.detail
+        .map((item) => {
+          if (item && typeof item === "object" && "msg" in item) {
+            return String((item as { msg: unknown }).msg);
+          }
+          return "";
+        })
+        .filter(Boolean)
+        .join(" ");
+    }
+    if (typeof parsed.detail === "string") return parsed.detail;
+  } catch {
+    // Fall back to raw response text below.
+  }
+  return body || "Request failed";
 }
 
 export function loginUser(payload: { email: string; password: string }) {
