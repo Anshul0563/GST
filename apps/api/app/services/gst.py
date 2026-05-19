@@ -297,7 +297,8 @@ def validate_doc_issue_ranges(doc_issue: dict[str, Any]) -> list[str]:
 
 def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    if list(payload.keys()) != [
+
+    expected_top_keys = [
         "gstin",
         "fp",
         "version",
@@ -305,26 +306,37 @@ def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
         "b2cs",
         "supeco",
         "doc_issue",
-    ]:
+    ]
+
+    if list(payload.keys()) != expected_top_keys:
         errors.append("GSTR-1 top-level JSON keys drifted from accepted contract")
+
     if not validate_gstin(str(payload.get("gstin") or "")):
         errors.append("Invalid GSTIN in export payload")
+
     if not validate_period(str(payload.get("fp") or "")):
         errors.append("Invalid filing period in export payload")
+
     if payload.get("version") != GST_VERSION:
         errors.append("Invalid GST JSON version")
+
     if payload.get("hash") != "hash":
         errors.append('GST portal reference hash must be literal "hash"')
+
     supeco = payload.get("supeco")
     if not isinstance(supeco, dict) or set(supeco.keys()) != {"clttx"}:
         errors.append("SUPECO must contain only clttx")
-    if "supeco_det" in (supeco or {}):
+
+    if isinstance(supeco, dict) and "supeco_det" in supeco:
         errors.append("supeco_det is not allowed")
+
     doc_issue = payload.get("doc_issue")
     if not isinstance(doc_issue, dict) or set(doc_issue.keys()) != {"doc_det"}:
         errors.append("doc_issue must contain only doc_det")
+
     for item in payload.get("b2cs", []):
         expected_keys = {"sply_ty", "rt", "typ", "pos", "txval", "csamt"}
+
         if item.get("sply_ty") == "INTER":
             expected_keys.add("iamt")
         elif item.get("sply_ty") == "INTRA":
@@ -332,69 +344,85 @@ def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
         else:
             errors.append(f"Invalid B2CS supply type: {item.get('sply_ty')}")
             continue
+
         if set(item.keys()) != expected_keys:
             errors.append(f"B2CS key mismatch for POS {item.get('pos')}")
+
         if money(item.get("rt")) not in SUPPORTED_RATES or money(
             item.get("rt")
         ) == Decimal("0.00"):
             errors.append(
                 f"Invalid/fake B2CS rate for POS {item.get('pos')}: {item.get('rt')}"
             )
+
         tax_total = (
             money(item.get("iamt"))
             + money(item.get("camt"))
             + money(item.get("samt"))
             + money(item.get("csamt"))
         )
+
         if money(item.get("txval")) == Decimal("0.00") and tax_total == Decimal("0.00"):
             errors.append(f"Fake zero B2CS row for POS {item.get('pos')}")
+
         if item.get("sply_ty") == "INTRA" and abs(
             money(item.get("camt")) - money(item.get("samt"))
         ) > Decimal("0.01"):
             errors.append(
                 f"INTRA CGST/SGST split differs by more than 0.01 for POS {item.get('pos')}"
             )
-    for section in payload.get("doc_issue", {}).get("doc_det", []):
-        if set(section.keys()) != {"doc_num", "doc_typ", "docs"}:
-            errors.append("doc_issue section key mismatch")
-        if DOC_TYP.get(
-            next(
-                (
-                    key
-                    for key, value in DOC_NUM.items()
-                    if value == section.get("doc_num")
-                ),
-                "",
-            )
-        ) != section.get("doc_typ"):
-            errors.append(f"doc_typ mismatch for doc_num {section.get('doc_num')}")
-        for doc in section.get("docs", []):
-            if set(doc.keys()) != {
-                "num",
-                "from",
-                "to",
-                "totnum",
-                "cancel",
-                "net_issue",
-            }:
-                errors.append(f"doc_issue docs key mismatch for {doc.get('from')}")
-            if int(doc.get("net_issue") or 0) != int(doc.get("totnum") or 0) - int(
-                doc.get("cancel") or 0
-            ):
-                errors.append(
-                    f"doc_issue net_issue mismatch for {doc.get('from')} to {doc.get('to')}"
+
+    if isinstance(doc_issue, dict):
+        for section in doc_issue.get("doc_det", []):
+            if set(section.keys()) != {"doc_num", "doc_typ", "docs"}:
+                errors.append("doc_issue section key mismatch")
+
+            expected_doc_typ = DOC_TYP.get(
+                next(
+                    (
+                        key
+                        for key, value in DOC_NUM.items()
+                        if value == section.get("doc_num")
+                    ),
+                    "",
                 )
-                b2cs_total = sum(money(x.get("txval")) for x in payload.get("b2cs", []))
+            )
 
+            if expected_doc_typ != section.get("doc_typ"):
+                errors.append(f"doc_typ mismatch for doc_num {section.get('doc_num')}")
 
-        supeco_total = sum(
-            money(x.get("suppval")) for x in payload.get("supeco", {}).get("clttx", [])
+            for doc in section.get("docs", []):
+                if set(doc.keys()) != {
+                    "num",
+                    "from",
+                    "to",
+                    "totnum",
+                    "cancel",
+                    "net_issue",
+                }:
+                    errors.append(f"doc_issue docs key mismatch for {doc.get('from')}")
+
+                expected_net_issue = int(doc.get("totnum") or 0) - int(
+                    doc.get("cancel") or 0
+                )
+                actual_net_issue = int(doc.get("net_issue") or 0)
+
+                if actual_net_issue != expected_net_issue:
+                    errors.append(
+                        f"doc_issue net_issue mismatch for {doc.get('from')} to {doc.get('to')}"
+                    )
+
+    b2cs_total = sum(money(x.get("txval")) for x in payload.get("b2cs", []))
+
+    supeco_total = sum(
+        money(x.get("suppval")) for x in payload.get("supeco", {}).get("clttx", [])
+    )
+
+    if abs(b2cs_total - supeco_total) > Decimal("0.01"):
+        errors.append(
+            f"B2CS taxable {b2cs_total} does not match SUPECO taxable {supeco_total}"
         )
 
-        if abs(b2cs_total - supeco_total) > Decimal("0.01"):
-            errors.append(
-                f"B2CS taxable {b2cs_total} does not match SUPECO taxable {supeco_total}"
-            )
     return errors
 
 

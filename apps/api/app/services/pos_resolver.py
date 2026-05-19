@@ -6,9 +6,12 @@ import json
 from typing import Any
 
 from app.services.validation import money, validate_gstin
-from app.services.validation import money
-from app.utils.states import STATE_CODES, normalize_state_text, state_code_from_pincode, state_code_from_text
-
+from app.utils.states import (
+    STATE_CODES,
+    normalize_state_text,
+    state_code_from_pincode,
+    state_code_from_text,
+)
 
 STATE_ALIASES = [
     "billing state",
@@ -156,14 +159,29 @@ def find_value(row: dict[str, Any], aliases: list[str]) -> tuple[str | None, Any
     return None, None
 
 
-def resolve_pos(raw_row: dict[str, Any], normalized_row: dict[str, Any], platform: str, seller_gstin: str | None = None) -> PosResolution:
+def resolve_pos(
+    raw_row: dict[str, Any],
+    normalized_row: dict[str, Any],
+    platform: str,
+    seller_gstin: str | None = None,
+) -> PosResolution:
     existing_code = state_code_from_text(normalized_row.get("buyer_state_code"))
     if existing_code:
-        return PosResolution(existing_code, STATE_CODES.get(existing_code), "normalized", "buyer_state_code")
+        return PosResolution(
+            existing_code,
+            STATE_CODES.get(existing_code),
+            "normalized",
+            "buyer_state_code",
+        )
 
     existing_name_code = state_code_from_text(normalized_row.get("buyer_state_name"))
     if existing_name_code:
-        return PosResolution(existing_name_code, STATE_CODES.get(existing_name_code), "normalized", "buyer_state_name")
+        return PosResolution(
+            existing_name_code,
+            STATE_CODES.get(existing_name_code),
+            "normalized",
+            "buyer_state_name",
+        )
 
     search_rows = [raw_row, read_raw_json(normalized_row)]
     for source in search_rows:
@@ -180,16 +198,34 @@ def resolve_pos(raw_row: dict[str, Any], normalized_row: dict[str, Any], platfor
         column, value = find_value(source, PINCODE_ALIASES)
         code = state_code_from_pincode(value)
         if code:
-            return PosResolution(code, STATE_CODES.get(code), "inferred_from_pincode", column, "POS inferred from pincode")
+            return PosResolution(
+                code,
+                STATE_CODES.get(code),
+                "inferred_from_pincode",
+                column,
+                "POS inferred from pincode",
+            )
 
     cgst = money(normalized_row.get("cgst"))
     sgst = money(normalized_row.get("sgst"))
-    seller_gstin_value = str(seller_gstin or normalized_row.get("gstin") or "").strip().upper()
-    seller_state = seller_gstin_value[:2] if validate_gstin(seller_gstin_value) else None
+    seller_gstin_value = (
+        str(seller_gstin or normalized_row.get("gstin") or "").strip().upper()
+    )
+    seller_state = (
+        seller_gstin_value[:2] if validate_gstin(seller_gstin_value) else None
+    )
     if (cgst != Decimal("0.00") or sgst != Decimal("0.00")) and seller_state:
-        return PosResolution(seller_state, STATE_CODES.get(seller_state), "inferred_from_seller_state", "gstin", "POS inferred from seller GSTIN because CGST/SGST is present")
+        return PosResolution(
+            seller_state,
+            STATE_CODES.get(seller_state),
+            "inferred_from_seller_state",
+            "gstin",
+            "POS inferred from seller GSTIN because CGST/SGST is present",
+        )
 
-    return PosResolution(None, None, "unresolved", None, f"POS unresolved for {platform}")
+    return PosResolution(
+        None, None, "unresolved", None, f"POS unresolved for {platform}"
+    )
 
 
 def new_pos_debug(platform: str) -> dict[str, Any]:
@@ -206,8 +242,16 @@ def new_pos_debug(platform: str) -> dict[str, Any]:
     }
 
 
-def observe_pos_debug(debug: dict[str, Any], row_id: Any, resolution: PosResolution, raw_row: dict[str, Any]) -> None:
-    if resolution.source_column and resolution.source_column not in debug["detected_state_columns"]:
+def observe_pos_debug(
+    debug: dict[str, Any],
+    row_id: Any,
+    resolution: PosResolution,
+    raw_row: dict[str, Any],
+) -> None:
+    if (
+        resolution.source_column
+        and resolution.source_column not in debug["detected_state_columns"]
+    ):
         debug["detected_state_columns"].append(resolution.source_column)
     if resolution.source_column:
         value = None
@@ -228,8 +272,12 @@ def observe_pos_debug(debug: dict[str, Any], row_id: Any, resolution: PosResolut
         debug["warnings"].append({"row": row_id, "warning": resolution.warning})
 
 
-def apply_pos_resolution(raw_row: dict[str, Any], normalized_row: dict[str, Any], platform: str) -> PosResolution:
-    resolution = resolve_pos(raw_row, normalized_row, platform, normalized_row.get("gstin"))
+def apply_pos_resolution(
+    raw_row: dict[str, Any], normalized_row: dict[str, Any], platform: str
+) -> PosResolution:
+    resolution = resolve_pos(
+        raw_row, normalized_row, platform, normalized_row.get("gstin")
+    )
     normalized_row["buyer_state_code"] = resolution.buyer_state_code
     normalized_row["buyer_state_name"] = resolution.buyer_state_name
     return resolution
