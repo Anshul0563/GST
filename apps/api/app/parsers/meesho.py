@@ -71,8 +71,18 @@ class MeeshoParser(MarketplaceParser):
                 if metadata.get("end customer state new") and not first_value(row, ["end customer state new", "customer state", "delivery state", "shipping state", "recipient state", "buyer state", "place of supply", "pos", "state"]):
                     row["resolved state"] = metadata["end customer state new"]
                 txn = self.normalize_row(row, f"{path.name}:{sheet_name}")
-                if "return" in path.name.lower() and txn["doc_type"] == "invoice":
+                is_return = "return" in path.name.lower() or first_value(row, ["cancel return date", "return date"]) not in (None, "")
+                if is_return and txn["doc_type"] == "invoice":
                     txn["doc_type"] = "credit_note"
+                if not txn.get("invoice_no"):
+                    result.errors.append({
+                        "file": path.name,
+                        "sheet": sheet_name,
+                        "row": int(index) + 2,
+                        "suborder": suborder,
+                        "error": "Missing Meesho invoice metadata for financial row",
+                    })
+                    continue
                 observe_pos_debug(result.debug, int(index) + 2, resolve_pos(row, txn, self.platform), row)
                 if should_skip_transaction(txn):
                     continue

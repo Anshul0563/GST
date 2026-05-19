@@ -408,16 +408,17 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         db.commit()
         parser = get_parser(batch.platform)(profile.gstin, profile.return_period)
         result = parser.parse([Path(path) for path in file_paths])
-        seen_keys: set[tuple[int, str | None, str | None, str | None]] = set()
+        seen_keys: set[tuple[int, str | None, str | None, str | None, str | None]] = set()
         inserted_rows = 0
         validation_error_rows = 0
         for txn in result.transactions:
-            key = (batch.profile_id, txn.get("platform"), txn.get("invoice_no"), txn.get("order_item_id"))
+            key = (batch.profile_id, txn.get("platform"), txn.get("doc_type"), txn.get("invoice_no"), txn.get("order_item_id"))
             duplicate = key in seen_keys or db.scalar(select(NormalizedTransaction).where(
                 NormalizedTransaction.profile_id == key[0],
                 NormalizedTransaction.platform == key[1],
-                NormalizedTransaction.invoice_no == key[2],
-                NormalizedTransaction.order_item_id == key[3],
+                NormalizedTransaction.doc_type == key[2],
+                NormalizedTransaction.invoice_no == key[3],
+                NormalizedTransaction.order_item_id == key[4],
             ))
             if duplicate:
                 continue

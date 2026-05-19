@@ -17,7 +17,12 @@ class RealGstr1JsonExportTests(unittest.TestCase):
         if not original_path.exists():
             self.skipTest("Original GST Tool JSON file is not available on this machine.")
 
-        payload, summary = build_payload_and_summary()
+        try:
+            payload, summary = build_payload_and_summary()
+        except SystemExit as exc:
+            if "Missing input files" in str(exc):
+                self.skipTest(str(exc))
+            raise
         original = json.loads(original_path.read_text(encoding="utf-8"))
         checks, failures = validate(summary, payload)
 
