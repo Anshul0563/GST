@@ -9,8 +9,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "03",
-      "txval": 643.68,
-      "iamt": 19.32,
+      "txval": 439.8,
+      "iamt": 13.2,
       "csamt": 0.0
     },
     {
@@ -171,8 +171,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "37",
-      "txval": 1495.12,
-      "iamt": 44.88,
+      "txval": 1306.77,
+      "iamt": 39.23,
       "csamt": 0.0
     },
     {
@@ -208,8 +208,8 @@
       },
       {
         "etin": "07AARCM9332R1CQ",
-        "suppval": 13340.78,
-        "igst": 382.81,
+        "suppval": 12948.55,
+        "igst": 371.04,
         "cgst": 8.71,
         "sgst": 8.7,
         "cess": 0.0,
@@ -271,6 +271,22 @@
         "docs": [
           {
             "num": 1,
+            "from": "255724174047155204_1",
+            "to": "255724174047155204_1",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          },
+          {
+            "num": 2,
+            "from": "258278316879138432_1",
+            "to": "258278316879138432_1",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          },
+          {
+            "num": 3,
             "from": "6p5kc27C1",
             "to": "6p5kc27C1",
             "totnum": 1,
@@ -278,7 +294,7 @@
             "net_issue": 1
           },
           {
-            "num": 2,
+            "num": 4,
             "from": "6p5kc26C68",
             "to": "6p5kc26C98",
             "totnum": 31,
@@ -286,7 +302,7 @@
             "net_issue": 31
           },
           {
-            "num": 3,
+            "num": 5,
             "from": "CANQ1W2600000013",
             "to": "CANQ1W2600000019",
             "totnum": 7,
@@ -294,7 +310,7 @@
             "net_issue": 7
           },
           {
-            "num": 4,
+            "num": 6,
             "from": "LYAA9U7260000001",
             "to": "LYAA9U7260000001",
             "totnum": 1,
@@ -302,7 +318,7 @@
             "net_issue": 1
           },
           {
-            "num": 5,
+            "num": 7,
             "from": "MFABNVY260000001",
             "to": "MFABNVY260000002",
             "totnum": 2,
@@ -310,7 +326,7 @@
             "net_issue": 2
           },
           {
-            "num": 6,
+            "num": 8,
             "from": "RAT6SO2600000028",
             "to": "RAT6SO2600000034",
             "totnum": 7,
