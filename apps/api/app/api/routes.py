@@ -398,6 +398,7 @@ def delete_import_batch(batch_id: int, user: User = Depends(get_current_user), d
         raise HTTPException(409, "Import is still processing")
 
     files = db.scalars(select(UploadedFile).where(UploadedFile.batch_id == batch.id, UploadedFile.user_id == user.id)).all()
+    stored_paths = [uploaded.stored_path for uploaded in files if uploaded.stored_path]
     for txn in db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.batch_id == batch.id, NormalizedTransaction.user_id == user.id)).all():
         db.delete(txn)
     for uploaded in files:
@@ -406,14 +407,13 @@ def delete_import_batch(batch_id: int, user: User = Depends(get_current_user), d
     db.delete(batch)
     db.commit()
 
-    for uploaded in files:
-        if uploaded.stored_path:
-            path = Path(uploaded.stored_path)
-            if path.exists():
-                path.unlink()
-            parent = path.parent
-            if parent.exists() and not any(parent.iterdir()):
-                shutil.rmtree(parent, ignore_errors=True)
+    for stored_path in stored_paths:
+        path = Path(stored_path)
+        if path.exists():
+            path.unlink()
+        parent = path.parent
+        if parent.exists() and not any(parent.iterdir()):
+            shutil.rmtree(parent, ignore_errors=True)
     return {"ok": True}
 
 

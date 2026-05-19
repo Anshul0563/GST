@@ -8,11 +8,27 @@ import { useWorkspace } from "@/components/saas/workspace";
 import { BillingPlan, BillingStatus, createBillingOrder, createProfile, getBillingPlans, getBillingStatus, updateProfile, verifyBillingPayment } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
+function currentProfileDefaults() {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const year = now.getFullYear();
+  const financialStart = now.getMonth() >= 3 ? year : year - 1;
+  return {
+    gstin: "",
+    legal_name: "",
+    trade_name: "",
+    filing_frequency: "Monthly",
+    financial_year: `${financialStart}-${String(financialStart + 1).slice(-2)}`,
+    return_period: `${month}${year}`
+  };
+}
+
 export function ProfilePage() {
   const workspace = useWorkspace();
-  const [form, setForm] = useState({ gstin: "", legal_name: "", trade_name: "", filing_frequency: "Monthly", financial_year: "2026-27", return_period: "042026" });
+  const [form, setForm] = useState(currentProfileDefaults);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const dynamicDefaults = currentProfileDefaults();
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!workspace.token) return;
@@ -22,7 +38,7 @@ export function ProfilePage() {
       await createProfile(workspace.token, form);
     }
     setEditingId(null);
-    setForm({ gstin: "", legal_name: "", trade_name: "", filing_frequency: "Monthly", financial_year: "2026-27", return_period: "042026" });
+    setForm(currentProfileDefaults());
     await workspace.refresh();
     setMessage(editingId ? "GST profile updated." : "GST profile added.");
   }
@@ -31,6 +47,11 @@ export function ProfilePage() {
       <div className="text-center">
         <h2 className="text-xl font-black">GST Information</h2>
         <p className="mt-2 text-xs text-slate-500">Provide GST Number, month and year of filing.</p>
+      </div>
+      <div className="mx-auto mt-6 grid max-w-2xl gap-3 rounded-md border border-slate-200 bg-slate-50 p-4 text-xs md:grid-cols-3">
+        <div><b className="text-slate-800">Active GSTIN</b><p className="mt-1 text-slate-500">{workspace.profile?.gstin || "No active profile"}</p></div>
+        <div><b className="text-slate-800">Current period</b><p className="mt-1 text-slate-500">{workspace.profile?.return_period || dynamicDefaults.return_period}</p></div>
+        <div><b className="text-slate-800">Financial year</b><p className="mt-1 text-slate-500">{workspace.profile?.financial_year || dynamicDefaults.financial_year}</p></div>
       </div>
       <form onSubmit={submit} className="mx-auto mt-8 max-w-2xl rounded-md border border-slate-200 bg-white shadow-sm">
         <div className="grid border-b border-slate-200 md:grid-cols-[1fr_220px]">
