@@ -126,6 +126,8 @@ def validation_summary(transactions: list[dict], parser_errors: list[dict]) -> d
         errors = str(txn.get("validation_errors") or "")
         if txn.get("validation_status") == "valid":
             summary["valid_rows"] += 1
+        elif txn.get("validation_status") == "skipped":
+            summary["skipped_rows"] += 1
         else:
             summary["invalid_rows"] += 1
         if "Missing POS" in errors:
@@ -136,7 +138,6 @@ def validation_summary(transactions: list[dict], parser_errors: list[dict]) -> d
             summary["missing_invoice"] += 1
         if "Zero amount row" in errors or "Zero rate and zero taxable row" in errors:
             summary["zero_amount_rows"] += 1
-            summary["skipped_rows"] += 1
     return summary
 
 
@@ -481,7 +482,7 @@ def import_errors(batch_id: int, user: User = Depends(get_current_user), db: Ses
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
     parser_errors, debug = read_import_report(batch)
-    rows = db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.batch_id == batch_id, NormalizedTransaction.validation_status == "error")).all()
+    rows = db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.batch_id == batch_id, NormalizedTransaction.validation_status.in_(["error", "skipped"]))).all()
     row_errors = []
     for row in rows:
         item = TransactionOut.model_validate(row).model_dump(mode="json")

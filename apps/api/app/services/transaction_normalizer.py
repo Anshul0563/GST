@@ -83,6 +83,7 @@ def finalize_transaction(txn: dict) -> dict:
         parsed = pd.to_datetime(text_value, errors="coerce", dayfirst=dayfirst)
         txn["invoice_date"] = None if pd.isna(parsed) else parsed.date()
     errors = validate_transaction(txn)
-    txn["validation_status"] = "error" if errors else "valid"
+    zero_only = errors and all(error in {"Zero amount row", "Zero rate and zero taxable row"} for error in errors)
+    txn["validation_status"] = "skipped" if zero_only else "error" if errors else "valid"
     txn["validation_errors"] = "; ".join(errors) if errors else None
     return txn
