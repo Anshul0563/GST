@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { CalendarDays, CheckCircle2, CreditCard, Settings, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
@@ -133,7 +133,7 @@ export function SettingsPage() {
   const [saved, setSaved] = useState("");
   useEffect(() => {
     const raw = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_workspace_settings") : null;
-    if (raw) setSettings({ ...settings, ...JSON.parse(raw) });
+    if (raw) setSettings((current) => ({ ...current, ...JSON.parse(raw) }));
   }, []);
   function saveSettings() {
     window.localStorage.setItem("gst_bharat_workspace_settings", JSON.stringify(settings));
@@ -168,12 +168,12 @@ export function BillingPage() {
   const [cycle, setCycle] = useState("monthly");
   const [message, setMessage] = useState("");
 
-  async function loadBilling() {
+  const loadBilling = useCallback(async () => {
     if (!workspace.token) return;
     const [planResult, statusResult] = await Promise.all([getBillingPlans(workspace.token), getBillingStatus(workspace.token)]);
     setPlans(planResult.plans);
     setStatus(statusResult);
-  }
+  }, [workspace.token]);
 
   async function startCheckout(planId: string) {
     if (!workspace.token) return;
@@ -228,7 +228,7 @@ export function BillingPage() {
   useEffect(() => {
     if (!workspace.token) return;
     loadBilling().catch((exc) => setMessage(exc instanceof Error ? exc.message : "Could not load billing"));
-  }, [workspace.token]);
+  }, [workspace.token, loadBilling]);
 
   return <AppShell title="Billing" subtitle="Subscription, free-access admin status and Razorpay checkout." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <div className="space-y-6">

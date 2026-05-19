@@ -47,9 +47,7 @@ export function useWorkspace(): Workspace {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const refresh = useCallback(async (profileOverride?: Profile) => {
-    const activeToken = token || (typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") || "" : "");
-    const activeProfile = profileOverride || profile;
+  const refreshWorkspace = useCallback(async (activeToken: string, activeProfile: Profile | null | undefined) => {
     if (!activeToken) return;
     setLoading(true);
     try {
@@ -88,7 +86,13 @@ export function useWorkspace(): Workspace {
     } finally {
       setLoading(false);
     }
-  }, [profile, token]);
+  }, []);
+
+  const refresh = useCallback(async (profileOverride?: Profile) => {
+    const activeToken = token || (typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") || "" : "");
+    const activeProfile = profileOverride || profile;
+    await refreshWorkspace(activeToken, activeProfile);
+  }, [profile, refreshWorkspace, token]);
 
   useEffect(() => {
     const storedToken = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") : null;
@@ -103,13 +107,13 @@ export function useWorkspace(): Workspace {
         setUser(user);
         setProfiles(profiles);
         setProfile(profile);
-        await refresh(profile ?? undefined);
+        await refreshWorkspace(token, profile);
       })
       .catch((exc) => {
         setError(exc instanceof Error ? exc.message : "Could not initialize workspace");
         setLoading(false);
       });
-  }, []);
+  }, [refreshWorkspace]);
 
   return useMemo(() => ({
     token,
