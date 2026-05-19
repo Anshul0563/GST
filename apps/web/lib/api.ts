@@ -324,6 +324,27 @@ export function downloadUrl(path: string) {
   return `${API_BASE}${path}`;
 }
 
+export async function downloadAuthenticatedFile(token: string, path: string, fallbackName: string) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(readApiError(body));
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("content-disposition") || "";
+  const filename = disposition.match(/filename="?([^"]+)"?/i)?.[1] || fallbackName;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function createTallyCompany(token: string, payload: { profile_id: number; company_name: string; gstin?: string; financial_year?: string; state?: string; auto_create_ledger?: boolean; tally_guid?: string }) {
   return request<TallyCompany>("/tally/company", { method: "POST", body: JSON.stringify(payload) }, token);
 }

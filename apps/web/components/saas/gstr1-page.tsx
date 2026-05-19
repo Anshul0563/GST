@@ -5,7 +5,7 @@ import { Download, FileJson, FileSpreadsheet } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard, StatusPill } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { Gstr1ExportItem, downloadUrl, generateGstr1, getGstr1History } from "@/lib/api";
+import { Gstr1ExportItem, downloadAuthenticatedFile, generateGstr1, getGstr1History } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 export function Gstr1Page() {
@@ -54,11 +54,22 @@ export function Gstr1Page() {
       setDownloads({ download_json: result.download_json, download_excel: result.download_excel });
       await workspace.refresh();
       await loadHistory();
-      window.location.href = downloadUrl(format === "json" ? result.download_json : result.download_excel);
+      await downloadAuthenticatedFile(workspace.token, format === "json" ? result.download_json : result.download_excel, `gstr1-${workspace.profile.return_period}.${format === "json" ? "json" : "xlsx"}`);
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : `Could not export GSTR-1 ${format.toUpperCase()}`);
     } finally {
       setBusy(false);
+    }
+  }
+  async function downloadExport(path: string, fallbackName: string) {
+    if (!workspace.token) return;
+    setError("");
+    try {
+      await downloadAuthenticatedFile(workspace.token, path, fallbackName);
+      await loadHistory();
+      await workspace.refresh();
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Could not download export");
     }
   }
   const summary = workspace.summary;
@@ -106,7 +117,7 @@ export function Gstr1Page() {
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <button onClick={generate} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Generating files..." : "Save to history"}</button>
-              {downloads && <><a href={downloadUrl(downloads.download_json)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> JSON</a><a href={downloadUrl(downloads.download_excel)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Excel</a></>}
+              {downloads && <><button onClick={() => downloadExport(downloads.download_json, `gstr1-${workspace.profile?.return_period || "export"}.json`)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> JSON</button><button onClick={() => downloadExport(downloads.download_excel, `gstr1-${workspace.profile?.return_period || "export"}.xlsx`)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Excel</button></>}
             </div>
             {error && <div className="mt-5 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
           </Panel>
@@ -119,8 +130,8 @@ export function Gstr1Page() {
           {loadingHistory ? <EmptyState title="Loading exports" body="Fetching generated GSTR-1 files." /> : history.length ? <div className="space-y-3">{history.map((item) => <div key={item.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]">
             <div><b>Export #{item.id}</b><p className="text-xs text-slate-500">{item.period} / {new Date(item.created_at).toLocaleString()}</p></div>
             <StatusPill status={item.status} />
-            <a href={downloadUrl(item.download_json)} className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">JSON</a>
-            <a href={downloadUrl(item.download_excel)} className="rounded-xl bg-[#1746A2] px-3 py-2 text-center text-xs font-bold text-white">Excel</a>
+            <button onClick={() => downloadExport(item.download_json, `gstr1-${item.period}.json`)} className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">JSON</button>
+            <button onClick={() => downloadExport(item.download_excel, `gstr1-${item.period}.xlsx`)} className="rounded-xl bg-[#1746A2] px-3 py-2 text-center text-xs font-bold text-white">Excel</button>
           </div>)}</div> : <EmptyState title="No generated files" body="Generated JSON and Excel files will appear here." />}
         </Panel>
       </div>
