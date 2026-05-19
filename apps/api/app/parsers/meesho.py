@@ -22,7 +22,11 @@ def has_financial_values(row: dict) -> bool:
         "invoice amount",
         "gross amount",
     ]
-    return money(first_value(row, fields)) != 0
+    return any(money(first_value(row, [field])) != 0 for field in fields)
+
+
+def is_empty(value: object) -> bool:
+    return text(value) is None
 
 
 class MeeshoParser(MarketplaceParser):
@@ -69,7 +73,8 @@ class MeeshoParser(MarketplaceParser):
                 metadata_type = "credit_note" if is_return else "invoice"
                 metadata = metadata_by_suborder.get(suborder or "", {}).get(metadata_type, {})
                 for key, value in metadata.items():
-                    row.setdefault(key, value)
+                    if is_empty(row.get(key)):
+                        row[key] = value
                 if metadata.get("invoice no") and not first_value(row, ["invoice no.", "invoice no", "invoice number", "tax invoice no"]):
                     row["invoice no"] = metadata["invoice no"]
                 if metadata.get("end customer state new") and not first_value(row, ["end customer state new", "customer state", "delivery state", "shipping state", "recipient state", "buyer state", "place of supply", "pos", "state"]):

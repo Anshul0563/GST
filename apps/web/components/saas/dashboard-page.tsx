@@ -67,7 +67,7 @@ export function DashboardSaasPage() {
             ? [{ label: "Imports", value: String(summary?.uploaded_files || workspace.batches.length || 0) }, { label: "Rows", value: String(workspace.transactions.length || 0) }]
             : index === 1
               ? [{ label: "Profile", value: workspace.profile?.gstin ? "Ready" : "Not set" }, { label: "Period", value: workspace.profile?.return_period || "--" }]
-              : [{ label: "Companies", value: String(workspace.companies.length || 0) }, { label: "Ready rows", value: String(workspace.transactions.filter((row) => row.validation_status !== "error").length || 0) }];
+              : [{ label: "Companies", value: String(workspace.companies.length || 0) }, { label: "Ready rows", value: String(workspace.transactions.filter((row) => row.validation_status === "valid").length || 0) }];
           return <article key={tool.title} className="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white text-left shadow-xl shadow-slate-200/70 transition hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-slate-900 dark:shadow-none">
             <div className={`relative min-h-48 bg-gradient-to-br ${tool.accent} p-6 text-white`}>
               <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(135deg,rgba(255,255,255,.35)_1px,transparent_1px)] [background-size:28px_28px]" />
@@ -104,7 +104,7 @@ export function DashboardSaasPage() {
 export function OnlineSellerDashboardPage() {
   const workspace = useWorkspace();
   const summary = workspace.summary;
-  const warnings = workspace.transactions.filter((row) => row.validation_status === "error");
+  const warnings = workspace.transactions.filter((row) => ["error", "invalid", "warning"].includes(row.validation_status));
   const activePlatforms = summary?.platform_wise_sale.length || 0;
   const workflows: Array<{ title: string; href: Route; icon: typeof UploadCloud; body: string }> = [
     { title: "GST Profile", href: "/modules/online-seller/profile", icon: ReceiptText, body: "GSTIN, period and filing frequency." },

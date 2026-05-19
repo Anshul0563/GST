@@ -3,7 +3,7 @@ from decimal import Decimal
 import pandas as pd
 
 from app.services.gst import classify_supply
-from app.services.gst_rate_resolver import nearest_supported_rate, resolve_gst_rate
+from app.services.gst_rate_resolver import resolve_gst_rate
 from app.services.validation import money, round_money, validate_transaction
 
 
@@ -84,6 +84,6 @@ def finalize_transaction(txn: dict) -> dict:
         txn["invoice_date"] = None if pd.isna(parsed) else parsed.date()
     errors = validate_transaction(txn)
     zero_only = errors and all(error in {"Zero amount row", "Zero rate and zero taxable row"} for error in errors)
-    txn["validation_status"] = "skipped" if zero_only else "error" if errors else "valid"
+    txn["validation_status"] = "skipped" if zero_only else "invalid" if errors else "valid"
     txn["validation_errors"] = "; ".join(errors) if errors else None
     return txn

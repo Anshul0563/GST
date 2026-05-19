@@ -425,7 +425,7 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
             seen_keys.add(key)
             db.add(NormalizedTransaction(user_id=batch.user_id, profile_id=batch.profile_id, batch_id=batch.id, **txn))
             inserted_rows += 1
-            validation_error_rows += 1 if txn.get("validation_status") == "error" else 0
+            validation_error_rows += 1 if txn.get("validation_status") in {"error", "invalid"} else 0
         batch.parsed_rows = inserted_rows
         batch.error_rows = len(result.errors) + validation_error_rows
         result.debug["validation_summary"] = validation_summary(result.transactions, result.errors)
@@ -483,7 +483,7 @@ def import_errors(batch_id: int, user: User = Depends(get_current_user), db: Ses
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
     parser_errors, debug = read_import_report(batch)
-    rows = db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.batch_id == batch_id, NormalizedTransaction.validation_status.in_(["error", "skipped"]))).all()
+    rows = db.scalars(select(NormalizedTransaction).where(NormalizedTransaction.batch_id == batch_id, NormalizedTransaction.validation_status.in_(["error", "invalid", "warning", "skipped"]))).all()
     row_errors = []
     for row in rows:
         item = TransactionOut.model_validate(row).model_dump(mode="json")
@@ -496,8 +496,15 @@ def import_errors(batch_id: int, user: User = Depends(get_current_user), db: Ses
             "Review source row and correct normalized values"
         )
         item["raw_column_source"] = item.get("source_file")
+        item["pos_resolution_source"] = "buyer_state_code" if item.get("buyer_state_code") else "unresolved"
+        item["gst_rate_resolution_source"] = "normalized_gst_rate" if item.get("gst_rate") else "unresolved"
         row_errors.append(item)
-    return {"parser_errors": parser_errors, "parser_debug": debug, "row_errors": row_errors}
+    return {
+        "parser_errors": parser_errors,
+        "parser_debug": debug,
+        "row_errors": row_errors,
+        "actions": ["fix POS manually", "map column", "correct GST rate", "reprocess batch", "export error report"],
+    }
 
 
 @router.delete("/imports/{batch_id}")
@@ -565,7 +572,7 @@ def dashboard_summary(profile_id: int | None = None, period: str | None = None, 
         igst += money(row.igst)
         cgst += money(row.cgst)
         sgst += money(row.sgst)
-        pending_errors += 1 if row.validation_status == "error" else 0
+        pending_errors += 1 if row.validation_status in {"error", "invalid"} else 0
         platform = row.platform or "unknown"
         state = row.buyer_state_code or "NA"
         platform_totals.setdefault(platform, {"platform": platform, "taxable_value": money(0), "gst": money(0), "rows": 0})
@@ -638,7 +645,7 @@ def validation_error_count(user_id: int, profile_id: int, period: str, db: Sessi
         NormalizedTransaction.user_id == user_id,
         NormalizedTransaction.profile_id == profile_id,
         NormalizedTransaction.filing_period == period,
-        NormalizedTransaction.validation_status == "error",
+        NormalizedTransaction.validation_status.in_(["error", "invalid"]),
     )).all()
     return len(rows)
 

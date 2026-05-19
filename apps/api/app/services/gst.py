@@ -5,7 +5,7 @@ from decimal import Decimal
 import re
 from typing import Any
 
-from app.services.validation import money
+from app.services.validation import SUPPORTED_RATES, money, validate_gstin, validate_period
 
 
 GST_VERSION = "GST3.1.6"
@@ -24,6 +24,11 @@ def classify_supply(seller_gstin: str, pos: str | None) -> str:
 
 def json_amount(value: Any) -> float:
     return float(money(value))
+
+
+def split_tax_evenly(total_tax: Decimal) -> tuple[Decimal, Decimal]:
+    half = money(total_tax / Decimal("2"))
+    return half, money(total_tax - half)
 
 
 def valid_for_gstr(row: dict[str, Any]) -> bool:
@@ -122,8 +127,10 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             base["iamt"] = json_amount(amounts["iamt"])
             base["csamt"] = json_amount(amounts["csamt"])
         else:
-            base["camt"] = json_amount(amounts["camt"])
-            base["samt"] = json_amount(amounts["samt"])
+            intra_tax = amounts["camt"] + amounts["samt"]
+            camt, samt = split_tax_evenly(intra_tax)
+            base["camt"] = json_amount(camt)
+            base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
         output.append(base)
     return output
@@ -150,8 +157,8 @@ def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         "etin": etin,
         "suppval": json_amount(amounts["suppval"]),
         "igst": json_amount(amounts["igst"]),
-        "cgst": json_amount(amounts["cgst"]),
-        "sgst": json_amount(amounts["sgst"]),
+        "cgst": json_amount(split_tax_evenly(amounts["cgst"] + amounts["sgst"])[0]),
+        "sgst": json_amount(split_tax_evenly(amounts["cgst"] + amounts["sgst"])[1]),
         "cess": json_amount(amounts["cess"]),
         "flag": "N",
     } for etin, amounts in sorted(groups.items())]
@@ -206,6 +213,57 @@ def validate_doc_issue_ranges(doc_issue: dict[str, Any]) -> list[str]:
     return errors
 
 
+def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+    if list(payload.keys()) != ["gstin", "fp", "version", "hash", "b2cs", "supeco", "doc_issue"]:
+        errors.append("GSTR-1 top-level JSON keys drifted from accepted contract")
+    if not validate_gstin(str(payload.get("gstin") or "")):
+        errors.append("Invalid GSTIN in export payload")
+    if not validate_period(str(payload.get("fp") or "")):
+        errors.append("Invalid filing period in export payload")
+    if payload.get("version") != GST_VERSION:
+        errors.append("Invalid GST JSON version")
+    if payload.get("hash") != "hash":
+        errors.append('GST portal reference hash must be literal "hash"')
+    supeco = payload.get("supeco")
+    if not isinstance(supeco, dict) or set(supeco.keys()) != {"clttx"}:
+        errors.append("SUPECO must contain only clttx")
+    if "supeco_det" in (supeco or {}):
+        errors.append("supeco_det is not allowed")
+    doc_issue = payload.get("doc_issue")
+    if not isinstance(doc_issue, dict) or set(doc_issue.keys()) != {"doc_det"}:
+        errors.append("doc_issue must contain only doc_det")
+    for item in payload.get("b2cs", []):
+        expected_keys = {"sply_ty", "rt", "typ", "pos", "txval", "csamt"}
+        if item.get("sply_ty") == "INTER":
+            expected_keys.add("iamt")
+        elif item.get("sply_ty") == "INTRA":
+            expected_keys.update({"camt", "samt"})
+        else:
+            errors.append(f"Invalid B2CS supply type: {item.get('sply_ty')}")
+            continue
+        if set(item.keys()) != expected_keys:
+            errors.append(f"B2CS key mismatch for POS {item.get('pos')}")
+        if money(item.get("rt")) not in SUPPORTED_RATES or money(item.get("rt")) == Decimal("0.00"):
+            errors.append(f"Invalid/fake B2CS rate for POS {item.get('pos')}: {item.get('rt')}")
+        tax_total = money(item.get("iamt")) + money(item.get("camt")) + money(item.get("samt")) + money(item.get("csamt"))
+        if money(item.get("txval")) == Decimal("0.00") and tax_total == Decimal("0.00"):
+            errors.append(f"Fake zero B2CS row for POS {item.get('pos')}")
+        if item.get("sply_ty") == "INTRA" and abs(money(item.get("camt")) - money(item.get("samt"))) > Decimal("0.01"):
+            errors.append(f"INTRA CGST/SGST split differs by more than 0.01 for POS {item.get('pos')}")
+    for section in payload.get("doc_issue", {}).get("doc_det", []):
+        if set(section.keys()) != {"doc_num", "doc_typ", "docs"}:
+            errors.append("doc_issue section key mismatch")
+        if DOC_TYP.get(next((key for key, value in DOC_NUM.items() if value == section.get("doc_num")), "")) != section.get("doc_typ"):
+            errors.append(f"doc_typ mismatch for doc_num {section.get('doc_num')}")
+        for doc in section.get("docs", []):
+            if set(doc.keys()) != {"num", "from", "to", "totnum", "cancel", "net_issue"}:
+                errors.append(f"doc_issue docs key mismatch for {doc.get('from')}")
+            if int(doc.get("net_issue") or 0) != int(doc.get("totnum") or 0) - int(doc.get("cancel") or 0):
+                errors.append(f"doc_issue net_issue mismatch for {doc.get('from')} to {doc.get('to')}")
+    return errors
+
+
 def gstr1_generation_report(payload: dict[str, Any], source_rows: list[dict[str, Any]]) -> dict[str, Any]:
     uploaded_platforms = sorted({str(row.get("platform") or "unknown") for row in source_rows if row.get("platform")})
     valid_rows = [row for row in source_rows if valid_for_gstr(row)]
@@ -222,7 +280,8 @@ def gstr1_generation_report(payload: dict[str, Any], source_rows: list[dict[str,
             else:
                 warnings.append(f"No valid {platform.title()} rows found for period {payload.get('fp')}")
 
-    errors = validate_doc_issue_ranges(payload.get("doc_issue", {}))
+    errors = validate_gstr1_schema(payload)
+    errors.extend(validate_doc_issue_ranges(payload.get("doc_issue", {})))
     valid_etins = sorted({str(row.get("etin")) for row in valid_rows if row.get("etin")})
     missing_etins = [etin for etin in valid_etins if etin not in supeco_etins]
     for etin in missing_etins:

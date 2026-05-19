@@ -39,7 +39,7 @@ export function TallyDashboardPage() {
   }, [workspace.token, workspace.profile?.id]);
   const latest = history[0];
   const importErrors = workspace.batches.reduce((sum, batch) => sum + batch.error_rows, 0);
-  const readyTransactions = workspace.transactions.filter((row) => row.validation_status !== "error").length;
+  const readyTransactions = workspace.transactions.filter((row) => row.validation_status === "valid").length;
   const generatedVouchers = history.reduce((sum, item) => sum + item.voucher_count, 0);
   const latestValid = latest?.validation?.valid === true;
   return <AppShell requiresSubscription requiredPlan="ecom_tally" token={workspace.token} user={workspace.user} productName="eCom to Tally" title="eCom to Tally" subtitle="Convert normalized marketplace transactions into Tally-compatible XML vouchers." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/modules/tally/export" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileArchive className="size-4" /> Generate XML</Link>}>

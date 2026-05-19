@@ -119,6 +119,23 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(txn["sgst"], Decimal("90.00"))
         self.assertEqual(txn["validation_status"], "valid")
 
+    def test_intra_state_aggregate_split_is_stable_with_one_paise_drift(self):
+        rows = [
+            finalize_transaction({
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
+                "invoice_no": "A1", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 333.33, "gst_rate": 3, "cgst": 5, "sgst": 5,
+            }),
+            finalize_transaction({
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
+                "invoice_no": "A2", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 346.67, "gst_rate": 3, "cgst": 5.2, "sgst": 5.2,
+            }),
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        intra = next(item for item in payload["b2cs"] if item["sply_ty"] == "INTRA")
+
+        self.assertLessEqual(abs(Decimal(str(intra["camt"])) - Decimal(str(intra["samt"]))), Decimal("0.01"))
+        self.assertEqual(Decimal(str(intra["camt"])) + Decimal(str(intra["samt"])), Decimal("20.40"))
+
     def test_credit_note_signs_are_normalized_before_validation(self):
         txn = finalize_transaction({
             "platform": "flipkart",
@@ -367,6 +384,23 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(set(payload["b2cs"][0].keys()), {"sply_ty", "rt", "typ", "pos", "txval", "iamt", "csamt"})
         self.assertTrue(all(set(section.keys()) == {"doc_num", "doc_typ", "docs"} for section in payload["doc_issue"]["doc_det"]))
         self.assertTrue(all(set(doc.keys()) == {"num", "from", "to", "totnum", "cancel", "net_issue"} for section in payload["doc_issue"]["doc_det"] for doc in section["docs"]))
+
+    def test_gstr1_report_blocks_schema_drift_and_fake_rows(self):
+        payload = {
+            "gstin": "07ABCDE1234F1Z5",
+            "fp": "042026",
+            "version": "GST3.1.6",
+            "hash": "bad",
+            "b2cs": [{"sply_ty": "INTER", "rt": 0, "typ": "OE", "pos": "27", "txval": 0, "iamt": 0, "csamt": 0}],
+            "supeco": {"supeco_det": []},
+            "doc_issue": {"doc_det": [{"doc_num": 1, "doc_typ": "Wrong", "docs": [{"num": 1, "from": "IN-1", "to": "IN-3", "totnum": 2, "cancel": 0, "net_issue": 2}]}]},
+        }
+        report = gstr1_generation_report(payload, [])
+
+        self.assertTrue(any("hash" in error for error in report["errors"]))
+        self.assertTrue(any("SUPECO" in error for error in report["errors"]))
+        self.assertTrue(any("fake" in error.lower() or "rate" in error.lower() for error in report["errors"]))
+        self.assertTrue(any("implies 3 documents" in error for error in report["errors"]))
 
     def test_gstr1_excel_contract_matches_offline_tool_sheet_layout(self):
         rows = [

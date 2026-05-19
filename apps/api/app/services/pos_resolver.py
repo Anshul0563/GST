@@ -43,6 +43,24 @@ STATE_ALIASES = [
     "destination-state",
     "buyer-state",
     "place-of-supply",
+    "shipping province",
+    "billing province",
+    "province",
+    "customer province",
+    "delivery province",
+    "ship province",
+    "shipping address province",
+    "billing address province",
+    "shipping address state",
+    "billing address state",
+    "ship to province",
+    "ship to state code",
+    "billing state code",
+    "shipping state code",
+    "destination state code",
+    "place of supply code",
+    "place_of_supply_state",
+    "place_of_supply_code",
 ]
 
 PINCODE_ALIASES = [
@@ -58,6 +76,11 @@ PINCODE_ALIASES = [
     "buyer pincode",
     "customer pincode",
     "recipient pincode",
+    "shipping zip",
+    "billing zip",
+    "shipping postal code",
+    "billing postal code",
+    "delivery postal code",
 ]
 
 

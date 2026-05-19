@@ -26,7 +26,7 @@ export function TransactionsPage() {
     (docType === "all" || row.doc_type === docType) &&
     (rate === "all" || String(row.gst_rate) === rate) &&
     (state === "all" || row.buyer_state_code === state) &&
-    (!errorOnly || row.validation_status === "error")
+    (!errorOnly || ["error", "invalid", "warning"].includes(row.validation_status))
   ), [workspace.transactions, query, platform, docType, rate, state, errorOnly]);
 
   async function remove(row: Transaction) {
