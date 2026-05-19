@@ -26,7 +26,7 @@ export default function LandingPage() {
           <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">GST Bharat turns messy platform reports into normalized transactions, validation insights, GSTR-1 JSON/Excel, Tally XML and reconciliation workflows.</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/register" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-6 py-4 font-bold text-white shadow-2xl shadow-blue-950/20">Create workspace <ArrowRight className="size-4" /></Link>
-            <Link href="/marketplaces" className="rounded-2xl border border-slate-200 bg-white px-6 py-4 font-bold text-slate-700">Explore integrations</Link>
+            <Link href="/modules/online-seller/marketplaces" className="rounded-2xl border border-slate-200 bg-white px-6 py-4 font-bold text-slate-700">Explore integrations</Link>
           </div>
         </div>
         <div className="rounded-[2rem] border border-white bg-white p-4 shadow-2xl shadow-slate-300/60">

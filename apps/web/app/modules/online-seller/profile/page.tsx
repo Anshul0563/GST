@@ -1,2 +1,5 @@
-export { default } from "../../../profile/page";
+import { ProfilePage } from "@/components/saas/utility-pages";
 
+export default function Page() {
+  return <ProfilePage />;
+}
