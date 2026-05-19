@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from app.parsers.amazon import AmazonParser
+from app.parsers.flipkart import FlipkartParser
 from app.services.gst import build_gstr1_json
 from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
@@ -40,6 +41,35 @@ class GstCalculationTests(unittest.TestCase):
 
         self.assertEqual(result.errors, [])
         self.assertEqual(result.transactions, [])
+
+    def test_flipkart_cashback_document_number_and_tcs_are_parsed(self):
+        parser = FlipkartParser("07TCRPS8655B1ZK", "032026")
+        txn = parser.normalize_row({
+            "Seller GSTIN": "07TCRPS8655B1ZK",
+            "Order ID": "OD337009368354503100",
+            "Order Item ID": "337009368354503100",
+            "Document Type": "Credit Note",
+            "Credit Note ID/ Debit Note ID": "CANQ1W2600000015",
+            "Invoice Amount": "8.0",
+            "Invoice Date": "2026-03-11 00:00:00.0",
+            "Taxable Value": "7.77",
+            "IGST Rate": "3.0",
+            "IGST Amount": "0.23",
+            "TCS IGST Rate": "0.5",
+            "TCS IGST Amount": "0.039",
+            "Total TCS Deducted": "0.04",
+            "Customer's Delivery State": "Madhya Pradesh",
+            "TDS Rate": "0.1",
+            "TDS Amount": "0.008",
+        }, "flipkart.xlsx:Cash Back Report")
+        txn["doc_type"] = "credit_note"
+        txn = finalize_transaction(txn)
+
+        self.assertEqual(txn["invoice_no"], "CANQ1W2600000015")
+        self.assertEqual(txn["buyer_state_code"], "23")
+        self.assertEqual(txn["tcs"], Decimal("-0.04"))
+        self.assertEqual(txn["tds"], Decimal("-0.01"))
+        self.assertEqual(txn["validation_status"], "valid")
 
     def test_inter_state_invoice_uses_igst(self):
         txn = finalize_transaction({

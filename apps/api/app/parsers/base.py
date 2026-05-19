@@ -55,7 +55,20 @@ class MarketplaceParser:
             "filing_period": self.filing_period,
             "order_id": text(first_value(row, ["order_id", "order id", "amazon order id", "order no"])),
             "order_item_id": text(first_value(row, ["order_item_id", "order item id", "order item identifier", "item id"])),
-            "invoice_no": text(first_value(row, ["invoice_no", "invoice number", "invoice id", "invoice no", "tax invoice no"])),
+            "invoice_no": text(first_value(row, [
+                "invoice_no",
+                "invoice number",
+                "invoice id",
+                "invoice no",
+                "tax invoice no",
+                "credit note id/ debit note id",
+                "credit note id",
+                "debit note id",
+                "document number",
+                "document no",
+                "doc no",
+                "voucher no",
+            ])),
             "invoice_date": parse_date(raw_date),
             "doc_type": doc_type,
             "buyer_state_code": text(first_value(row, ["buyer_state_code", "state code", "gst state code"])),
@@ -70,8 +83,8 @@ class MarketplaceParser:
             "cgst": money(first_value(row, ["cgst tax", "cgst amount", "central tax", "cgst"])),
             "sgst": money(first_value(row, ["sgst tax", "sgst amount", "state tax", "sgst"])),
             "cess": money(first_value(row, ["cess", "cess amount"])),
-            "tcs": money(first_value(row, ["tcs", "tcs amount"])),
-            "tds": money(first_value(row, ["tds", "tds amount"])),
+            "tcs": money(first_value(row, ["total tcs deducted", "tcs amount", "tcs"])),
+            "tds": money(first_value(row, ["tds amount", "tds"])),
             "gross_amount": money(first_value(row, ["gross_amount", "gross amount", "invoice amount", "total amount", "selling price", "price before discount"])),
             "discount_seller": money(first_value(row, ["discount_seller", "seller discount", "merchant discount"])),
             "discount_platform": money(first_value(row, ["discount_platform", "platform discount", "bank discount", "cashback"])),
@@ -123,6 +136,8 @@ def first_value(row: dict[str, Any], candidates: list[str]) -> Any:
             return lowered[candidate]
     for key, value in lowered.items():
         for candidate in candidates:
+            if len(candidate) <= 3:
+                continue
             if candidate in key and value not in (None, ""):
                 return value
     return None

@@ -33,10 +33,11 @@ class FlipkartParser(MarketplaceParser):
                     for index, series in data.iterrows():
                         txn = self.normalize_row(series.to_dict(), f"{path.name}:{sheet.title}")
                         blob = " ".join(str(value) for value in series.to_dict().values()).lower()
-                        if "credit note" in blob or "return" in blob:
-                            txn["doc_type"] = "credit_note"
-                        elif "debit note" in blob:
+                        document_no = str(txn.get("invoice_no") or "").upper()
+                        if document_no.startswith("LZAA") or "debit note" in blob:
                             txn["doc_type"] = "debit_note"
+                        elif document_no.startswith(("LYAA", "CAN")) or "credit note" in blob or "return" in blob:
+                            txn["doc_type"] = "credit_note"
                         observe_pos_debug(result.debug, int(index) + 1, resolve_pos(series.to_dict(), txn, self.platform), series.to_dict())
                         if should_skip_transaction(txn):
                             continue
