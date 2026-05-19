@@ -108,6 +108,13 @@ def parse_date(value: object):
     return parsed.date()
 
 
+def should_skip_transaction(txn: dict[str, Any]) -> bool:
+    if txn.get("invoice_no"):
+        return False
+    amount_fields = ("taxable_value", "gross_amount", "igst", "cgst", "sgst", "cess")
+    return all(money(txn.get(field)) == 0 for field in amount_fields)
+
+
 def first_value(row: dict[str, Any], candidates: list[str]) -> Any:
     lowered = {clean_column(k): v for k, v in row.items()}
     for candidate in candidates:

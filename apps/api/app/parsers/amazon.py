@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.parsers.base import MarketplaceParser, ParseResult, clean_column
+from app.parsers.base import MarketplaceParser, ParseResult, clean_column, should_skip_transaction
 from app.services.transaction_normalizer import finalize_transaction
 
 
@@ -21,6 +21,8 @@ class AmazonParser(MarketplaceParser):
                     type_blob = " ".join(str(row.get(key, "")) for key in row.keys()).lower()
                     if any(word in type_blob for word in ["refund", "cancel"]):
                         txn["doc_type"] = "credit_note"
+                    if should_skip_transaction(txn):
+                        continue
                     result.transactions.append(finalize_transaction(txn))
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})

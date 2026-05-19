@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.parsers.base import MarketplaceParser, ParseResult, excel_frames
+from app.parsers.base import MarketplaceParser, ParseResult, excel_frames, should_skip_transaction
 from app.services.transaction_normalizer import finalize_transaction
 
 
@@ -16,6 +16,8 @@ class MeeshoParser(MarketplaceParser):
                         txn = self.normalize_row(series.to_dict(), f"{path.name}:{sheet_name}")
                         if "return" in path.name.lower() and txn["doc_type"] == "invoice":
                             txn["doc_type"] = "credit_note"
+                        if should_skip_transaction(txn):
+                            continue
                         result.transactions.append(finalize_transaction(txn))
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})

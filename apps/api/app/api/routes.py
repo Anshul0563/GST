@@ -338,6 +338,7 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         parser = get_parser(batch.platform)(profile.gstin, profile.return_period)
         result = parser.parse([Path(path) for path in file_paths])
         seen_keys: set[tuple[int, str | None, str | None, str | None]] = set()
+        inserted_rows = 0
         for txn in result.transactions:
             key = (batch.profile_id, txn.get("platform"), txn.get("invoice_no"), txn.get("order_item_id"))
             duplicate = key in seen_keys or db.scalar(select(NormalizedTransaction).where(
@@ -347,11 +348,11 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
                 NormalizedTransaction.order_item_id == key[3],
             ))
             if duplicate:
-                result.errors.append({"error": "Duplicate invoice/order item skipped", "invoice_no": txn.get("invoice_no"), "order_item_id": txn.get("order_item_id")})
                 continue
             seen_keys.add(key)
             db.add(NormalizedTransaction(user_id=batch.user_id, profile_id=batch.profile_id, batch_id=batch.id, **txn))
-        batch.parsed_rows = len(result.transactions)
+            inserted_rows += 1
+        batch.parsed_rows = inserted_rows
         batch.error_rows = len(result.errors) + sum(1 for txn in result.transactions if txn.get("validation_status") == "error")
         batch.error_report_json = json.dumps(result.errors)
         batch.status = "completed" if not result.errors else "completed_with_errors"

@@ -3,7 +3,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 import pandas as pd
 
-from app.parsers.base import MarketplaceParser, ParseResult, clean_column, detect_header_row_frame, unique_headers
+from app.parsers.base import MarketplaceParser, ParseResult, clean_column, detect_header_row_frame, should_skip_transaction, unique_headers
 from app.services.transaction_normalizer import finalize_transaction
 
 
@@ -34,6 +34,8 @@ class FlipkartParser(MarketplaceParser):
                             txn["doc_type"] = "credit_note"
                         elif "debit note" in blob:
                             txn["doc_type"] = "debit_note"
+                        if should_skip_transaction(txn):
+                            continue
                         result.transactions.append(finalize_transaction(txn))
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})

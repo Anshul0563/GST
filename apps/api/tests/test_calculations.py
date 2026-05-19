@@ -29,6 +29,18 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(txn["igst"], Decimal("6.09"))
         self.assertEqual(txn["validation_status"], "valid")
 
+    def test_amazon_zero_value_cancel_without_invoice_is_skipped(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "amazon.csv"
+            path.write_text(
+                '"Seller Gstin","Invoice Number","Invoice Date","Transaction Type","Order Id","Shipment Item Id","Quantity","Ship To State","Invoice Amount","Tax Exclusive Gross","Igst Rate","Igst Tax"\n'
+                '07TCRPS8655B1ZK,,"2026-03-12 19:15:27",Cancel,408-4473300-5420329,556794094160,1,ODISHA,0,0,0,0\n'
+            )
+            result = AmazonParser("07TCRPS8655B1ZK", "032026").parse([path])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.transactions, [])
+
     def test_inter_state_invoice_uses_igst(self):
         txn = finalize_transaction({
             "platform": "meesho",
