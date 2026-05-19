@@ -43,15 +43,21 @@ def validate_period(period: str) -> bool:
 
 def validate_transaction(txn: dict) -> list[str]:
     errors: list[str] = []
+    platform = str(txn.get("platform") or "").strip().lower()
+    doc_type = str(txn.get("doc_type") or "").strip().lower()
     if not validate_gstin(str(txn.get("gstin", ""))):
         errors.append("Invalid GSTIN")
     if not validate_period(str(txn.get("filing_period", ""))):
         errors.append("Invalid filing period")
+    if not platform:
+        errors.append("Missing platform")
+    if doc_type not in {"invoice", "credit_note", "debit_note"}:
+        errors.append("Invalid document type")
     if not txn.get("buyer_state_code"):
         errors.append("Missing POS")
     elif txn["buyer_state_code"] not in STATE_CODES:
         errors.append("Invalid state code")
-    if not txn.get("invoice_no"):
+    if doc_type in {"invoice", "credit_note", "debit_note"} and not txn.get("invoice_no"):
         errors.append("Missing invoice number")
     rate = money(txn.get("gst_rate"))
     if rate not in SUPPORTED_RATES:
@@ -59,6 +65,10 @@ def validate_transaction(txn: dict) -> list[str]:
     if not txn.get("etin"):
         errors.append("Missing ETIN")
     taxable = money(txn.get("taxable_value"))
+    if taxable == Decimal("0.00") and money(txn.get("igst")) == Decimal("0.00") and money(txn.get("cgst")) == Decimal("0.00") and money(txn.get("sgst")) == Decimal("0.00") and money(txn.get("cess")) == Decimal("0.00"):
+        errors.append("Zero amount row")
+    if rate == Decimal("0.00") and taxable == Decimal("0.00"):
+        errors.append("Zero rate and zero taxable row")
     expected = round_money(taxable * rate / Decimal("100"))
     actual = money(txn.get("igst")) + money(txn.get("cgst")) + money(txn.get("sgst")) + money(txn.get("cess"))
     if abs(expected - actual) > Decimal("1.00"):

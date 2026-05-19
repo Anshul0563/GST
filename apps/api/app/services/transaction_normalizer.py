@@ -3,7 +3,8 @@ from decimal import Decimal
 import pandas as pd
 
 from app.services.gst import classify_supply
-from app.services.validation import SUPPORTED_RATES, money, round_money, validate_transaction
+from app.services.gst_rate_resolver import nearest_supported_rate, resolve_gst_rate
+from app.services.validation import money, round_money, validate_transaction
 
 
 TAX_FIELDS = ("igst", "cgst", "sgst", "cess", "tcs", "tds")
@@ -18,21 +19,13 @@ def _same_sign(value, sign: Decimal):
 
 
 def infer_rate(txn: dict) -> Decimal:
-    rate = money(txn.get("gst_rate"))
-    if Decimal("0.00") < rate < Decimal("1.00"):
-        return nearest_supported_rate(round_money(rate * Decimal("100")))
-    taxable = abs(money(txn.get("taxable_value")))
-    tax = abs(money(txn.get("igst")) + money(txn.get("cgst")) + money(txn.get("sgst")) + money(txn.get("cess")))
-    if rate == Decimal("0.00") and taxable > 0 and tax > 0:
-        return nearest_supported_rate(round_money(tax * Decimal("100") / taxable))
-    return nearest_supported_rate(rate)
-
-
-def nearest_supported_rate(rate: Decimal) -> Decimal:
-    if rate in SUPPORTED_RATES:
-        return rate
-    nearest = min(SUPPORTED_RATES, key=lambda slab: abs(slab - rate))
-    return nearest if abs(nearest - rate) <= Decimal("0.25") else rate
+    resolution = resolve_gst_rate(txn)
+    txn["gst_rate_confidence"] = resolution.confidence
+    if resolution.warning:
+        txn["gst_rate_warning"] = resolution.warning
+    if resolution.rate is None:
+        return money(txn.get("gst_rate"))
+    return resolution.rate
 
 
 def infer_taxable(txn: dict) -> Decimal:

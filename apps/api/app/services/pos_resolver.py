@@ -132,7 +132,7 @@ def find_value(row: dict[str, Any], aliases: list[str]) -> tuple[str | None, Any
     return None, None
 
 
-def resolve_pos(raw_row: dict[str, Any], normalized_row: dict[str, Any], platform: str) -> PosResolution:
+def resolve_pos(raw_row: dict[str, Any], normalized_row: dict[str, Any], platform: str, seller_gstin: str | None = None) -> PosResolution:
     existing_code = state_code_from_text(normalized_row.get("buyer_state_code"))
     if existing_code:
         return PosResolution(existing_code, STATE_CODES.get(existing_code), "normalized", "buyer_state_code")
@@ -160,7 +160,7 @@ def resolve_pos(raw_row: dict[str, Any], normalized_row: dict[str, Any], platfor
 
     cgst = money(normalized_row.get("cgst"))
     sgst = money(normalized_row.get("sgst"))
-    seller_state = state_code_from_text(str(normalized_row.get("gstin") or "")[:2])
+    seller_state = state_code_from_text(str(seller_gstin or normalized_row.get("gstin") or "")[:2])
     if (cgst != Decimal("0.00") or sgst != Decimal("0.00")) and seller_state:
         return PosResolution(seller_state, STATE_CODES.get(seller_state), "inferred_from_seller_state", "gstin", "POS inferred from seller GSTIN because CGST/SGST is present")
 
@@ -204,7 +204,7 @@ def observe_pos_debug(debug: dict[str, Any], row_id: Any, resolution: PosResolut
 
 
 def apply_pos_resolution(raw_row: dict[str, Any], normalized_row: dict[str, Any], platform: str) -> PosResolution:
-    resolution = resolve_pos(raw_row, normalized_row, platform)
+    resolution = resolve_pos(raw_row, normalized_row, platform, normalized_row.get("gstin"))
     normalized_row["buyer_state_code"] = resolution.buyer_state_code
     normalized_row["buyer_state_name"] = resolution.buyer_state_name
     return resolution
