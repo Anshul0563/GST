@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bell, Building2, ChevronDown, CreditCard, FileJson, FileSpreadsheet, Home, Menu, Moon, ReceiptText, Repeat2, Search, Settings, ShieldCheck, UploadCloud } from "lucide-react";
 import { Profile } from "@/lib/api";
 
@@ -80,6 +80,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const activeModule = pathname.startsWith("/modules/online-seller") ? "onlineSeller" : pathname.startsWith("/modules/reconcile") ? "reconcile" : pathname.startsWith("/modules/tally") ? "tally" : "";
   const activeModuleConfig = activeModule ? moduleNav[activeModule] : null;
   const currentItem = activeModuleConfig?.items.find((item) => pathname === item.href || pathname.startsWith(`${item.href}/`));
@@ -88,10 +89,22 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 dark:bg-[#07111f] dark:text-white">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-200/60 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none lg:block">
         <LogoMark />
-        <div className="mt-7 rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 dark:border-white/10 dark:from-slate-900 dark:to-slate-950">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><ShieldCheck className="size-4 text-emerald-600" /> Workspace</div>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push("/modules/online-seller/profile")}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") router.push("/modules/online-seller/profile");
+          }}
+          className="mt-7 cursor-pointer rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 transition hover:-translate-y-0.5 hover:border-[#1746A2]/40 hover:shadow-xl hover:shadow-slate-200/70 dark:border-white/10 dark:from-slate-900 dark:to-slate-950 dark:hover:shadow-none"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><ShieldCheck className="size-4 text-emerald-600" /> Workspace</div>
+            <span className="rounded-full bg-[#1746A2]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#1746A2]">Edit</span>
+          </div>
           <select
             value={profile?.id || ""}
+            onClick={(event) => event.stopPropagation()}
             onChange={(event) => {
               const next = profiles.find((item) => item.id === Number(event.target.value));
               if (next) onProfileChange?.(next);
@@ -104,6 +117,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             <span className="rounded-xl bg-white px-3 py-2 dark:bg-slate-900">{profile?.gstin || "No GSTIN"}</span>
             <span className="rounded-xl bg-white px-3 py-2 dark:bg-slate-900">FP {profile?.return_period || "--"}</span>
           </div>
+          <p className="mt-3 text-[11px] font-semibold text-slate-500">Click to set GSTIN, filing period and Monthly/Quarterly.</p>
         </div>
         <nav className="mt-6 space-y-1">
           {nav.map((item) => {
