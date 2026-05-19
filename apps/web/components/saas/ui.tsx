@@ -53,7 +53,7 @@ export function SkeletonGrid() {
 }
 
 export function StatusPill({ status }: { status: string }) {
-  const ok = ["completed", "generated", "Active"].includes(status);
+  const ok = ["completed", "generated", "downloaded", "Active"].includes(status);
   const warn = ["queued", "processing", "Beta"].includes(status);
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold ${ok ? "bg-emerald-50 text-emerald-700" : warn ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-600"}`}>

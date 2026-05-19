@@ -21,9 +21,6 @@ const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array
       { href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", icon: UploadCloud },
       { href: "/modules/online-seller/manage-data", label: "Manage Data", icon: ReceiptText },
       { href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson },
-      { href: "/modules/online-seller/gstr1", label: "JSON Export", icon: FileJson },
-      { href: "/modules/online-seller/gstr1", label: "Excel Export", icon: FileSpreadsheet },
-      { href: "/modules/online-seller/reports", label: "Reports", icon: FileSpreadsheet },
       { href: "/modules/online-seller/marketplaces", label: "Upload History", icon: UploadCloud }
     ]
   },

@@ -1,5 +1,5 @@
-import { Gstr1Page } from "@/components/saas/gstr1-page";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <Gstr1Page />;
+  redirect("/modules/online-seller/gstr1");
 }

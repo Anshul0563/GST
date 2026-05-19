@@ -45,6 +45,22 @@ export function Gstr1Page() {
       setBusy(false);
     }
   }
+  async function exportFile(format: "json" | "excel") {
+    if (!workspace.token || !workspace.profile) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await generateGstr1(workspace.token, workspace.profile);
+      setDownloads({ download_json: result.download_json, download_excel: result.download_excel });
+      await workspace.refresh();
+      await loadHistory();
+      window.location.href = downloadUrl(format === "json" ? result.download_json : result.download_excel);
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : `Could not export GSTR-1 ${format.toUpperCase()}`);
+    } finally {
+      setBusy(false);
+    }
+  }
   const summary = workspace.summary;
   const previewTotals = (workspace.preview?.b2cs || []).reduce((total, row) => ({
     taxable: total.taxable + money(row.txval),
@@ -63,7 +79,7 @@ export function Gstr1Page() {
   ];
 
   return (
-    <AppShell title="GSTR-1 Filing Studio" subtitle="Preview B2CS, SUPECO and document issue summaries before generating GST portal-compatible files." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<button onClick={generate} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileJson className="size-4" /> {busy ? "Generating..." : "Generate JSON"}</button>}>
+    <AppShell title="GSTR-1 Preview" subtitle="Preview B2CS, SUPECO and document issue summaries, then export GST portal-compatible JSON or Excel from the same workspace." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<div className="flex flex-wrap gap-3"><button onClick={() => exportFile("json")} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileJson className="size-4" /> {busy ? "Preparing..." : "JSON Export"}</button><button onClick={() => exportFile("excel")} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileSpreadsheet className="size-4" /> {busy ? "Preparing..." : "Excel Export"}</button></div>}>
       <div className="space-y-6">
         {!workspace.token ? <EmptyState title="Login required" body="GSTR-1 preview and generation use authenticated backend APIs." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="GSTR-1 generation needs GSTIN, filing frequency and return period." /> : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -89,7 +105,7 @@ export function Gstr1Page() {
               </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
-              <button onClick={generate} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Generating files..." : "Generate final files"}</button>
+              <button onClick={generate} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Generating files..." : "Save to history"}</button>
               {downloads && <><a href={downloadUrl(downloads.download_json)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> JSON</a><a href={downloadUrl(downloads.download_excel)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Excel</a></>}
             </div>
             {error && <div className="mt-5 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
