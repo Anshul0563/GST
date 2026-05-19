@@ -8,9 +8,27 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
+      "pos": "03",
+      "txval": 643.68,
+      "iamt": 19.32,
+      "csamt": 0.0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
       "pos": "04",
       "txval": 233.02,
       "iamt": 6.99,
+      "csamt": 0.0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "05",
+      "txval": 151.46,
+      "iamt": 4.54,
       "csamt": 0.0
     },
     {
@@ -26,9 +44,18 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
+      "pos": "08",
+      "txval": 312.63,
+      "iamt": 9.37,
+      "csamt": 0.0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
       "pos": "09",
-      "txval": 874.4,
-      "iamt": 26.24,
+      "txval": 2205.47,
+      "iamt": 66.17,
       "csamt": 0.0
     },
     {
@@ -36,8 +63,17 @@
       "rt": 3,
       "typ": "OE",
       "pos": "10",
-      "txval": 200.97,
-      "iamt": 6.03,
+      "txval": 721.37,
+      "iamt": 21.63,
+      "csamt": 0.0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "16",
+      "txval": 303.88,
+      "iamt": 9.12,
       "csamt": 0.0
     },
     {
@@ -45,8 +81,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "19",
-      "txval": 107.77,
-      "iamt": 3.23,
+      "txval": 1062.14,
+      "iamt": 31.86,
       "csamt": 0.0
     },
     {
@@ -54,8 +90,17 @@
       "rt": 3,
       "typ": "OE",
       "pos": "21",
-      "txval": 882.51,
-      "iamt": 26.49,
+      "txval": 1304.84,
+      "iamt": 39.16,
+      "csamt": 0.0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "22",
+      "txval": 691.27,
+      "iamt": 20.73,
       "csamt": 0.0
     },
     {
@@ -63,8 +108,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "23",
-      "txval": 92.23,
-      "iamt": 2.77,
+      "txval": 401.94,
+      "iamt": 12.06,
       "csamt": 0.0
     },
     {
@@ -72,8 +117,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "24",
-      "txval": 101.94,
-      "iamt": 3.06,
+      "txval": 436.89,
+      "iamt": 13.11,
       "csamt": 0.0
     },
     {
@@ -81,8 +126,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "27",
-      "txval": 99.03,
-      "iamt": 2.97,
+      "txval": 538.83,
+      "iamt": 16.17,
       "csamt": 0.0
     },
     {
@@ -90,8 +135,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "29",
-      "txval": 193.2,
-      "iamt": 5.8,
+      "txval": 1549.52,
+      "iamt": 46.48,
       "csamt": 0.0
     },
     {
@@ -99,8 +144,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "32",
-      "txval": 288.35,
-      "iamt": 8.65,
+      "txval": 1127.18,
+      "iamt": 33.82,
       "csamt": 0.0
     },
     {
@@ -108,8 +153,17 @@
       "rt": 3,
       "typ": "OE",
       "pos": "33",
-      "txval": 262.13,
-      "iamt": 7.87,
+      "txval": 1842.72,
+      "iamt": 55.28,
+      "csamt": 0.0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "36",
+      "txval": 1178.63,
+      "iamt": 35.37,
       "csamt": 0.0
     },
     {
@@ -117,8 +171,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "37",
-      "txval": 104.85,
-      "iamt": 3.15,
+      "txval": 1495.12,
+      "iamt": 44.88,
       "csamt": 0.0
     },
     {
@@ -126,9 +180,9 @@
       "rt": 3,
       "typ": "OE",
       "pos": "07",
-      "txval": 99.02,
-      "camt": 1.5,
-      "samt": 1.49,
+      "txval": 679.61,
+      "camt": 10.21,
+      "samt": 10.19,
       "csamt": 0.0
     }
   ],
@@ -151,6 +205,15 @@
         "sgst": 0.0,
         "cess": 0.0,
         "flag": "N"
+      },
+      {
+        "etin": "07AARCM9332R1CQ",
+        "suppval": 13340.78,
+        "igst": 382.81,
+        "cgst": 8.71,
+        "sgst": 8.7,
+        "cess": 0.0,
+        "flag": "N"
       }
     ]
   },
@@ -162,6 +225,14 @@
         "docs": [
           {
             "num": 1,
+            "from": "6p5kc26133",
+            "to": "6p5kc26244",
+            "totnum": 112,
+            "cancel": 0,
+            "net_issue": 112
+          },
+          {
+            "num": 2,
             "from": "FAWRLX2600000080",
             "to": "FAWRLX2600000107",
             "totnum": 28,
@@ -169,15 +240,23 @@
             "net_issue": 28
           },
           {
-            "num": 2,
+            "num": 3,
             "from": "IN-5",
-            "to": "IN-9",
-            "totnum": 4,
+            "to": "IN-5",
+            "totnum": 1,
             "cancel": 0,
-            "net_issue": 4
+            "net_issue": 1
           },
           {
-            "num": 3,
+            "num": 4,
+            "from": "IN-7",
+            "to": "IN-9",
+            "totnum": 3,
+            "cancel": 0,
+            "net_issue": 3
+          },
+          {
+            "num": 5,
             "from": "LWABOG7260000001",
             "to": "LWABOG7260000005",
             "totnum": 5,
@@ -192,6 +271,22 @@
         "docs": [
           {
             "num": 1,
+            "from": "6p5kc27C1",
+            "to": "6p5kc27C1",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          },
+          {
+            "num": 2,
+            "from": "6p5kc26C68",
+            "to": "6p5kc26C98",
+            "totnum": 31,
+            "cancel": 0,
+            "net_issue": 31
+          },
+          {
+            "num": 3,
             "from": "CANQ1W2600000013",
             "to": "CANQ1W2600000019",
             "totnum": 7,
@@ -199,7 +294,7 @@
             "net_issue": 7
           },
           {
-            "num": 2,
+            "num": 4,
             "from": "LYAA9U7260000001",
             "to": "LYAA9U7260000001",
             "totnum": 1,
@@ -207,7 +302,7 @@
             "net_issue": 1
           },
           {
-            "num": 3,
+            "num": 5,
             "from": "MFABNVY260000001",
             "to": "MFABNVY260000002",
             "totnum": 2,
@@ -215,7 +310,7 @@
             "net_issue": 2
           },
           {
-            "num": 4,
+            "num": 6,
             "from": "RAT6SO2600000028",
             "to": "RAT6SO2600000034",
             "totnum": 7,

@@ -22,7 +22,7 @@ def has_financial_values(row: dict) -> bool:
         "invoice amount",
         "gross amount",
     ]
-    return any(money(first_value(row, fields)) != 0 for _ in [0])
+    return money(first_value(row, fields)) != 0
 
 
 class MeeshoParser(MarketplaceParser):
@@ -32,7 +32,7 @@ class MeeshoParser(MarketplaceParser):
         result = ParseResult()
         result.debug = new_pos_debug(self.platform)
         loaded_frames: list[tuple[Path, str, object]] = []
-        metadata_by_suborder: dict[str, dict[str, object]] = {}
+        metadata_by_suborder: dict[str, dict[str, dict[str, object]]] = {}
         for path in files:
             try:
                 frames = excel_frames(path)
@@ -42,7 +42,9 @@ class MeeshoParser(MarketplaceParser):
                         suborder = suborder_key(row)
                         if not suborder:
                             continue
-                        metadata = metadata_by_suborder.setdefault(suborder, {})
+                        raw_type = str(first_value(row, ["type", "doc_type", "document type", "transaction type"]) or "").lower()
+                        metadata_type = "credit_note" if "credit" in raw_type or "return" in raw_type or "refund" in raw_type else "invoice"
+                        metadata = metadata_by_suborder.setdefault(suborder, {}).setdefault(metadata_type, {})
                         values = {
                             "invoice no": first_value(row, ["invoice no.", "invoice no", "invoice number", "tax invoice no"]),
                             "invoice date": first_value(row, ["invoice date", "order date"]),
@@ -63,7 +65,9 @@ class MeeshoParser(MarketplaceParser):
                 if not has_financial_values(row):
                     continue
                 suborder = suborder_key(row)
-                metadata = metadata_by_suborder.get(suborder or "", {})
+                is_return = "return" in path.name.lower() or first_value(row, ["cancel return date", "return date"]) not in (None, "")
+                metadata_type = "credit_note" if is_return else "invoice"
+                metadata = metadata_by_suborder.get(suborder or "", {}).get(metadata_type, {})
                 for key, value in metadata.items():
                     row.setdefault(key, value)
                 if metadata.get("invoice no") and not first_value(row, ["invoice no.", "invoice no", "invoice number", "tax invoice no"]):
@@ -71,7 +75,6 @@ class MeeshoParser(MarketplaceParser):
                 if metadata.get("end customer state new") and not first_value(row, ["end customer state new", "customer state", "delivery state", "shipping state", "recipient state", "buyer state", "place of supply", "pos", "state"]):
                     row["resolved state"] = metadata["end customer state new"]
                 txn = self.normalize_row(row, f"{path.name}:{sheet_name}")
-                is_return = "return" in path.name.lower() or first_value(row, ["cancel return date", "return date"]) not in (None, "")
                 if is_return and txn["doc_type"] == "invoice":
                     txn["doc_type"] = "credit_note"
                 if not txn.get("invoice_no"):

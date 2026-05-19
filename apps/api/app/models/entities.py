@@ -79,7 +79,7 @@ class UploadedFile(Base):
 
 class NormalizedTransaction(Base):
     __tablename__ = "normalized_transactions"
-    __table_args__ = (UniqueConstraint("profile_id", "platform", "invoice_no", "order_item_id", name="uq_txn_doc_item"),)
+    __table_args__ = (UniqueConstraint("profile_id", "platform", "doc_type", "invoice_no", "order_item_id", name="uq_txn_doc_item"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
