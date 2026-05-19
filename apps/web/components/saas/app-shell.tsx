@@ -61,13 +61,31 @@ export function LogoMark() {
   );
 }
 
-export function AppShell({ title, subtitle, profile, profiles, onProfileChange, actions, children }: {
+type AppShellUser = {
+  id: number;
+  email: string;
+  full_name?: string | null;
+  role?: string;
+  plan?: string;
+  subscription_status?: string;
+  free_access_reason?: string | null;
+} | null;
+
+function hasPaidAccess(user: AppShellUser) {
+  return Boolean(user && (user.role === "admin" || user.plan === "admin_free" || user.subscription_status === "active"));
+}
+
+export function AppShell({ title, subtitle, profile, profiles, onProfileChange, actions, token, user, requiresSubscription = false, productName, children }: {
   title: string;
   subtitle?: string;
   profile: Profile | null;
   profiles: Profile[];
   onProfileChange?: (profile: Profile) => void;
   actions?: React.ReactNode;
+  token?: string;
+  user?: AppShellUser;
+  requiresSubscription?: boolean;
+  productName?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -81,6 +99,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const pageContext = currentItem?.label || activeModuleConfig?.title || "Product Suite";
   const workspaceName = profile?.trade_name || profile?.legal_name || "Workspace";
   const workspaceInitial = workspaceName.trim().charAt(0).toUpperCase() || "G";
+  const locked = requiresSubscription && !hasPaidAccess(user ?? null);
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 dark:bg-[#07111f] dark:text-white">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-200/60 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none lg:block">
@@ -186,9 +205,9 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
               <h1 className="mt-2 text-3xl font-black tracking-tight md:text-4xl">{title}</h1>
               {subtitle && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">{subtitle}</p>}
             </div>
-            {actions}
+            {!locked && actions}
           </div>
-          {children}
+          {locked ? <SubscriptionGate token={token || ""} user={user ?? null} productName={productName || activeModuleConfig?.title || title} /> : children}
         </main>
       </div>
     </div>
@@ -197,4 +216,64 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
 
 function CalendarMini() {
   return <span className="grid size-7 shrink-0 place-items-center rounded-xl bg-[#1746A2]/10 text-[10px] font-black text-[#1746A2]">FP</span>;
+}
+
+function SubscriptionGate({ token, user, productName }: { token: string; user: AppShellUser; productName: string }) {
+  const [plans, setPlans] = useState<BillingPlan[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!token) return;
+    setLoading(true);
+    getBillingPlans(token)
+      .then((result) => setPlans(result.plans))
+      .catch(() => setPlans([]))
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  return (
+    <div className="space-y-6">
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950 dark:shadow-none">
+        <div className="grid gap-6 p-6 lg:grid-cols-[1fr_0.8fr] lg:p-8">
+          <div>
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-700">
+              <LockKeyhole className="size-3.5" /> Subscription required
+            </div>
+            <h2 className="text-2xl font-black tracking-tight md:text-3xl">{productName} is a paid GST Bharat module</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
+              2A/2B Reconcile remains available. Subscribe to unlock marketplace GST filing tools and Tally XML workflows.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <Link href="/billing" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><CreditCard className="size-4" /> View pricing</Link>
+              <Link href="/modules/reconcile" className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200">Open 2A/2B Reconcile</Link>
+            </div>
+          </div>
+          <div className="rounded-3xl bg-slate-50 p-5 dark:bg-white/5">
+            <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">Account status</div>
+            <div className="mt-4 grid gap-3 text-sm">
+              <AccessRow label="Email" value={user?.email || "Login required"} />
+              <AccessRow label="Plan" value={user?.plan || "free"} />
+              <AccessRow label="Status" value={user?.subscription_status || "inactive"} />
+            </div>
+          </div>
+        </div>
+      </section>
+      <section className="grid gap-4 lg:grid-cols-3">
+        {loading ? <div className="rounded-3xl border border-slate-200 bg-white p-5 text-sm font-bold text-slate-500 dark:border-white/10 dark:bg-slate-950">Loading pricing...</div> : plans.map((plan) => (
+          <div key={plan.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950 dark:shadow-none">
+            <h3 className="text-xl font-black">{plan.name}</h3>
+            <div className="mt-4 grid gap-3 text-sm">
+              <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>Monthly</b><p className="mt-1 text-2xl font-black">₹{plan.monthly_amount.toLocaleString("en-IN")}</p></div>
+              <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>Yearly</b><p className="mt-1 text-2xl font-black">₹{plan.yearly_amount.toLocaleString("en-IN")}</p></div>
+            </div>
+            <div className="mt-4 space-y-2 text-sm text-slate-500">{plan.features.slice(0, 4).map((feature) => <p key={feature}>- {feature}</p>)}</div>
+          </div>
+        ))}
+        {!loading && !plans.length ? <div className="rounded-3xl border border-slate-200 bg-white p-5 text-sm font-bold text-slate-500 dark:border-white/10 dark:bg-slate-950">Pricing will load after login.</div> : null}
+      </section>
+    </div>
+  );
+}
+
+function AccessRow({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 dark:bg-slate-900"><span className="text-slate-500">{label}</span><b className="break-all text-right">{value}</b></div>;
 }

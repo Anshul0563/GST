@@ -181,6 +181,7 @@ export function BillingPage() {
     if (order.free_access) {
       setMessage(order.message || "Free access is active.");
       await loadBilling();
+      await workspace.refresh();
       return;
     }
     if (!order.gateway_configured) {
@@ -219,6 +220,7 @@ export function BillingPage() {
         });
         setMessage("Payment verified. Subscription is active.");
         await loadBilling();
+        await workspace.refresh();
       },
     });
     checkout.open();
