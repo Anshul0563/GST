@@ -3,6 +3,7 @@ from pathlib import Path
 from app.parsers.base import (
     MarketplaceParser,
     ParseResult,
+    belongs_to_period,
     excel_frames,
     first_value,
     money,
