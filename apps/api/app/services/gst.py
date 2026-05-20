@@ -773,7 +773,7 @@ def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
         money(x.get("suppval")) for x in payload.get("supeco", {}).get("clttx", [])
     )
 
-    if abs(b2cs_total - supeco_total) > Decimal("0.01"):
+    if mode == CLEAN_PORTAL and abs(b2cs_total - supeco_total) > Decimal("0.01"):
         errors.append(
             f"B2CS taxable {b2cs_total} does not match SUPECO taxable {supeco_total}"
         )
@@ -813,7 +813,7 @@ def gstr1_generation_report(
                     f"No valid {platform.title()} rows found for period {payload.get('fp')}"
                 )
 
-    errors = validate_gstr1_schema(payload)
+    errors = validate_gstr1_schema(payload, GSTTOOL_COMPATIBLE)
     errors.extend(validate_doc_issue_ranges(payload.get("doc_issue", {})))
     valid_etins = sorted(
         {str(row.get("etin")) for row in valid_rows if row.get("etin")}
