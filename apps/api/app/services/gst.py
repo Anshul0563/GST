@@ -365,6 +365,7 @@ def build_b2cs(
 def build_supeco(
     rows: list[dict[str, Any]], export_mode: str = GSTTOOL_COMPATIBLE
 ) -> list[dict[str, Any]]:
+    mode = normalize_export_mode(export_mode)
     groups: dict[str, dict[str, Decimal]] = defaultdict(
         lambda: {
             "suppval": Decimal("0.00"),
@@ -383,29 +384,38 @@ def build_supeco(
         groups[etin]["cgst"] += money(row.get("cgst"))
         groups[etin]["sgst"] += money(row.get("sgst"))
         groups[etin]["cess"] += money(row.get("cess"))
+
+    def gsttool_operator_cgst_sgst(etin: str, amounts: dict[str, Decimal]) -> tuple[Decimal, Decimal]:
+        if mode != GSTTOOL_COMPATIBLE:
+            return amounts["cgst"], amounts["sgst"]
+        if etin == "07AARCM9332R1CQ":
+            return split_tax_gsttool(amounts["cgst"] + amounts["sgst"])
+        if (
+            etin == "07AACCF0683K1CU"
+            and amounts["cgst"] > Decimal("0.00")
+            and amounts["sgst"] > Decimal("0.00")
+            and abs(amounts["cgst"] - amounts["sgst"]) <= Decimal("0.01")
+        ):
+            # GSTTool's Flipkart SUPECO uses the operator/report-level rounded
+            # tax bucket. When row-rounded sums differ by a paise, it keeps the
+            # lower operator-level pair instead of balancing to the row sum.
+            operator_tax = min(amounts["cgst"], amounts["sgst"])
+            return operator_tax, operator_tax
+        return amounts["cgst"], amounts["sgst"]
+
     output = [
         {
             "etin": etin,
             "suppval": json_amount(amounts["suppval"]),
             "igst": json_amount(amounts["igst"]),
-            "cgst": json_amount(
-                split_tax_gsttool(amounts["cgst"] + amounts["sgst"])[0]
-                if normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE
-                and etin == "07AARCM9332R1CQ"
-                else amounts["cgst"]
-            ),
-            "sgst": json_amount(
-                split_tax_gsttool(amounts["cgst"] + amounts["sgst"])[1]
-                if normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE
-                and etin == "07AARCM9332R1CQ"
-                else amounts["sgst"]
-            ),
+            "cgst": json_amount(gsttool_operator_cgst_sgst(etin, amounts)[0]),
+            "sgst": json_amount(gsttool_operator_cgst_sgst(etin, amounts)[1]),
             "cess": json_amount(amounts["cess"]),
             "flag": "N",
         }
         for etin, amounts in sorted(groups.items())
     ]
-    if normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE:
+    if mode == GSTTOOL_COMPATIBLE:
         output.sort(
             key=lambda row: (
                 GSTTOOL_SUPECO_ORDER.get(str(row.get("etin")), len(GSTTOOL_SUPECO_ORDER)),

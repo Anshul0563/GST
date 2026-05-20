@@ -312,6 +312,22 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(clean_payload["b2cs"][0]["camt"], 1.5)
         self.assertEqual(clean_payload["b2cs"][0]["samt"], 1.49)
 
+    def test_gsttool_mode_uses_flipkart_operator_level_supeco_rounding(self):
+        row = {
+            "platform": "flipkart", "gstin": "07ABCDE1234F1Z5", "etin": "07AACCF0683K1CU", "filing_period": "032026",
+            "invoice_no": "LWABOG7260000002", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 99.02,
+            "gst_rate": 3, "igst": 0, "cgst": 1.50, "sgst": 1.49, "cess": 0, "validation_status": "valid",
+        }
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "032026", [row], GSTTOOL_COMPATIBLE)
+        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "032026", [row], CLEAN_PORTAL)
+
+        gsttool_eco = next(row for row in payload["supeco"]["clttx"] if row["etin"] == "07AACCF0683K1CU")
+        clean_eco = next(row for row in clean_payload["supeco"]["clttx"] if row["etin"] == "07AACCF0683K1CU")
+        self.assertEqual(gsttool_eco["cgst"], 1.49)
+        self.assertEqual(gsttool_eco["sgst"], 1.49)
+        self.assertEqual(clean_eco["cgst"], 1.5)
+        self.assertEqual(clean_eco["sgst"], 1.49)
+
     def test_gsttool_parity_validator_matches_reference_json(self):
         reference = {
             "gstin": "07ABCDE1234F1Z5",
