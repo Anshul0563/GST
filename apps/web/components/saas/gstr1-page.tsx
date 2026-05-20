@@ -10,6 +10,8 @@ import { formatCurrency } from "@/lib/utils";
 
 export function Gstr1Page() {
   const workspace = useWorkspace();
+  const activeProfileId = workspace.profile?.id;
+  const activeProfilePeriod = workspace.profile?.return_period;
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
   const [exportMode, setExportMode] = useState<Gstr1ExportMode>("gsttool_compatible");
   const [modePreview, setModePreview] = useState<Gstr1Payload | null>(null);
@@ -22,22 +24,22 @@ export function Gstr1Page() {
   const historyRequest = useRef(0);
   const loadHistory = useCallback(async () => {
     const requestId = ++historyRequest.current;
-    if (!workspace.token || !workspace.profile) {
+    if (!workspace.token || !activeProfileId || !activeProfilePeriod) {
       setHistory([]);
       return;
     }
     setLoadingHistory(true);
     setHistory([]);
     try {
-      const items = await getGstr1History(workspace.token, workspace.profile?.id);
+      const items = await getGstr1History(workspace.token, activeProfileId);
       if (requestId !== historyRequest.current) return;
-      setHistory(items.filter((item) => item.period === workspace.profile?.return_period));
+      setHistory(items.filter((item) => item.period === activeProfilePeriod));
     } catch {
       if (requestId === historyRequest.current) setHistory([]);
     } finally {
       if (requestId === historyRequest.current) setLoadingHistory(false);
     }
-  }, [workspace.token, workspace.profile?.id, workspace.profile?.return_period]);
+  }, [workspace.token, activeProfileId, activeProfilePeriod]);
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);

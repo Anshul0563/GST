@@ -14,17 +14,19 @@ const categories = ["matched", "partially_matched", "tax_mismatch", "invoice_mis
 
 export function ReconcileDashboardPage() {
   const workspace = useWorkspace();
+  const activeProfileId = workspace.profile?.id;
+  const activeProfilePeriod = workspace.profile?.return_period;
   const [history, setHistory] = useState<ReconcileHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   useEffect(() => {
-    if (!workspace.token || !workspace.profile) {
+    if (!workspace.token || !activeProfileId) {
       setHistory([]);
       return;
     }
     setHistory([]);
     setLoadingHistory(true);
-    getReconcileHistory(workspace.token, workspace.profile?.id).then(setHistory).catch(() => setHistory([])).finally(() => setLoadingHistory(false));
-  }, [workspace.token, workspace.profile?.id, workspace.profile?.return_period]);
+    getReconcileHistory(workspace.token, activeProfileId).then(setHistory).catch(() => setHistory([])).finally(() => setLoadingHistory(false));
+  }, [workspace.token, activeProfileId, activeProfilePeriod]);
   const latest = history[0];
   const chart = history.slice(0, 8).reverse().map((item) => ({ name: `#${item.id}`, matched: item.matched_rows, mismatch: item.mismatch_rows }));
   const totalRuns = history.length;
@@ -198,15 +200,17 @@ export function ReconcileResultsPage({ id }: { id: number }) {
 
 export function ReconcileHistoryPage() {
   const workspace = useWorkspace();
+  const activeProfileId = workspace.profile?.id;
+  const activeProfilePeriod = workspace.profile?.return_period;
   const [history, setHistory] = useState<ReconcileHistoryItem[]>([]);
   useEffect(() => {
-    if (!workspace.token || !workspace.profile) {
+    if (!workspace.token || !activeProfileId) {
       setHistory([]);
       return;
     }
     setHistory([]);
-    getReconcileHistory(workspace.token, workspace.profile?.id).then(setHistory).catch(() => setHistory([]));
-  }, [workspace.token, workspace.profile?.id, workspace.profile?.return_period]);
+    getReconcileHistory(workspace.token, activeProfileId).then(setHistory).catch(() => setHistory([]));
+  }, [workspace.token, activeProfileId, activeProfilePeriod]);
   return <AppShell title="Reconciliation History" subtitle="Download center for previous 2A/2B matching runs." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <Panel title="History" subtitle="All batches are loaded from backend."><HistoryList history={history} /></Panel>
   </AppShell>;
