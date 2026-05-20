@@ -623,6 +623,7 @@ async def upload_import(
     platform: str,
     background_tasks: BackgroundTasks,
     profile_id: int,
+    period: str | None = None,
     files: list[UploadFile] = File(...),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -630,10 +631,12 @@ async def upload_import(
     profile = db.get(GSTProfile, profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
+    import_period = period or profile.return_period
     settings = get_settings()
     batch = PlatformImportBatch(
         user_id=user.id,
         profile_id=profile.id,
+        period=import_period,
         platform=platform.lower(),
         status="queued",
     )
@@ -670,7 +673,7 @@ async def upload_import(
             action="import.upload",
             entity_type="platform_import_batch",
             entity_id=str(batch.id),
-            metadata_json=json.dumps({"platform": platform}),
+            metadata_json=json.dumps({"platform": platform, "period": import_period}),
         )
     )
     db.commit()
@@ -680,6 +683,7 @@ async def upload_import(
     return BatchStatus(
         id=batch.id,
         platform=batch.platform,
+        period=batch.period,
         status=batch.status,
         parsed_rows=0,
         error_rows=0,
@@ -697,7 +701,7 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         profile = db.get(GSTProfile, batch.profile_id)
         batch.status = "processing"
         db.commit()
-        parser = get_parser(batch.platform)(profile.gstin, profile.return_period)
+        parser = get_parser(batch.platform)(profile.gstin, batch.period or profile.return_period)
         result = parser.parse([Path(path) for path in file_paths])
         seen_keys: set[tuple[int, str | None, str | None, str | None, str | None]] = (
             set()
@@ -705,8 +709,11 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         inserted_rows = 0
         validation_error_rows = 0
         for txn in result.transactions:
+            txn = dict(txn)
+            txn["filing_period"] = batch.period or txn.get("filing_period")
             key = (
                 batch.profile_id,
+                txn.get("filing_period"),
                 txn.get("platform"),
                 txn.get("doc_type"),
                 txn.get("invoice_no"),
@@ -715,10 +722,11 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
             duplicate = key in seen_keys or db.scalar(
                 select(NormalizedTransaction).where(
                     NormalizedTransaction.profile_id == key[0],
-                    NormalizedTransaction.platform == key[1],
-                    NormalizedTransaction.doc_type == key[2],
-                    NormalizedTransaction.invoice_no == key[3],
-                    NormalizedTransaction.order_item_id == key[4],
+                    NormalizedTransaction.filing_period == key[1],
+                    NormalizedTransaction.platform == key[2],
+                    NormalizedTransaction.doc_type == key[3],
+                    NormalizedTransaction.invoice_no == key[4],
+                    NormalizedTransaction.order_item_id == key[5],
                 )
             )
             if duplicate:
@@ -778,6 +786,7 @@ def import_status(
     return BatchStatus(
         id=batch.id,
         platform=batch.platform,
+        period=batch.period,
         status=batch.status,
         parsed_rows=batch.parsed_rows,
         error_rows=batch.error_rows,
@@ -789,6 +798,7 @@ def import_status(
 @router.get("/imports", response_model=list[BatchStatus])
 def list_imports(
     profile_id: int | None = None,
+    period: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -799,6 +809,8 @@ def list_imports(
     )
     if profile_id:
         stmt = stmt.where(PlatformImportBatch.profile_id == profile_id)
+    if period:
+        stmt = stmt.where(PlatformImportBatch.period == period)
     batches = db.scalars(stmt.limit(50)).all()
     for batch in batches:
         settle_stale_import(batch, db)
@@ -807,6 +819,7 @@ def list_imports(
             lambda report: BatchStatus(
                 id=batch.id,
                 platform=batch.platform,
+                period=batch.period,
                 status=batch.status,
                 parsed_rows=batch.parsed_rows,
                 error_rows=batch.error_rows,

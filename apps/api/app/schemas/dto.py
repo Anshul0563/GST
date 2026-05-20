@@ -118,6 +118,7 @@ class TransactionUpdate(BaseModel):
 class BatchStatus(BaseModel):
     id: int
     platform: str
+    period: str | None = None
     status: str
     parsed_rows: int
     error_rows: int

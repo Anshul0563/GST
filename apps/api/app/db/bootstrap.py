@@ -65,6 +65,24 @@ def run_lightweight_migrations(engine) -> None:
             for column, definition in additions.items():
                 if column not in row_columns:
                     connection.execute(text(f"ALTER TABLE reconciliation_rows ADD COLUMN {column} {definition}"))
+    if "platform_import_batches" in inspector.get_table_names():
+        import_columns = {column["name"] for column in inspector.get_columns("platform_import_batches")}
+        with engine.begin() as connection:
+            if "period" not in import_columns:
+                connection.execute(text("ALTER TABLE platform_import_batches ADD COLUMN period VARCHAR(6)"))
+                connection.execute(
+                    text(
+                        """
+                        UPDATE platform_import_batches
+                        SET period = (
+                            SELECT return_period
+                            FROM gst_profiles
+                            WHERE gst_profiles.id = platform_import_batches.profile_id
+                        )
+                        WHERE period IS NULL OR period = ''
+                        """
+                    )
+                )
 
 
 def seed_super_admin() -> None:

@@ -55,6 +55,7 @@ class PlatformImportBatch(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     profile_id: Mapped[int] = mapped_column(ForeignKey("gst_profiles.id"), index=True)
+    period: Mapped[str] = mapped_column(String(6), index=True)
     platform: Mapped[str] = mapped_column(String(40), index=True)
     status: Mapped[str] = mapped_column(String(32), default="queued")
     parsed_rows: Mapped[int] = mapped_column(Integer, default=0)
@@ -79,7 +80,17 @@ class UploadedFile(Base):
 
 class NormalizedTransaction(Base):
     __tablename__ = "normalized_transactions"
-    __table_args__ = (UniqueConstraint("profile_id", "platform", "doc_type", "invoice_no", "order_item_id", name="uq_txn_doc_item"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "profile_id",
+            "filing_period",
+            "platform",
+            "doc_type",
+            "invoice_no",
+            "order_item_id",
+            name="uq_txn_doc_item_period",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
