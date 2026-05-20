@@ -323,7 +323,19 @@ class GstCalculationTests(unittest.TestCase):
         row = {
             "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "022026",
             "invoice_no": "CN-MAR", "doc_type": "credit_note", "buyer_state_code": "29", "taxable_value": -100,
-            "gst_rate": 3, "igst": -3, "cess": 0, "credit_note_date": "2026-03-01", "validation_status": "valid",
+            "gst_rate": 3, "igst": -3, "cess": 0, "invoice_date": "2026-02-15",
+            "credit_note_date": "2026-03-01", "validation_status": "valid",
+        }
+
+        self.assertTrue(row_belongs_to_period(row, "032026"))
+        self.assertFalse(row_belongs_to_period(row, "022026"))
+
+    def test_debit_note_date_controls_return_period(self):
+        row = {
+            "platform": "flipkart", "gstin": "07ABCDE1234F1Z5", "etin": "07AACCF0683K1CU", "filing_period": "022026",
+            "invoice_no": "DN-MAR", "doc_type": "debit_note", "buyer_state_code": "29", "taxable_value": 100,
+            "gst_rate": 3, "igst": 3, "cess": 0, "invoice_date": "2026-02-15",
+            "debit_note_date": "2026-03-01", "validation_status": "valid",
         }
 
         self.assertTrue(row_belongs_to_period(row, "032026"))

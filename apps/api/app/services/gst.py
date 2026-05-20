@@ -72,13 +72,30 @@ def json_amount(value: Any) -> float:
 
 
 def document_period(row: dict[str, Any]) -> str | None:
-    value = (
-        row.get("invoice_date")
-        or row.get("credit_note_date")
-        or row.get("debit_note_date")
-        or row.get("document_date")
-        or row.get("doc_date")
-    )
+    doc_type = str(row.get("doc_type") or "").lower()
+    if doc_type == "credit_note":
+        date_fields = (
+            "credit_note_date",
+            "document_date",
+            "doc_date",
+            "invoice_date",
+        )
+    elif doc_type == "debit_note":
+        date_fields = (
+            "debit_note_date",
+            "document_date",
+            "doc_date",
+            "invoice_date",
+        )
+    else:
+        date_fields = (
+            "invoice_date",
+            "document_date",
+            "doc_date",
+            "credit_note_date",
+            "debit_note_date",
+        )
+    value = next((row.get(field) for field in date_fields if row.get(field) not in (None, "")), None)
     if isinstance(value, datetime):
         value = value.date()
     if isinstance(value, date):
