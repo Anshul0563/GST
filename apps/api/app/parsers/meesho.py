@@ -218,6 +218,16 @@ class MeeshoParser(MarketplaceParser):
                     )
                 ):
                     row["invoice no"] = metadata["invoice no"]
+                elif suborder and not first_value(
+                    row,
+                    [
+                        "invoice no.",
+                        "invoice no",
+                        "invoice number",
+                        "tax invoice no",
+                    ],
+                ):
+                    row["invoice no"] = suborder
 
                 # State fallback
                 if (
@@ -250,7 +260,6 @@ class MeeshoParser(MarketplaceParser):
                 if is_return and txn["doc_type"] == "invoice":
                     txn["doc_type"] = "credit_note"
 
-                # Strict invoice validation
                 if not txn.get("invoice_no"):
                     result.errors.append(
                         {

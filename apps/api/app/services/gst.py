@@ -70,6 +70,12 @@ def document_series_key(invoice_no: str) -> str:
     if not text:
         return ""
 
+    last_number = re.search(r"\d+(?!.*\d)", text)
+    if last_number and last_number.start() > 0:
+        prefix_text = text[: last_number.start()].rstrip("-_/")
+        if prefix_text:
+            return prefix_text.upper()
+
     prefix = re.match(
         r"^[A-Za-z0-9]+(?:[-_/][A-Za-z0-9]+)?",
         text,
@@ -133,7 +139,6 @@ def document_group_key(row: dict[str, Any], invoice_no: str) -> str:
 
 def valid_document_number_for_doc_issue(row: dict[str, Any], invoice_no: str) -> bool:
     platform = str(row.get("platform") or "").lower()
-    doc_type = str(row.get("doc_type") or "").lower()
     invoice = str(invoice_no or "").strip().upper()
 
     if not invoice:
@@ -142,14 +147,6 @@ def valid_document_number_for_doc_issue(row: dict[str, Any], invoice_no: str) ->
     # Never allow pure fallback/order/suborder ids in document issue
     if re.fullmatch(r"\d{10,}_\d+", invoice):
         return False
-
-    # Generic placeholder credit notes should not enter Table 13
-    if doc_type == "credit_note" and re.fullmatch(r"CN-\d+", invoice):
-        return False
-
-    # Meesho valid document series observed in source
-    if platform == "meesho":
-        return bool(re.match(r"^6P5KC\d+C?\d+$", invoice))
 
     return True
 
