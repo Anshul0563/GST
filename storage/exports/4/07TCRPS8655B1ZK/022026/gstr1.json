@@ -9,8 +9,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "37",
-      "txval": 90.29,
-      "iamt": 2.71,
+      "txval": 578.64,
+      "iamt": 17.36,
       "csamt": 0
     },
     {
@@ -50,12 +50,40 @@
       "csamt": 0
     },
     {
+      "sply_ty": "INTRA",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "07",
+      "txval": 516.5,
+      "camt": 7.75,
+      "samt": 7.75,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "24",
+      "txval": 219.42,
+      "iamt": 6.58,
+      "csamt": 0
+    },
+    {
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
       "pos": "06",
       "txval": 0,
       "iamt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "02",
+      "txval": 200,
+      "iamt": 6,
       "csamt": 0
     },
     {
@@ -72,8 +100,8 @@
       "rt": 3,
       "typ": "OE",
       "pos": "29",
-      "txval": 318.46,
-      "iamt": 9.54,
+      "txval": 654.38,
+      "iamt": 19.62,
       "csamt": 0
     },
     {
@@ -81,8 +109,17 @@
       "rt": 3,
       "typ": "OE",
       "pos": "27",
-      "txval": 126.21,
-      "iamt": 3.79,
+      "txval": 319.41,
+      "iamt": 9.59,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "21",
+      "txval": 0,
+      "iamt": 0,
       "csamt": 0
     },
     {
@@ -90,15 +127,15 @@
       "rt": 3,
       "typ": "OE",
       "pos": "03",
-      "txval": 111.66,
-      "iamt": 3.35,
+      "txval": 315.54,
+      "iamt": 9.47,
       "csamt": 0
     },
     {
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
-      "pos": "33",
+      "pos": "08",
       "txval": 113.59,
       "iamt": 3.41,
       "csamt": 0
@@ -107,9 +144,9 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
-      "pos": "36",
-      "txval": 0,
-      "iamt": 0,
+      "pos": "33",
+      "txval": 524.27,
+      "iamt": 15.73,
       "csamt": 0
     },
     {
@@ -120,10 +157,37 @@
       "txval": 0,
       "iamt": 0,
       "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "17",
+      "txval": 152.43,
+      "iamt": 4.57,
+      "csamt": 0
     }
   ],
   "supeco": {
     "clttx": [
+      {
+        "etin": "07AARCM9332R1CQ",
+        "suppval": 2406.8,
+        "igst": 56.71,
+        "cgst": 7.75,
+        "sgst": 7.75,
+        "cess": 0,
+        "flag": "N"
+      },
+      {
+        "etin": "07AAICA3918J1CV",
+        "suppval": 193.2,
+        "igst": 5.8,
+        "cgst": 0,
+        "sgst": 0,
+        "cess": 0,
+        "flag": "N"
+      },
       {
         "etin": "07AACCF0683K1CU",
         "suppval": 1127.19,
@@ -143,6 +207,22 @@
         "docs": [
           {
             "num": 1,
+            "from": "6p5kc26102",
+            "to": "6p5kc26132",
+            "totnum": 31,
+            "cancel": 0,
+            "net_issue": 31
+          },
+          {
+            "num": 2,
+            "from": "IN-4",
+            "to": "IN-4",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          },
+          {
+            "num": 3,
             "from": "FAWRLX2600000063",
             "to": "FAWRLX2600000079",
             "totnum": 17,
@@ -157,6 +237,14 @@
         "docs": [
           {
             "num": 1,
+            "from": "6p5kc26C50",
+            "to": "6p5kc26C65",
+            "totnum": 16,
+            "cancel": 0,
+            "net_issue": 16
+          },
+          {
+            "num": 2,
             "from": "RAT6SO2600000021",
             "to": "RAT6SO2600000027",
             "totnum": 7,
@@ -164,7 +252,7 @@
             "net_issue": 7
           },
           {
-            "num": 2,
+            "num": 3,
             "from": "CANQ1W2600000008",
             "to": "CANQ1W2600000012",
             "totnum": 5,
