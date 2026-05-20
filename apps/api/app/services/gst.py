@@ -13,6 +13,8 @@ from app.services.validation import (
 )
 
 GST_VERSION = "GST3.1.6"
+GSTTOOL_COMPATIBLE = "gsttool_compatible"
+CLEAN_PORTAL = "clean_portal"
 DOC_NUM = {"invoice": 1, "debit_note": 4, "credit_note": 5}
 DOC_TYP = {
     "invoice": "Invoices for outward supply",
@@ -35,8 +37,24 @@ def split_tax_evenly(total_tax: Decimal) -> tuple[Decimal, Decimal]:
     return half, money(total_tax - half)
 
 
-def valid_for_b2cs(row: dict[str, Any]) -> bool:
-    if row.get("validation_status") != "valid":
+def normalize_export_mode(export_mode: str | None) -> str:
+    normalized = str(export_mode or GSTTOOL_COMPATIBLE).strip().lower()
+    aliases = {
+        "gsttool": GSTTOOL_COMPATIBLE,
+        "gsttool_compatible": GSTTOOL_COMPATIBLE,
+        "strict_gsttool_parity": GSTTOOL_COMPATIBLE,
+        "strict_gsttool_parity_mode": GSTTOOL_COMPATIBLE,
+        "clean": CLEAN_PORTAL,
+        "clean_portal": CLEAN_PORTAL,
+        "clean_portal_mode": CLEAN_PORTAL,
+    }
+    return aliases.get(normalized, GSTTOOL_COMPATIBLE)
+
+
+def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool:
+    mode = normalize_export_mode(export_mode)
+    status = row.get("validation_status")
+    if status != "valid" and not (mode == GSTTOOL_COMPATIBLE and status == "skipped"):
         return False
     if not row.get("buyer_state_code") or not row.get("invoice_no"):
         return False
@@ -48,13 +66,28 @@ def valid_for_b2cs(row: dict[str, Any]) -> bool:
         + money(row.get("sgst"))
         + money(row.get("cess"))
     )
-    return rate != Decimal("0.00") and not (
+    if rate == Decimal("0.00"):
+        return False
+    if mode == GSTTOOL_COMPATIBLE:
+        return True
+    return not (
         taxable == Decimal("0.00") and total_tax == Decimal("0.00")
     )
 
 
-def valid_for_supeco(row: dict[str, Any]) -> bool:
-    return valid_for_b2cs(row) and bool(row.get("etin"))
+def valid_for_supeco(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool:
+    if not valid_for_b2cs(row, export_mode) or not bool(row.get("etin")):
+        return False
+    if normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE:
+        total = (
+            money(row.get("taxable_value"))
+            + money(row.get("igst"))
+            + money(row.get("cgst"))
+            + money(row.get("sgst"))
+            + money(row.get("cess"))
+        )
+        return total != Decimal("0.00")
+    return True
 
 
 def valid_for_doc_issue(row: dict[str, Any]) -> bool:
@@ -151,7 +184,10 @@ def valid_document_number_for_doc_issue(row: dict[str, Any], invoice_no: str) ->
     return True
 
 
-def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_b2cs(
+    gstin: str, rows: list[dict[str, Any]], export_mode: str = GSTTOOL_COMPATIBLE
+) -> list[dict[str, Any]]:
+    mode = normalize_export_mode(export_mode)
     groups: dict[tuple[str, Decimal, str, str], dict[str, Decimal]] = defaultdict(
         lambda: {
             "txval": Decimal("0.00"),
@@ -162,7 +198,7 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
     )
     for row in rows:
-        if not valid_for_b2cs(row):
+        if not valid_for_b2cs(row, mode):
             continue
         sply_ty = classify_supply(gstin, row.get("buyer_state_code"))
         key = (
@@ -184,7 +220,11 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         total_tax = (
             amounts["iamt"] + amounts["camt"] + amounts["samt"] + amounts["csamt"]
         )
-        if amounts["txval"] == Decimal("0.00") and total_tax == Decimal("0.00"):
+        if (
+            mode == CLEAN_PORTAL
+            and amounts["txval"] == Decimal("0.00")
+            and total_tax == Decimal("0.00")
+        ):
             continue
         if amounts["txval"] < Decimal("0.00"):
             continue
@@ -199,8 +239,11 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             base["iamt"] = json_amount(amounts["iamt"])
             base["csamt"] = json_amount(amounts["csamt"])
         else:
-            intra_tax = amounts["camt"] + amounts["samt"]
-            camt, samt = split_tax_evenly(intra_tax)
+            if mode == GSTTOOL_COMPATIBLE:
+                camt, samt = money(amounts["camt"]), money(amounts["samt"])
+            else:
+                intra_tax = amounts["camt"] + amounts["samt"]
+                camt, samt = split_tax_evenly(intra_tax)
             base["camt"] = json_amount(camt)
             base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
@@ -208,7 +251,9 @@ def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return output
 
 
-def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_supeco(
+    rows: list[dict[str, Any]], export_mode: str = GSTTOOL_COMPATIBLE
+) -> list[dict[str, Any]]:
     groups: dict[str, dict[str, Decimal]] = defaultdict(
         lambda: {
             "suppval": Decimal("0.00"),
@@ -219,7 +264,7 @@ def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
     )
     for row in rows:
-        if not valid_for_supeco(row):
+        if not valid_for_supeco(row, export_mode):
             continue
         etin = str(row.get("etin"))
         groups[etin]["suppval"] += money(row.get("taxable_value"))
@@ -241,7 +286,10 @@ def build_supeco(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def build_doc_issue(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+def build_doc_issue(
+    rows: list[dict[str, Any]], export_mode: str = GSTTOOL_COMPATIBLE
+) -> dict[str, list[dict[str, Any]]]:
+    mode = normalize_export_mode(export_mode)
     grouped: dict[tuple[str, str, str], set[str]] = defaultdict(set)
     for row in rows:
         if not valid_for_doc_issue(row):
@@ -255,9 +303,11 @@ def build_doc_issue(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
         if not valid_document_number_for_doc_issue(row, invoice_no):
             continue
         platform = str(row.get("platform") or "unknown").lower()
-        grouped[(doc_type, platform, document_group_key(row, invoice_no))].add(
-            invoice_no
-        )
+        if mode == GSTTOOL_COMPATIBLE:
+            group_key = f"{platform}:{doc_type}"
+        else:
+            group_key = document_group_key(row, invoice_no)
+        grouped[(doc_type, platform, group_key)].add(invoice_no)
 
     doc_det: list[dict[str, Any]] = []
     for doc_type in ("invoice", "credit_note", "debit_note"):
@@ -272,11 +322,7 @@ def build_doc_issue(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
         for key, values in sorted(
             series, key=lambda item: document_sort_key(item[1][0])
         ):
-            ranges = (
-                [values]
-                if str(key[2]).startswith("flipkart:")
-                else split_document_ranges(values)
-            )
+            ranges = [values] if mode == GSTTOOL_COMPATIBLE else split_document_ranges(values)
             for item_range in ranges:
                 docs.append(
                     {
@@ -513,16 +559,22 @@ def gstr1_generation_report(
     }
 
 
-def build_gstr1_json(gstin: str, period: str, rows: list[dict]) -> dict:
-    valid_rows = [row for row in rows if valid_for_b2cs(row)]
+def build_gstr1_json(
+    gstin: str,
+    period: str,
+    rows: list[dict],
+    export_mode: str = GSTTOOL_COMPATIBLE,
+) -> dict:
+    mode = normalize_export_mode(export_mode)
+    valid_rows = [row for row in rows if valid_for_b2cs(row, mode)]
 
-    b2cs = build_b2cs(gstin, valid_rows)
-    supeco_rows = build_supeco(valid_rows)
+    b2cs = build_b2cs(gstin, valid_rows, mode)
+    supeco_rows = build_supeco(valid_rows, mode)
 
     b2cs_txval = sum(money(x.get("txval")) for x in b2cs)
     eco_txval = sum(money(x.get("suppval")) for x in supeco_rows)
 
-    if abs(b2cs_txval - eco_txval) > Decimal("0.01"):
+    if mode == CLEAN_PORTAL and abs(b2cs_txval - eco_txval) > Decimal("0.01"):
         raise ValueError(
             f"B2CS taxable {b2cs_txval} does not match SUPECO taxable {eco_txval}"
         )
@@ -534,5 +586,5 @@ def build_gstr1_json(gstin: str, period: str, rows: list[dict]) -> dict:
         "hash": "hash",
         "b2cs": b2cs,
         "supeco": {"clttx": supeco_rows},
-        "doc_issue": build_doc_issue(valid_rows),
+        "doc_issue": build_doc_issue(valid_rows, mode),
     }
