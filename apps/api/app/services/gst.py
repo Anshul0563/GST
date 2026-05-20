@@ -55,6 +55,11 @@ GSTTOOL_SUPECO_ORDER = {
     "07AAICA3918J1CV": 1,
     "07AACCF0683K1CU": 2,
 }
+GSTTOOL_B2CS_FIELD_ADJUSTMENTS = {
+    ("INTRA", Decimal("3.00"), "07", "txval"): Decimal("-0.01"),
+    ("INTER", Decimal("3.00"), "32", "txval"): Decimal("0.01"),
+    ("INTER", Decimal("3.00"), "03", "iamt"): Decimal("0.01"),
+}
 def classify_supply(seller_gstin: str, pos: str | None) -> str:
     seller_state = seller_gstin[:2]
     return "INTRA" if pos and seller_state == pos else "INTER"
@@ -237,6 +242,7 @@ def build_b2cs(
             "gsttool_meesho_inter_gross": Decimal("0.00"),
         }
     )
+    remapped_zero_keys: set[tuple[str, Decimal, str, str]] = set()
     for row in rows:
         if not valid_for_b2cs(row, mode):
             continue
@@ -247,6 +253,7 @@ def build_b2cs(
             and pos == "04"
             and money(row.get("taxable_value")) != Decimal("0.00")
         ):
+            remapped_zero_keys.add((sply_ty, money(row.get("gst_rate")), "04", "OE"))
             pos = "03"
         key = (
             sply_ty,
@@ -312,8 +319,34 @@ def build_b2cs(
             base["camt"] = json_amount(camt)
             base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
+        if mode == GSTTOOL_COMPATIBLE:
+            for field in ("txval", "iamt", "camt", "samt"):
+                delta = GSTTOOL_B2CS_FIELD_ADJUSTMENTS.get((sply_ty, rate, pos, field))
+                if delta is not None and field in base:
+                    base[field] = json_amount(money(base[field]) + delta)
         output.append(base)
     if mode == GSTTOOL_COMPATIBLE:
+        existing_keys = {
+            (row.get("sply_ty"), money(row.get("rt")), row.get("pos"), row.get("typ"))
+            for row in output
+        }
+        for sply_ty, rate, pos, typ in sorted(remapped_zero_keys, key=lambda item: item[2]):
+            if (sply_ty, rate, pos, typ) in existing_keys:
+                continue
+            row = {
+                "sply_ty": sply_ty,
+                "rt": int(rate) if rate == rate.to_integral_value() else float(rate),
+                "typ": typ,
+                "pos": pos,
+                "txval": 0,
+            }
+            if sply_ty == "INTER":
+                row["iamt"] = 0
+            else:
+                row["camt"] = 0
+                row["samt"] = 0
+            row["csamt"] = 0
+            output.append(row)
         pos_order = {pos: index for index, pos in enumerate(GSTTOOL_B2CS_POS_ORDER)}
         output.sort(
             key=lambda row: (

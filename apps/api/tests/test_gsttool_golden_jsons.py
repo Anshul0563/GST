@@ -15,6 +15,67 @@ from app.services.excel_template_export import write_gstr1_template_excel
 
 
 class GstToolGoldenJsonTests(unittest.TestCase):
+    gstin = "07TCRPS8655B1ZK"
+
+    def golden_cases(self):
+        return {
+            "022026": {
+                "reference": Path("/home/jarvis/Downloads/GSTR1_returns_07TCRPS8655B1ZK_monthly_022026.json"),
+                "amazon": [Path("storage/uploads/4/7/eef204f91f474184b31853737577779d.csv")],
+                "flipkart": [Path("storage/uploads/4/5/fee8bd723cf04b8bb6637402f6be0c26.xlsx")],
+                "meesho": [
+                    Path("storage/uploads/4/6/a5ecca73d9d348c592a6f640b5e61542.xlsx"),
+                    Path("storage/uploads/4/6/e5d97d93eb254b4d8a73bab35f2b01d0.xlsx"),
+                    Path("storage/uploads/4/6/2ce7ac3ccd9c4ca5a2ea5a84a76cd8bf.xlsx"),
+                ],
+            },
+            "032026": {
+                "reference": Path("/home/jarvis/Downloads/GSTR1_returns_07TCRPS8655B1ZK_monthly_032026.json"),
+                "amazon": [Path("/home/jarvis/Downloads/MTR_B2C-MARCH-2026-A1YGIWFZR88S6S.csv")],
+                "flipkart": [Path("/home/jarvis/Downloads/11d11828-0221-4866-b714-b5a26595f116_1779106486000.xlsx")],
+                "meesho": [
+                    Path("/home/jarvis/Downloads/tcs_sales.xlsx"),
+                    Path("/home/jarvis/Downloads/tcs_sales_return.xlsx"),
+                    Path("/home/jarvis/Downloads/Tax_invoice_details.xlsx"),
+                ],
+            },
+            "042026": {
+                "reference": Path("/home/jarvis/Downloads/GSTR1_returns_07TCRPS8655B1ZK_monthly_042026.json"),
+                "amazon": [],
+                "flipkart": [],
+                "meesho": [],
+            },
+        }
+
+    def payload_for_period(self, period: str):
+        case = self.golden_cases()[period]
+        reference_path = case["reference"]
+        raw_paths = case["amazon"] + case["flipkart"] + case["meesho"]
+        missing = [path for path in [reference_path, *raw_paths] if not path.exists()]
+        if missing:
+            self.skipTest(f"GSTTool golden fixtures are not available: {missing}")
+        if not raw_paths:
+            self.skipTest(f"Raw marketplace files for {period} are not available.")
+        rows = []
+        rows.extend(AmazonParser(self.gstin, period).parse(case["amazon"]).transactions)
+        rows.extend(FlipkartParser(self.gstin, period).parse(case["flipkart"]).transactions)
+        rows.extend(MeeshoParser(self.gstin, period).parse(case["meesho"]).transactions)
+        return build_gstr1_json(self.gstin, period, rows, GSTTOOL_COMPATIBLE)
+
+    def assert_exact_gsttool_json(self, period: str):
+        reference_path = self.golden_cases()[period]["reference"]
+        generated = self.payload_for_period(period)
+        reference = json.loads(reference_path.read_text(encoding="utf-8"))
+        report = compare_against_reference(reference, generated)
+
+        self.assertEqual(list(generated.keys()), list(reference.keys()))
+        self.assertEqual(generated.get("hash"), reference.get("hash"))
+        self.assertEqual(generated.get("b2cs"), reference.get("b2cs"))
+        self.assertEqual(generated.get("supeco", {}).get("clttx"), reference.get("supeco", {}).get("clttx"))
+        self.assertEqual(generated.get("doc_issue"), reference.get("doc_issue"))
+        self.assertTrue(report["exact_match"], report["differences"][:20])
+        self.assertEqual(report["match_score"], 100.0)
+
     def march_payload(self):
         gstin = "07TCRPS8655B1ZK"
         period = "032026"
@@ -36,6 +97,15 @@ class GstToolGoldenJsonTests(unittest.TestCase):
             .transactions
         )
         return build_gstr1_json(gstin, period, rows, GSTTOOL_COMPATIBLE)
+
+    def test_february_raw_marketplace_files_rebuild_original_gsttool_json_exactly(self):
+        self.assert_exact_gsttool_json("022026")
+
+    def test_march_raw_marketplace_files_rebuild_original_gsttool_json_exactly(self):
+        self.assert_exact_gsttool_json("032026")
+
+    def test_april_raw_marketplace_files_rebuild_original_gsttool_json_exactly(self):
+        self.assert_exact_gsttool_json("042026")
 
     def test_original_march_json_preserves_gsttool_quirks(self):
         path = Path("/home/jarvis/Downloads/GSTR1_returns_07TCRPS8655B1ZK_monthly_032026.json")
@@ -71,18 +141,6 @@ class GstToolGoldenJsonTests(unittest.TestCase):
         self.assertEqual(payload["fp"], "042026")
         self.assertEqual([row["etin"] for row in payload["supeco"]["clttx"]], ["07AARCM9332R1CQ", "07AACCF0683K1CU", "07AAICA3918J1CV"])
         self.assertTrue(report["exact_match"])
-        self.assertEqual(report["match_score"], 100.0)
-
-    def test_march_raw_marketplace_files_rebuild_original_gsttool_json_exactly(self):
-        reference_path = Path("/home/jarvis/Downloads/GSTR1_returns_07TCRPS8655B1ZK_monthly_032026.json")
-        if not reference_path.exists():
-            self.skipTest("Original March GSTTool JSON and raw marketplace files are not available.")
-
-        generated = self.march_payload()
-        reference = json.loads(reference_path.read_text(encoding="utf-8"))
-        report = compare_against_reference(reference, generated)
-
-        self.assertTrue(report["exact_match"], report["differences"][:10])
         self.assertEqual(report["match_score"], 100.0)
 
     def test_excel_template_export_preserves_original_gsttool_workbook_layout(self):

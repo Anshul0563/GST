@@ -283,14 +283,14 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_gsttool_mode_preserves_negative_b2cs_rows(self):
         row = finalize_transaction({
-            "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "042026",
+            "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
             "invoice_no": "CN-NEG", "doc_type": "credit_note", "buyer_state_code": "36", "taxable_value": 100, "gst_rate": 3, "igst": 3,
         })
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
         clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
 
-        self.assertEqual(payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -97.09, "iamt": -3, "csamt": 0}])
-        self.assertEqual(clean_payload["b2cs"], [])
+        self.assertEqual(payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -100, "iamt": -3, "csamt": 0}])
+        self.assertEqual(clean_payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -100, "iamt": -3, "csamt": 0}])
 
     def test_gstr1_generation_filters_rows_by_requested_period(self):
         rows = [
