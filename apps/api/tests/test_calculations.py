@@ -292,15 +292,15 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -100, "iamt": -3, "csamt": 0}])
         self.assertEqual(clean_payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -100, "iamt": -3, "csamt": 0}])
 
-    def test_gstr1_generation_filters_rows_by_requested_period(self):
+    def test_gstr1_generation_filters_rows_by_document_date_period(self):
         rows = [
             finalize_transaction({
                 "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "022026",
-                "invoice_no": "IN-FEB", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+                "invoice_no": "IN-FEB", "invoice_date": "2026-02-28", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
             }),
             finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "032026",
-                "invoice_no": "IN-MAR", "doc_type": "invoice", "buyer_state_code": "29", "taxable_value": 200, "gst_rate": 3, "igst": 6,
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "022026",
+                "invoice_no": "IN-MAR", "invoice_date": "2026-03-01", "doc_type": "invoice", "buyer_state_code": "29", "taxable_value": 200, "gst_rate": 3, "igst": 6,
             }),
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "022026", rows, GSTTOOL_COMPATIBLE)

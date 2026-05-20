@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import date, datetime
 from decimal import Decimal
 import re
 from typing import Any
@@ -68,6 +69,40 @@ def classify_supply(seller_gstin: str, pos: str | None) -> str:
 def json_amount(value: Any) -> float:
     rounded = money(value)
     return int(rounded) if rounded == rounded.to_integral_value() else float(rounded)
+
+
+def document_period(row: dict[str, Any]) -> str | None:
+    value = (
+        row.get("invoice_date")
+        or row.get("credit_note_date")
+        or row.get("debit_note_date")
+        or row.get("document_date")
+        or row.get("doc_date")
+    )
+    if isinstance(value, datetime):
+        value = value.date()
+    if isinstance(value, date):
+        return f"{value.month:02d}{value.year}"
+    if value in (None, ""):
+        return None
+    parsed = None
+    text = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            parsed = datetime.strptime(text[:19], fmt)
+            break
+        except ValueError:
+            continue
+    if parsed is None:
+        return None
+    return f"{parsed.month:02d}{parsed.year}"
+
+
+def row_belongs_to_period(row: dict[str, Any], period: str) -> bool:
+    row_period = document_period(row)
+    if row_period is None:
+        row_period = str(row.get("filing_period") or "")
+    return row_period == str(period)
 
 
 def split_tax_evenly(total_tax: Decimal) -> tuple[Decimal, Decimal]:
@@ -741,7 +776,7 @@ def build_gstr1_json(
     valid_rows = [
         row
         for row in rows
-        if str(row.get("filing_period") or period) == str(period)
+        if row_belongs_to_period(row, period)
         and valid_for_b2cs(row, mode)
     ]
 

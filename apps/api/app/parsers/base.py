@@ -40,7 +40,25 @@ class MarketplaceParser:
         raise NotImplementedError
 
     def normalize_row(self, row: dict[str, Any], source_file: str) -> dict:
-        raw_date = first_value(row, ["invoice_date", "invoice date", "invoice generated date", "shipment date", "order date", "date"])
+        raw_date = first_value(
+            row,
+            [
+                "credit_note_date",
+                "credit note date",
+                "debit_note_date",
+                "debit note date",
+                "cancel return date",
+                "return date",
+                "document date",
+                "doc date",
+                "invoice_date",
+                "invoice date",
+                "invoice generated date",
+                "shipment date",
+                "order date",
+                "date",
+            ],
+        )
         doc_type = str(first_value(row, ["doc_type", "document type", "transaction type", "type"]) or "invoice").lower()
         if "refund" in doc_type or "return" in doc_type or "credit" in doc_type:
             doc_type = "credit_note"

@@ -60,20 +60,6 @@ class GstToolGoldenJsonTests(unittest.TestCase):
         rows.extend(AmazonParser(self.gstin, period).parse(case["amazon"]).transactions)
         rows.extend(FlipkartParser(self.gstin, period).parse(case["flipkart"]).transactions)
         rows.extend(MeeshoParser(self.gstin, period).parse(case["meesho"]).transactions)
-        reference = json.loads(reference_path.read_text(encoding="utf-8"))
-        source_documents = {str(row.get("invoice_no")) for row in rows if row.get("invoice_no")}
-        reference_endpoints = {
-            str(doc[field])
-            for section in reference.get("doc_issue", {}).get("doc_det", [])
-            for doc in section.get("docs", [])
-            for field in ("from", "to")
-        }
-        missing_reference_documents = sorted(reference_endpoints - source_documents)
-        if missing_reference_documents:
-            self.skipTest(
-                f"Raw marketplace fixture set for {period} does not match original GSTTool JSON; "
-                f"missing document endpoints: {missing_reference_documents[:6]}"
-            )
         return build_gstr1_json(self.gstin, period, rows, GSTTOOL_COMPATIBLE)
 
     def assert_exact_gsttool_json(self, period: str):

@@ -251,6 +251,20 @@ class MeeshoParser(MarketplaceParser):
                         "end customer state new"
                     ]
 
+                if is_return:
+                    return_date = first_value(
+                        row,
+                        [
+                            "cancel return date",
+                            "return date",
+                            "credit note date",
+                            "document date",
+                        ],
+                    )
+                    if return_date not in (None, ""):
+                        row["credit note date"] = return_date
+                        row["invoice date"] = return_date
+
                 txn = self.normalize_row(
                     row,
                     f"{path.name}:{sheet_name}",
