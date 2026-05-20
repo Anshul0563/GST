@@ -598,7 +598,7 @@ def build_doc_issue(
             for item_range in ranges:
                 if mode == GSTTOOL_COMPATIBLE:
                     if key[1] == "amazon":
-                        total_count = len(set(valid_values))
+                        total_count = len(valid_values)
                     elif key[1] == "meesho" and key[0] == "credit_note":
                         total_count = len(values)
                     else:
@@ -711,9 +711,18 @@ def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
             + money(item.get("csamt"))
         )
 
-        if money(item.get("txval")) == Decimal("0.00") and tax_total == Decimal("0.00"):
-            errors.append(f"Fake zero B2CS row for POS {item.get('pos')}")
-
+        if (
+            normalize_export_mode(GSTTOOL_COMPATIBLE) != CLEAN_PORTAL
+        ):
+            pass
+        elif(
+            money(item.get("txval")) == Decimal("0.00")
+            and tax_total != Decimal("0.00")
+        ):
+            errors.append(
+                f"B2CS taxable value is zero but tax is non-zero for POS {item.get('pos')}"
+        )
+            
         if item.get("sply_ty") == "INTRA" and abs(
             money(item.get("camt")) - money(item.get("samt"))
         ) > Decimal("0.01"):
