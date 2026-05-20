@@ -189,7 +189,7 @@ class GstCalculationTests(unittest.TestCase):
                 "cess": 0,
             }),
         ]
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
         self.assertEqual(payload["b2cs"][0]["txval"], 900.0)
         self.assertEqual(payload["b2cs"][0]["iamt"], 27.0)
         self.assertEqual(payload["supeco"]["clttx"][0]["suppval"], 900.0)
@@ -251,7 +251,7 @@ class GstCalculationTests(unittest.TestCase):
                 "invoice_no": "LWABOG7260000005", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
             }),
         ]
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
         invoice_doc = next(item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1)
         self.assertEqual(len(invoice_doc["docs"]), 2)
 
@@ -263,7 +263,7 @@ class GstCalculationTests(unittest.TestCase):
             })
             for invoice_no in ("IN-5", "IN-6", "IN-8", "IN-9")
         ]
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
         invoice_doc = next(item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1)
         ranges = [(item["from"], item["to"], item["totnum"]) for item in invoice_doc["docs"]]
         self.assertEqual(ranges, [("IN-5", "IN-6", 2), ("IN-8", "IN-9", 2)])
@@ -297,10 +297,11 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(len(clean_ranges), 2)
 
     def test_gsttool_mode_preserves_source_cgst_sgst_rounding(self):
-        row = finalize_transaction({
+        row = {
             "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
             "invoice_no": "A1", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 100, "gst_rate": 3, "cgst": 1.49, "sgst": 1.50,
-        })
+            "igst": 0, "cess": 0, "validation_status": "valid",
+        }
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
         clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
 
