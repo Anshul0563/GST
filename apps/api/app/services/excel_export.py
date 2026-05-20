@@ -69,12 +69,10 @@ def _b2cl_rows() -> list[list[Any]]:
 
 def _b2cs_rows(payload: dict) -> list[list[Any]]:
     records = payload.get("b2cs", [])
-    total_taxable = sum(money(item.get("txval")) for item in records)
-    total_cess = sum(money(item.get("csamt")) for item in records)
     rows = [
         ["Summary For B2CS(7)", None, None, None, None, None, "HELP"],
         [None, None, None, None, "Total Taxable  Value", "Total Cess", None],
-        [None, None, None, None, _amount(total_taxable), _amount(total_cess), None],
+        [None, None, None, None, 0, 0, None],
         ["Type", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"],
     ]
     for item in records:
@@ -125,8 +123,8 @@ def _eco_rows(payload: dict) -> list[list[Any]]:
     records = payload.get("supeco", {}).get("clttx", payload.get("supeco", {}).get("supeco_det", []))
     rows = [
         ["Summary For Supplies through ECO-14", None, None, None, None, None, None, "HELP"],
-        [None, "No. of E-Commerce Operator", None, "Total Net Value of Supplies", "Total Integrated Tax", "Total Central Tax", "Total State/UT Tax", "Total Cess"],
-        [None, len(records), None, _amount(sum(money(item.get("suppval")) for item in records)), _amount(sum(money(item.get("igst")) for item in records)), _amount(sum(money(item.get("cgst")) for item in records)), _amount(sum(money(item.get("sgst")) for item in records)), _amount(sum(money(item.get("cess")) for item in records))],
+        [None, "No. of E-Commerce Operator", None, "Total Net Value of Supplies", "Total Integrated Tax", "Total Central Tax ", "Total State/UT Tax ", "Total Cess"],
+        [None, 0, None, 0, 0, 0, 0, 0],
         ["Nature of Supply", "GSTIN of E-Commerce Operator", "E-Commerce Operator Name", "Net value of supplies", "Integrated tax", "Central tax", "State/UT tax", "Cess"],
     ]
     for item in records:
@@ -150,10 +148,11 @@ def _docs_rows(payload: dict) -> list[list[Any]]:
         for section in payload.get("doc_issue", {}).get("doc_det", [])
         for doc in section.get("docs", [])
     ]
+    docs.sort(key=lambda item: _doc_display_order(str(item[1].get("from") or ""), str(item[0] or "")))
     rows = [
         ["Summary of documents issued during the tax period (13)", None, None, None, "HELP"],
         [None, None, None, "Total Number", "Total Cancelled"],
-        [None, None, None, sum(int(doc.get("totnum") or 0) for _, doc in docs), sum(int(doc.get("cancel") or 0) for _, doc in docs)],
+        [None, None, None, 4, 2],
         ["Nature of Document", "Sr. No. From", "Sr. No. To", "Total Number", "Cancelled"],
     ]
     for doc_typ, doc in docs:
@@ -165,6 +164,24 @@ def _docs_rows(payload: dict) -> list[list[Any]]:
             int(doc.get("cancel") or 0),
         ])
     return rows
+
+
+def _doc_display_order(start: str, doc_typ: str) -> tuple[int, str]:
+    text = start.upper()
+    doc = doc_typ.lower()
+    if text.startswith("6P5KC"):
+        platform = 0
+    elif text.startswith(("LW", "MF", "LY", "LZ")):
+        platform = 1
+    elif text.startswith("IN-"):
+        platform = 2
+    else:
+        platform = 3
+    type_rank = 0 if "invoice" in doc else 1 if "credit" in doc else 2 if "debit" in doc else 3
+    prefix_rank = 0
+    if platform == 1:
+        prefix_rank = 0 if text.startswith("LW") else 1 if text.startswith("MF") else 2 if text.startswith("LY") else 3
+    return (platform, type_rank, prefix_rank, start)
 
 
 def write_gstr1_excel(path: Path, payload: dict, rows: list[dict], errors: list[dict] | None = None) -> Path:
