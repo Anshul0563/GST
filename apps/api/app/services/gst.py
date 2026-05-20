@@ -55,13 +55,6 @@ GSTTOOL_SUPECO_ORDER = {
     "07AAICA3918J1CV": 1,
     "07AACCF0683K1CU": 2,
 }
-GSTTOOL_B2CS_ROUNDING_ADJUSTMENTS = {
-    ("INTRA", Decimal("3.00"), "07", "txval"): Decimal("-0.01"),
-    ("INTER", Decimal("3.00"), "32", "txval"): Decimal("0.01"),
-    ("INTER", Decimal("3.00"), "03", "iamt"): Decimal("0.01"),
-}
-
-
 def classify_supply(seller_gstin: str, pos: str | None) -> str:
     seller_state = seller_gstin[:2]
     return "INTRA" if pos and seller_state == pos else "INTER"
@@ -297,8 +290,6 @@ def build_b2cs(
             and total_tax == Decimal("0.00")
         ):
             continue
-        if amounts["txval"] < Decimal("0.00"):
-            continue
         base = {
             "sply_ty": sply_ty,
             "rt": int(rate) if rate == rate.to_integral_value() else float(rate),
@@ -321,35 +312,7 @@ def build_b2cs(
             base["camt"] = json_amount(camt)
             base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
-        if mode == GSTTOOL_COMPATIBLE:
-            for field in ("txval", "iamt", "camt", "samt"):
-                delta = GSTTOOL_B2CS_ROUNDING_ADJUSTMENTS.get((sply_ty, rate, pos, field))
-                if delta is not None and field in base:
-                    base[field] = json_amount(money(base[field]) + delta)
         output.append(base)
-    if mode == GSTTOOL_COMPATIBLE:
-        existing_zero_keys = {
-            (row.get("sply_ty"), row.get("rt"), row.get("typ"), row.get("pos"))
-            for row in output
-            if money(row.get("txval")) == Decimal("0.00")
-            and money(row.get("iamt")) == Decimal("0.00")
-            and money(row.get("camt")) == Decimal("0.00")
-            and money(row.get("samt")) == Decimal("0.00")
-        }
-        for pos in ("18", "04", "06", "20"):
-            key = ("INTER", 3, "OE", pos)
-            if key not in existing_zero_keys:
-                output.append(
-                    {
-                        "sply_ty": "INTER",
-                        "rt": 3,
-                        "typ": "OE",
-                        "pos": pos,
-                        "txval": 0,
-                        "iamt": 0,
-                        "csamt": 0,
-                    }
-                )
     if mode == GSTTOOL_COMPATIBLE:
         pos_order = {pos: index for index, pos in enumerate(GSTTOOL_B2CS_POS_ORDER)}
         output.sort(
@@ -742,7 +705,12 @@ def build_gstr1_json(
     export_mode: str = GSTTOOL_COMPATIBLE,
 ) -> dict:
     mode = normalize_export_mode(export_mode)
-    valid_rows = [row for row in rows if valid_for_b2cs(row, mode)]
+    valid_rows = [
+        row
+        for row in rows
+        if str(row.get("filing_period") or period) == str(period)
+        and valid_for_b2cs(row, mode)
+    ]
 
     b2cs = build_b2cs(gstin, valid_rows, mode)
     supeco_rows = build_supeco(valid_rows, mode)

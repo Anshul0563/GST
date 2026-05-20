@@ -278,8 +278,35 @@ class GstCalculationTests(unittest.TestCase):
         clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
 
         self.assertIn({"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "18", "txval": 0, "iamt": 0, "csamt": 0}, payload["b2cs"])
-        self.assertTrue({"18", "04", "06", "20"}.issubset({row["pos"] for row in payload["b2cs"]}))
+        self.assertEqual({row["pos"] for row in payload["b2cs"]}, {"18"})
         self.assertEqual(clean_payload["b2cs"], [])
+
+    def test_gsttool_mode_preserves_negative_b2cs_rows(self):
+        row = finalize_transaction({
+            "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "042026",
+            "invoice_no": "CN-NEG", "doc_type": "credit_note", "buyer_state_code": "36", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+        })
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
+        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
+
+        self.assertEqual(payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -97.09, "iamt": -3, "csamt": 0}])
+        self.assertEqual(clean_payload["b2cs"], [])
+
+    def test_gstr1_generation_filters_rows_by_requested_period(self):
+        rows = [
+            finalize_transaction({
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "022026",
+                "invoice_no": "IN-FEB", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+            }),
+            finalize_transaction({
+                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "032026",
+                "invoice_no": "IN-MAR", "doc_type": "invoice", "buyer_state_code": "29", "taxable_value": 200, "gst_rate": 3, "igst": 6,
+            }),
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "022026", rows, GSTTOOL_COMPATIBLE)
+
+        self.assertEqual([row["pos"] for row in payload["b2cs"]], ["27"])
+        self.assertEqual(payload["doc_issue"]["doc_det"][0]["docs"][0]["from"], "IN-FEB")
 
     def test_gsttool_mode_merges_cross_prefix_document_ranges(self):
         rows = [
