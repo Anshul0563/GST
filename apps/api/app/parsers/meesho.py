@@ -1,4 +1,6 @@
+from operator import index
 from pathlib import Path
+from unittest import result
 
 from app.parsers.base import (
     MarketplaceParser,
@@ -16,7 +18,6 @@ from app.services.pos_resolver import (
     resolve_pos,
 )
 from app.services.transaction_normalizer import finalize_transaction
-
 
 SUBORDER_ALIASES = [
     "suborder no.",
@@ -176,28 +177,18 @@ class MeeshoParser(MarketplaceParser):
 
                 suborder = suborder_key(row)
 
-                is_return = (
-                    "return" in path.name.lower()
-                    or first_value(
-                        row,
-                        [
-                            "cancel return date",
-                            "return date",
-                        ],
-                    )
-                    not in (None, "")
-                )
+                is_return = "return" in path.name.lower() or first_value(
+                    row,
+                    [
+                        "cancel return date",
+                        "return date",
+                    ],
+                ) not in (None, "")
 
-                metadata_type = (
-                    "credit_note"
-                    if is_return
-                    else "invoice"
-                )
+                metadata_type = "credit_note" if is_return else "invoice"
 
-                metadata = (
-                    metadata_by_suborder
-                    .get(suborder or "", {})
-                    .get(metadata_type, {})
+                metadata = metadata_by_suborder.get(suborder or "", {}).get(
+                    metadata_type, {}
                 )
 
                 # Fill missing metadata
@@ -206,17 +197,14 @@ class MeeshoParser(MarketplaceParser):
                         row[key] = value
 
                 # Invoice fallback
-                if (
-                    metadata.get("invoice no")
-                    and not first_value(
-                        row,
-                        [
-                            "invoice no.",
-                            "invoice no",
-                            "invoice number",
-                            "tax invoice no",
-                        ],
-                    )
+                if metadata.get("invoice no") and not first_value(
+                    row,
+                    [
+                        "invoice no.",
+                        "invoice no",
+                        "invoice number",
+                        "tax invoice no",
+                    ],
                 ):
                     row["invoice no"] = metadata["invoice no"]
                 elif suborder and not first_value(
@@ -231,26 +219,21 @@ class MeeshoParser(MarketplaceParser):
                     row["invoice no"] = suborder
 
                 # State fallback
-                if (
-                    metadata.get("end customer state new")
-                    and not first_value(
-                        row,
-                        [
-                            "end customer state new",
-                            "customer state",
-                            "delivery state",
-                            "shipping state",
-                            "recipient state",
-                            "buyer state",
-                            "place of supply",
-                            "pos",
-                            "state",
-                        ],
-                    )
+                if metadata.get("end customer state new") and not first_value(
+                    row,
+                    [
+                        "end customer state new",
+                        "customer state",
+                        "delivery state",
+                        "shipping state",
+                        "recipient state",
+                        "buyer state",
+                        "place of supply",
+                        "pos",
+                        "state",
+                    ],
                 ):
-                    row["resolved state"] = metadata[
-                        "end customer state new"
-                    ]
+                    row["resolved state"] = metadata["end customer state new"]
 
                 if is_return:
                     return_date = first_value(
@@ -297,16 +280,34 @@ class MeeshoParser(MarketplaceParser):
                 if should_skip_transaction(txn):
                     continue
 
-                result.transactions.append(
-                    finalize_transaction(txn)
+            finalized = finalize_transaction(txn)
+
+            if not belongs_to_period(
+                finalized.get("document_date"),
+                finalized.get("filing_period"),
+            ):
+                result.debug.setdefault(
+                    "period_excluded_rows",
+                    [],
+                ).append(
+                    {
+                        "file": path.name,
+                        "sheet": sheet_name,
+                        "row": int(index) + 2,
+                        "invoice_no": finalized.get("invoice_no"),
+                        "doc_type": finalized.get("doc_type"),
+                        "document_date": str(finalized.get("document_date")),
+                        "taxable_value": str(finalized.get("taxable_value")),
+                        "reason": "document date outside filing period",
+                    }
                 )
 
-        result.debug["meesho_metadata_rows"] = len(
-            metadata_by_suborder
-        )
+                continue
 
-        result.debug["meesho_financial_rows"] = len(
-            result.transactions
-        )
+        result.transactions.append(finalized)
+
+        result.debug["meesho_metadata_rows"] = len(metadata_by_suborder)
+
+        result.debug["meesho_financial_rows"] = len(result.transactions)
 
         return result
