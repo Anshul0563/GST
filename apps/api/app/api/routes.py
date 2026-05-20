@@ -61,6 +61,7 @@ from app.services.gst import (
     build_gstr1_json,
     gstr1_generation_report,
     normalize_export_mode,
+    row_belongs_to_period,
 )
 from app.services.gsttool_parity_validator import compare_against_reference
 from app.services.reconciliation import (
@@ -946,11 +947,12 @@ def transactions(
     stmt = select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id)
     if profile_id:
         stmt = stmt.where(NormalizedTransaction.profile_id == profile_id)
-    if period:
-        stmt = stmt.where(NormalizedTransaction.filing_period == period)
     if platform:
         stmt = stmt.where(NormalizedTransaction.platform == platform)
-    return db.scalars(stmt.limit(1000)).all()
+    rows = db.scalars(stmt).all()
+    if period:
+        rows = [row for row in rows if transaction_matches_period(row, period)]
+    return rows[:1000]
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)
@@ -963,9 +965,9 @@ def dashboard_summary(
     stmt = select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id)
     if profile_id:
         stmt = stmt.where(NormalizedTransaction.profile_id == profile_id)
-    if period:
-        stmt = stmt.where(NormalizedTransaction.filing_period == period)
     rows = db.scalars(stmt).all()
+    if period:
+        rows = [row for row in rows if transaction_matches_period(row, period)]
     platform_totals: dict[str, dict] = {}
     state_totals: dict[str, dict] = {}
     total_taxable = money(0)
@@ -1079,18 +1081,29 @@ def delete_transaction(
     return {"ok": True}
 
 
+def transaction_to_dict(row: NormalizedTransaction) -> dict:
+    return TransactionOut.model_validate(row).model_dump(mode="json")
+
+
+def transaction_matches_period(row: NormalizedTransaction, period: str) -> bool:
+    return row_belongs_to_period(transaction_to_dict(row), period)
+
+
 def transaction_dicts(
     user_id: int, profile_id: int, period: str, db: Session, valid_only: bool = True
 ) -> list[dict]:
     stmt = select(NormalizedTransaction).where(
         NormalizedTransaction.user_id == user_id,
         NormalizedTransaction.profile_id == profile_id,
-        NormalizedTransaction.filing_period == period,
     )
     if valid_only:
         stmt = stmt.where(NormalizedTransaction.validation_status == "valid")
     rows = db.scalars(stmt).all()
-    return [TransactionOut.model_validate(row).model_dump(mode="json") for row in rows]
+    return [
+        transaction_to_dict(row)
+        for row in rows
+        if transaction_matches_period(row, period)
+    ]
 
 
 def validation_error_count(
@@ -1100,11 +1113,10 @@ def validation_error_count(
         select(NormalizedTransaction).where(
             NormalizedTransaction.user_id == user_id,
             NormalizedTransaction.profile_id == profile_id,
-            NormalizedTransaction.filing_period == period,
             NormalizedTransaction.validation_status.in_(["error", "invalid"]),
         )
     ).all()
-    return len(rows)
+    return sum(1 for row in rows if transaction_matches_period(row, period))
 
 
 def load_reference_gstr1(gstin: str, period: str) -> dict | None:

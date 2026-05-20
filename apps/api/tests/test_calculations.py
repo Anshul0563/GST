@@ -9,7 +9,7 @@ from app.parsers.amazon import AmazonParser
 from app.parsers.flipkart import FlipkartParser
 from app.parsers.meesho import MeeshoParser
 from app.services.excel_export import write_gstr1_excel
-from app.services.gst import CLEAN_PORTAL, GSTTOOL_COMPATIBLE, build_gstr1_json, gstr1_generation_report
+from app.services.gst import CLEAN_PORTAL, GSTTOOL_COMPATIBLE, build_gstr1_json, gstr1_generation_report, row_belongs_to_period
 from app.services.gsttool_parity_validator import compare_against_reference
 from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
