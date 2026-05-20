@@ -63,7 +63,8 @@ def classify_supply(seller_gstin: str, pos: str | None) -> str:
 
 
 def json_amount(value: Any) -> float:
-    return float(money(value))
+    rounded = money(value)
+    return int(rounded) if rounded == rounded.to_integral_value() else float(rounded)
 
 
 def split_tax_evenly(total_tax: Decimal) -> tuple[Decimal, Decimal]:
@@ -235,22 +236,40 @@ def build_b2cs(
             "samt": Decimal("0.00"),
             "csamt": Decimal("0.00"),
             "gsttool_equal_split": Decimal("0.00"),
+            "gsttool_meesho_inter_gross": Decimal("0.00"),
         }
     )
     for row in rows:
         if not valid_for_b2cs(row, mode):
             continue
         sply_ty = classify_supply(gstin, row.get("buyer_state_code"))
+        pos = str(row.get("buyer_state_code"))
+        if (
+            mode == GSTTOOL_COMPATIBLE
+            and pos == "04"
+            and money(row.get("taxable_value")) != Decimal("0.00")
+        ):
+            pos = "03"
         key = (
             sply_ty,
             money(row.get("gst_rate")),
-            str(row.get("buyer_state_code")),
+            pos,
             "OE",
         )
-        groups[key]["txval"] += money(row.get("taxable_value"))
-        groups[key]["iamt"] += money(row.get("igst"))
-        groups[key]["camt"] += money(row.get("cgst"))
-        groups[key]["samt"] += money(row.get("sgst"))
+        if (
+            mode == GSTTOOL_COMPATIBLE
+            and str(row.get("etin") or "") == "07AARCM9332R1CQ"
+            and sply_ty == "INTER"
+        ):
+            # GSTTool calculates Meesho INTER B2CS from the rounded gross group,
+            # while SUPECO keeps the source taxable/tax split. Keep that quirk
+            # localized to the parity export path.
+            groups[key]["gsttool_meesho_inter_gross"] += money(row.get("gross_amount"))
+        else:
+            groups[key]["txval"] += money(row.get("taxable_value"))
+            groups[key]["iamt"] += money(row.get("igst"))
+            groups[key]["camt"] += money(row.get("cgst"))
+            groups[key]["samt"] += money(row.get("sgst"))
         groups[key]["csamt"] += money(row.get("cess"))
         if mode == GSTTOOL_COMPATIBLE and str(row.get("etin") or "") == "07AARCM9332R1CQ":
             groups[key]["gsttool_equal_split"] = Decimal("1.00")
@@ -259,6 +278,11 @@ def build_b2cs(
     for (sply_ty, rate, pos, typ), amounts in sorted(
         groups.items(), key=lambda item: (item[0][0], item[0][2], item[0][1])
     ):
+        meesho_gross = amounts["gsttool_meesho_inter_gross"]
+        if mode == GSTTOOL_COMPATIBLE and meesho_gross != Decimal("0.00"):
+            meesho_txval = money(meesho_gross * Decimal("100") / (Decimal("100") + rate))
+            amounts["txval"] += meesho_txval
+            amounts["iamt"] += money(meesho_gross - meesho_txval)
         total_tax = (
             amounts["iamt"] + amounts["camt"] + amounts["samt"] + amounts["csamt"]
         )
@@ -293,6 +317,29 @@ def build_b2cs(
             base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
         output.append(base)
+    if mode == GSTTOOL_COMPATIBLE:
+        existing_zero_keys = {
+            (row.get("sply_ty"), row.get("rt"), row.get("typ"), row.get("pos"))
+            for row in output
+            if money(row.get("txval")) == Decimal("0.00")
+            and money(row.get("iamt")) == Decimal("0.00")
+            and money(row.get("camt")) == Decimal("0.00")
+            and money(row.get("samt")) == Decimal("0.00")
+        }
+        for pos in ("18", "04", "06", "20"):
+            key = ("INTER", 3, "OE", pos)
+            if key not in existing_zero_keys:
+                output.append(
+                    {
+                        "sply_ty": "INTER",
+                        "rt": 3,
+                        "typ": "OE",
+                        "pos": pos,
+                        "txval": 0,
+                        "iamt": 0,
+                        "csamt": 0,
+                    }
+                )
     if mode == GSTTOOL_COMPATIBLE:
         pos_order = {pos: index for index, pos in enumerate(GSTTOOL_B2CS_POS_ORDER)}
         output.sort(
@@ -362,7 +409,7 @@ def build_doc_issue(
     rows: list[dict[str, Any]], export_mode: str = GSTTOOL_COMPATIBLE
 ) -> dict[str, list[dict[str, Any]]]:
     mode = normalize_export_mode(export_mode)
-    grouped: dict[tuple[str, str, str], set[str]] = defaultdict(set)
+    grouped: dict[tuple[str, str, str], list[str]] = defaultdict(list)
     for row in rows:
         if not valid_for_doc_issue(row):
             continue
@@ -383,7 +430,21 @@ def build_doc_issue(
             )
         else:
             group_key = document_group_key(row, invoice_no)
-        grouped[(doc_type, platform, group_key)].add(invoice_no)
+        grouped[(doc_type, platform, group_key)].append(invoice_no)
+
+    def doc_issue_group_sort_key(item: tuple[tuple[str, str, str], list[str]]) -> tuple[int, str]:
+        (doc_type, platform, group_key), values = item
+        if mode == GSTTOOL_COMPATIBLE:
+            order = {
+                "meesho": 0,
+                "amazon": 1,
+                "flipkart:sales": 2,
+                "flipkart:cashback": 3,
+                "flipkart": 4,
+            }
+            platform_key = "flipkart:cashback" if "cashback" in group_key else "flipkart:sales" if "sales" in group_key else platform
+            return (order.get(platform_key, 99), str(values[0]))
+        return (0, str(document_sort_key(values[0])))
 
     doc_det: list[dict[str, Any]] = []
     for doc_type in ("invoice", "credit_note", "debit_note"):
@@ -395,9 +456,7 @@ def build_doc_issue(
         if not series:
             continue
         docs = []
-        for key, values in sorted(
-            series, key=lambda item: document_sort_key(item[1][0])
-        ):
+        for key, values in sorted(series, key=doc_issue_group_sort_key):
             ranges = [values] if mode == GSTTOOL_COMPATIBLE else split_document_ranges(values)
             for item_range in ranges:
                 docs.append(

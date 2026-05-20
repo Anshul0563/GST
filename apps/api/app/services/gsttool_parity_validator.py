@@ -66,6 +66,17 @@ def _section_counts(payload: dict[str, Any]) -> dict[str, int]:
 
 
 def _recursive_differences(reference: Any, generated: Any, path: str = "$") -> list[dict[str, Any]]:
+    if isinstance(reference, (int, float)) and isinstance(generated, (int, float)):
+        if _decimal(reference) != _decimal(generated):
+            return [
+                {
+                    "path": path,
+                    "type": "rounding",
+                    "reference": reference,
+                    "generated": generated,
+                }
+            ]
+        return []
     if type(reference) is not type(generated):
         return [
             {
@@ -107,17 +118,6 @@ def _recursive_differences(reference: Any, generated: Any, path: str = "$") -> l
         for index, (left, right) in enumerate(zip(reference, generated)):
             differences.extend(_recursive_differences(left, right, f"{path}[{index}]"))
         return differences
-    if isinstance(reference, (int, float)) and isinstance(generated, (int, float)):
-        if _decimal(reference) != _decimal(generated):
-            return [
-                {
-                    "path": path,
-                    "type": "rounding",
-                    "reference": reference,
-                    "generated": generated,
-                }
-            ]
-        return []
     if reference != generated:
         return [
             {
