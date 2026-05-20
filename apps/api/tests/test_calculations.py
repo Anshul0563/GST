@@ -9,7 +9,8 @@ from app.parsers.amazon import AmazonParser
 from app.parsers.flipkart import FlipkartParser
 from app.parsers.meesho import MeeshoParser
 from app.services.excel_export import write_gstr1_excel
-from app.services.gst import build_gstr1_json, gstr1_generation_report
+from app.services.gst import CLEAN_PORTAL, GSTTOOL_COMPATIBLE, build_gstr1_json, gstr1_generation_report
+from app.services.gsttool_parity_validator import compare_against_reference
 from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
 from app.services.validation import money
@@ -130,7 +131,7 @@ class GstCalculationTests(unittest.TestCase):
                 "invoice_no": "A2", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 346.67, "gst_rate": 3, "cgst": 5.2, "sgst": 5.2,
             }),
         ]
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
         intra = next(item for item in payload["b2cs"] if item["sply_ty"] == "INTRA")
 
         self.assertLessEqual(abs(Decimal(str(intra["camt"])) - Decimal(str(intra["samt"]))), Decimal("0.01"))
@@ -267,6 +268,61 @@ class GstCalculationTests(unittest.TestCase):
         ranges = [(item["from"], item["to"], item["totnum"]) for item in invoice_doc["docs"]]
         self.assertEqual(ranges, [("IN-5", "IN-6", 2), ("IN-8", "IN-9", 2)])
         self.assertEqual(gstr1_generation_report(payload, rows)["errors"], [])
+
+    def test_gsttool_mode_preserves_zero_b2cs_rows(self):
+        row = finalize_transaction({
+            "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
+            "invoice_no": "IN-ZERO", "doc_type": "invoice", "buyer_state_code": "18", "taxable_value": 0, "gst_rate": 3, "igst": 0,
+        })
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
+        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
+
+        self.assertEqual(payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "18", "txval": 0.0, "iamt": 0.0, "csamt": 0.0}])
+        self.assertEqual(clean_payload["b2cs"], [])
+
+    def test_gsttool_mode_merges_cross_prefix_document_ranges(self):
+        rows = [
+            finalize_transaction({
+                "platform": "flipkart", "source_file": "flipkart.xlsx:Sales Report", "gstin": "07ABCDE1234F1Z5", "etin": "07AACCF0683K1CU", "filing_period": "032026",
+                "invoice_no": invoice_no, "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+            })
+            for invoice_no in ("FAWRLX2600000080", "LWABOG7260000005")
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "032026", rows, GSTTOOL_COMPATIBLE)
+        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "032026", rows, CLEAN_PORTAL)
+        gsttool_ranges = payload["doc_issue"]["doc_det"][0]["docs"]
+        clean_ranges = clean_payload["doc_issue"]["doc_det"][0]["docs"]
+
+        self.assertEqual(gsttool_ranges, [{"num": 1, "from": "FAWRLX2600000080", "to": "LWABOG7260000005", "totnum": 2, "cancel": 0, "net_issue": 2}])
+        self.assertEqual(len(clean_ranges), 2)
+
+    def test_gsttool_mode_preserves_source_cgst_sgst_rounding(self):
+        row = finalize_transaction({
+            "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
+            "invoice_no": "A1", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 100, "gst_rate": 3, "cgst": 1.49, "sgst": 1.50,
+        })
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
+        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
+
+        self.assertEqual(payload["b2cs"][0]["camt"], 1.49)
+        self.assertEqual(payload["b2cs"][0]["samt"], 1.5)
+        self.assertEqual(clean_payload["b2cs"][0]["camt"], 1.5)
+        self.assertEqual(clean_payload["b2cs"][0]["samt"], 1.49)
+
+    def test_gsttool_parity_validator_matches_reference_json(self):
+        reference = {
+            "gstin": "07ABCDE1234F1Z5",
+            "fp": "032026",
+            "version": "GST3.1.6",
+            "hash": "hash",
+            "b2cs": [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "18", "txval": 0, "iamt": 0, "csamt": 0}],
+            "supeco": {"clttx": []},
+            "doc_issue": {"doc_det": [{"doc_num": 1, "doc_typ": "Invoices for outward supply", "docs": [{"num": 1, "from": "FAWRLX2600000080", "to": "LWABOG7260000005", "totnum": 2, "cancel": 0, "net_issue": 2}]}]},
+        }
+        report = compare_against_reference(reference, reference)
+
+        self.assertTrue(report["exact_match"])
+        self.assertEqual(report["match_score"], 100.0)
 
     def test_uploaded_platform_without_valid_rows_warns_without_zero_supeco(self):
         rows = [
