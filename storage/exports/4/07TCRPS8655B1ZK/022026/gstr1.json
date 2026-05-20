@@ -1,0 +1,192 @@
+{
+  "gstin": "07TCRPS8655B1ZK",
+  "fp": "022026",
+  "version": "GST3.1.6",
+  "hash": "hash",
+  "b2cs": [
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "37",
+      "txval": 90.29,
+      "iamt": 2.71,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "18",
+      "txval": 234.95,
+      "iamt": 7.05,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "18",
+      "txval": 0,
+      "iamt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "10",
+      "txval": 264.07,
+      "iamt": 7.93,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "04",
+      "txval": 0,
+      "iamt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "06",
+      "txval": 0,
+      "iamt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "20",
+      "txval": 0,
+      "iamt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "29",
+      "txval": 318.46,
+      "iamt": 9.54,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "27",
+      "txval": 126.21,
+      "iamt": 3.79,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "03",
+      "txval": 111.66,
+      "iamt": 3.35,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "33",
+      "txval": 113.59,
+      "iamt": 3.41,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "36",
+      "txval": 0,
+      "iamt": 0,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "19",
+      "txval": 0,
+      "iamt": 0,
+      "csamt": 0
+    }
+  ],
+  "supeco": {
+    "clttx": [
+      {
+        "etin": "07AACCF0683K1CU",
+        "suppval": 1127.19,
+        "igst": 33.81,
+        "cgst": 0,
+        "sgst": 0,
+        "cess": 0,
+        "flag": "N"
+      }
+    ]
+  },
+  "doc_issue": {
+    "doc_det": [
+      {
+        "doc_num": 1,
+        "doc_typ": "Invoices for outward supply",
+        "docs": [
+          {
+            "num": 1,
+            "from": "FAWRLX2600000063",
+            "to": "FAWRLX2600000079",
+            "totnum": 17,
+            "cancel": 0,
+            "net_issue": 17
+          }
+        ]
+      },
+      {
+        "doc_num": 5,
+        "doc_typ": "Credit Note",
+        "docs": [
+          {
+            "num": 1,
+            "from": "RAT6SO2600000021",
+            "to": "RAT6SO2600000027",
+            "totnum": 7,
+            "cancel": 0,
+            "net_issue": 7
+          },
+          {
+            "num": 2,
+            "from": "CANQ1W2600000008",
+            "to": "CANQ1W2600000012",
+            "totnum": 5,
+            "cancel": 0,
+            "net_issue": 5
+          }
+        ]
+      },
+      {
+        "doc_num": 4,
+        "doc_typ": "Debit Note",
+        "docs": [
+          {
+            "num": 1,
+            "from": "DAL84U2600000004",
+            "to": "DAL84U2600000004",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          }
+        ]
+      }
+    ]
+  }
+}
