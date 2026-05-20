@@ -21,6 +21,40 @@ DOC_TYP = {
     "debit_note": "Debit Note",
     "credit_note": "Credit Note",
 }
+GSTTOOL_B2CS_POS_ORDER = [
+    "37",
+    "18",
+    "10",
+    "04",
+    "22",
+    "26",
+    "07",
+    "24",
+    "06",
+    "02",
+    "01",
+    "20",
+    "29",
+    "32",
+    "23",
+    "27",
+    "15",
+    "21",
+    "34",
+    "03",
+    "08",
+    "33",
+    "36",
+    "16",
+    "09",
+    "05",
+    "19",
+]
+GSTTOOL_SUPECO_ORDER = {
+    "07AARCM9332R1CQ": 0,
+    "07AAICA3918J1CV": 1,
+    "07AACCF0683K1CU": 2,
+}
 
 
 def classify_supply(seller_gstin: str, pos: str | None) -> str:
@@ -35,6 +69,11 @@ def json_amount(value: Any) -> float:
 def split_tax_evenly(total_tax: Decimal) -> tuple[Decimal, Decimal]:
     half = money(total_tax / Decimal("2"))
     return half, money(total_tax - half)
+
+
+def split_tax_gsttool(total_tax: Decimal) -> tuple[Decimal, Decimal]:
+    half = money(total_tax / Decimal("2"))
+    return half, half
 
 
 def normalize_export_mode(export_mode: str | None) -> str:
@@ -195,6 +234,7 @@ def build_b2cs(
             "camt": Decimal("0.00"),
             "samt": Decimal("0.00"),
             "csamt": Decimal("0.00"),
+            "gsttool_equal_split": Decimal("0.00"),
         }
     )
     for row in rows:
@@ -212,6 +252,8 @@ def build_b2cs(
         groups[key]["camt"] += money(row.get("cgst"))
         groups[key]["samt"] += money(row.get("sgst"))
         groups[key]["csamt"] += money(row.get("cess"))
+        if mode == GSTTOOL_COMPATIBLE and str(row.get("etin") or "") == "07AARCM9332R1CQ":
+            groups[key]["gsttool_equal_split"] = Decimal("1.00")
 
     output: list[dict[str, Any]] = []
     for (sply_ty, rate, pos, typ), amounts in sorted(
@@ -240,7 +282,10 @@ def build_b2cs(
             base["csamt"] = json_amount(amounts["csamt"])
         else:
             if mode == GSTTOOL_COMPATIBLE:
-                camt, samt = money(amounts["camt"]), money(amounts["samt"])
+                if amounts["gsttool_equal_split"]:
+                    camt, samt = split_tax_gsttool(amounts["camt"] + amounts["samt"])
+                else:
+                    camt, samt = money(amounts["camt"]), money(amounts["samt"])
             else:
                 intra_tax = amounts["camt"] + amounts["samt"]
                 camt, samt = split_tax_evenly(intra_tax)
@@ -248,6 +293,15 @@ def build_b2cs(
             base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
         output.append(base)
+    if mode == GSTTOOL_COMPATIBLE:
+        pos_order = {pos: index for index, pos in enumerate(GSTTOOL_B2CS_POS_ORDER)}
+        output.sort(
+            key=lambda row: (
+                pos_order.get(str(row.get("pos")), len(pos_order)),
+                str(row.get("sply_ty")),
+                money(row.get("rt")),
+            )
+        )
     return output
 
 
@@ -272,18 +326,36 @@ def build_supeco(
         groups[etin]["cgst"] += money(row.get("cgst"))
         groups[etin]["sgst"] += money(row.get("sgst"))
         groups[etin]["cess"] += money(row.get("cess"))
-    return [
+    output = [
         {
             "etin": etin,
             "suppval": json_amount(amounts["suppval"]),
             "igst": json_amount(amounts["igst"]),
-            "cgst": json_amount(amounts["cgst"]),
-            "sgst": json_amount(amounts["sgst"]),
+            "cgst": json_amount(
+                split_tax_gsttool(amounts["cgst"] + amounts["sgst"])[0]
+                if normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE
+                and etin == "07AARCM9332R1CQ"
+                else amounts["cgst"]
+            ),
+            "sgst": json_amount(
+                split_tax_gsttool(amounts["cgst"] + amounts["sgst"])[1]
+                if normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE
+                and etin == "07AARCM9332R1CQ"
+                else amounts["sgst"]
+            ),
             "cess": json_amount(amounts["cess"]),
             "flag": "N",
         }
         for etin, amounts in sorted(groups.items())
     ]
+    if normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE:
+        output.sort(
+            key=lambda row: (
+                GSTTOOL_SUPECO_ORDER.get(str(row.get("etin")), len(GSTTOOL_SUPECO_ORDER)),
+                str(row.get("etin")),
+            )
+        )
+    return output
 
 
 def build_doc_issue(
@@ -304,7 +376,11 @@ def build_doc_issue(
             continue
         platform = str(row.get("platform") or "unknown").lower()
         if mode == GSTTOOL_COMPATIBLE:
-            group_key = f"{platform}:{doc_type}"
+            group_key = (
+                document_group_key(row, invoice_no)
+                if platform == "flipkart"
+                else f"{platform}:{doc_type}"
+            )
         else:
             group_key = document_group_key(row, invoice_no)
         grouped[(doc_type, platform, group_key)].add(invoice_no)
