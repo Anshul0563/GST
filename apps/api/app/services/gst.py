@@ -61,6 +61,8 @@ GSTTOOL_B2CS_FIELD_ADJUSTMENTS = {
     ("INTER", Decimal("3.00"), "32", "txval"): Decimal("0.01"),
     ("INTER", Decimal("3.00"), "03", "iamt"): Decimal("0.01"),
 }
+
+
 def classify_supply(seller_gstin: str, pos: str | None) -> str:
     seller_state = seller_gstin[:2]
     return "INTRA" if pos and seller_state == pos else "INTER"
@@ -95,7 +97,10 @@ def document_period(row: dict[str, Any]) -> str | None:
             "credit_note_date",
             "debit_note_date",
         )
-    value = next((row.get(field) for field in date_fields if row.get(field) not in (None, "")), None)
+    value = next(
+        (row.get(field) for field in date_fields if row.get(field) not in (None, "")),
+        None,
+    )
     if isinstance(value, datetime):
         value = value.date()
     if isinstance(value, date):
@@ -129,8 +134,17 @@ def document_date_value(row: dict[str, Any]) -> date | None:
     elif doc_type == "debit_note":
         date_fields = ("document_date", "debit_note_date", "doc_date", "invoice_date")
     else:
-        date_fields = ("document_date", "invoice_date", "doc_date", "credit_note_date", "debit_note_date")
-    value = next((row.get(field) for field in date_fields if row.get(field) not in (None, "")), None)
+        date_fields = (
+            "document_date",
+            "invoice_date",
+            "doc_date",
+            "credit_note_date",
+            "debit_note_date",
+        )
+    value = next(
+        (row.get(field) for field in date_fields if row.get(field) not in (None, "")),
+        None,
+    )
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
@@ -189,9 +203,7 @@ def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool
         return False
     if mode == GSTTOOL_COMPATIBLE:
         return True
-    return not (
-        taxable == Decimal("0.00") and total_tax == Decimal("0.00")
-    )
+    return not (taxable == Decimal("0.00") and total_tax == Decimal("0.00"))
 
 
 def valid_for_supeco(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool:
@@ -352,7 +364,10 @@ def build_b2cs(
             groups[key]["camt"] += money(row.get("cgst"))
             groups[key]["samt"] += money(row.get("sgst"))
         groups[key]["csamt"] += money(row.get("cess"))
-        if mode == GSTTOOL_COMPATIBLE and str(row.get("etin") or "") == "07AARCM9332R1CQ":
+        if (
+            mode == GSTTOOL_COMPATIBLE
+            and str(row.get("etin") or "") == "07AARCM9332R1CQ"
+        ):
             groups[key]["gsttool_equal_split"] = Decimal("1.00")
 
     output: list[dict[str, Any]] = []
@@ -361,7 +376,9 @@ def build_b2cs(
     ):
         meesho_gross = amounts["gsttool_meesho_inter_gross"]
         if mode == GSTTOOL_COMPATIBLE and meesho_gross != Decimal("0.00"):
-            meesho_txval = money(meesho_gross * Decimal("100") / (Decimal("100") + rate))
+            meesho_txval = money(
+                meesho_gross * Decimal("100") / (Decimal("100") + rate)
+            )
             amounts["txval"] += meesho_txval
             amounts["iamt"] += money(meesho_gross - meesho_txval)
         total_tax = (
@@ -406,7 +423,9 @@ def build_b2cs(
             (row.get("sply_ty"), money(row.get("rt")), row.get("pos"), row.get("typ"))
             for row in output
         }
-        for sply_ty, rate, pos, typ in sorted(remapped_zero_keys, key=lambda item: item[2]):
+        for sply_ty, rate, pos, typ in sorted(
+            remapped_zero_keys, key=lambda item: item[2]
+        ):
             if (sply_ty, rate, pos, typ) in existing_keys:
                 continue
             row = {
@@ -457,7 +476,9 @@ def build_supeco(
         groups[etin]["sgst"] += money(row.get("sgst"))
         groups[etin]["cess"] += money(row.get("cess"))
 
-    def gsttool_operator_cgst_sgst(etin: str, amounts: dict[str, Decimal]) -> tuple[Decimal, Decimal]:
+    def gsttool_operator_cgst_sgst(
+        etin: str, amounts: dict[str, Decimal]
+    ) -> tuple[Decimal, Decimal]:
         if mode != GSTTOOL_COMPATIBLE:
             return amounts["cgst"], amounts["sgst"]
         if etin == "07AARCM9332R1CQ":
@@ -490,7 +511,9 @@ def build_supeco(
     if mode == GSTTOOL_COMPATIBLE:
         output.sort(
             key=lambda row: (
-                GSTTOOL_SUPECO_ORDER.get(str(row.get("etin")), len(GSTTOOL_SUPECO_ORDER)),
+                GSTTOOL_SUPECO_ORDER.get(
+                    str(row.get("etin")), len(GSTTOOL_SUPECO_ORDER)
+                ),
                 str(row.get("etin")),
             )
         )
@@ -525,7 +548,9 @@ def build_doc_issue(
             group_key = document_group_key(row, invoice_no)
         grouped[(doc_type, platform, group_key)].append(invoice_no)
 
-    def doc_issue_group_sort_key(item: tuple[tuple[str, str, str], list[str]]) -> tuple[int, str]:
+    def doc_issue_group_sort_key(
+        item: tuple[tuple[str, str, str], list[str]],
+    ) -> tuple[int, str]:
         (doc_type, platform, group_key), values = item
         if mode == GSTTOOL_COMPATIBLE:
             order = {
@@ -535,7 +560,11 @@ def build_doc_issue(
                 "flipkart:cashback": 3,
                 "flipkart": 4,
             }
-            platform_key = "flipkart:cashback" if "cashback" in group_key else "flipkart:sales" if "sales" in group_key else platform
+            platform_key = (
+                "flipkart:cashback"
+                if "cashback" in group_key
+                else "flipkart:sales" if "sales" in group_key else platform
+            )
             return (order.get(platform_key, 99), str(values[0]))
         return (0, str(document_sort_key(values[0])))
 
@@ -561,7 +590,11 @@ def build_doc_issue(
             if not valid_values:
                 continue
             range_values = sorted(set(valid_values), key=document_sort_key)
-            ranges = [range_values] if mode == GSTTOOL_COMPATIBLE else split_document_ranges(range_values)
+            ranges = (
+                [range_values]
+                if mode == GSTTOOL_COMPATIBLE
+                else split_document_ranges(range_values)
+            )
             for item_range in ranges:
                 if mode == GSTTOOL_COMPATIBLE:
                     if key[1] == "amazon":
@@ -810,12 +843,22 @@ def gstr1_generation_report(
     }
 
 
-def period_filter_debug(source_rows: list[dict[str, Any]], period: str) -> dict[str, Any]:
+def period_filter_debug(
+    source_rows: list[dict[str, Any]], period: str
+) -> dict[str, Any]:
     debug: dict[str, Any] = {}
-    for platform in sorted({str(row.get("platform") or "unknown") for row in source_rows}):
-        platform_rows = [row for row in source_rows if str(row.get("platform") or "unknown") == platform]
+    for platform in sorted(
+        {str(row.get("platform") or "unknown") for row in source_rows}
+    ):
+        platform_rows = [
+            row
+            for row in source_rows
+            if str(row.get("platform") or "unknown") == platform
+        ]
         included = [row for row in platform_rows if row_belongs_to_period(row, period)]
-        excluded = [row for row in platform_rows if not row_belongs_to_period(row, period)]
+        excluded = [
+            row for row in platform_rows if not row_belongs_to_period(row, period)
+        ]
         debug[platform] = {
             "included": period_filter_bucket_debug(included),
             "excluded": period_filter_bucket_debug(excluded),
@@ -832,7 +875,8 @@ def period_filter_bucket_debug(rows: list[dict[str, Any]]) -> dict[str, Any]:
             {
                 str(row.get("invoice_no") or "")
                 for row in rows
-                if str(row.get("doc_type") or "").lower() == doc_type and row.get("invoice_no")
+                if str(row.get("doc_type") or "").lower() == doc_type
+                and row.get("invoice_no")
             },
             key=document_sort_key,
         )
@@ -858,12 +902,7 @@ def build_gstr1_json(
     export_mode: str = GSTTOOL_COMPATIBLE,
 ) -> dict:
     mode = normalize_export_mode(export_mode)
-    valid_rows = [
-        row
-        for row in rows
-        if row_belongs_to_period(row, period)
-        and valid_for_b2cs(row, mode)
-    ]
+    valid_rows = [row for row in rows if row_belongs_to_period(row, period)]
 
     b2cs = build_b2cs(gstin, valid_rows, mode)
     supeco_rows = build_supeco(valid_rows, mode)
