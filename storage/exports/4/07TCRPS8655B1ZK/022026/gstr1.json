@@ -26,27 +26,9 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
-      "pos": "18",
-      "txval": 0,
-      "iamt": 0,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
       "pos": "10",
       "txval": 264.07,
       "iamt": 7.93,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "04",
-      "txval": 0,
-      "iamt": 0,
       "csamt": 0
     },
     {
@@ -72,27 +54,9 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
-      "pos": "06",
-      "txval": 0,
-      "iamt": 0,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
       "pos": "02",
       "txval": 200,
       "iamt": 6,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "20",
-      "txval": 0,
-      "iamt": 0,
       "csamt": 0
     },
     {
@@ -153,6 +117,24 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
+      "pos": "36",
+      "txval": -348.54,
+      "iamt": -10.46,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "09",
+      "txval": 114.56,
+      "iamt": 3.44,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
       "pos": "19",
       "txval": 0,
       "iamt": 0,
@@ -190,8 +172,8 @@
       },
       {
         "etin": "07AACCF0683K1CU",
-        "suppval": 1127.19,
-        "igst": 33.81,
+        "suppval": 1259.23,
+        "igst": 37.77,
         "cgst": 0,
         "sgst": 0,
         "cess": 0,
@@ -245,11 +227,11 @@
           },
           {
             "num": 2,
-            "from": "RAT6SO2600000021",
+            "from": "RAT6SO2600000022",
             "to": "RAT6SO2600000027",
-            "totnum": 7,
+            "totnum": 6,
             "cancel": 0,
-            "net_issue": 7
+            "net_issue": 6
           },
           {
             "num": 3,
