@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.parsers.base import MarketplaceParser, ParseResult, clean_column, should_skip_transaction
+from app.parsers.base import MarketplaceParser, ParseResult, clean_column, has_explicit_tax_split, should_skip_transaction
 from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
 from app.services.transaction_normalizer import finalize_transaction
 
@@ -20,6 +20,8 @@ class AmazonParser(MarketplaceParser):
                 for index, series in frame.iterrows():
                     row = series.to_dict()
                     txn = self.normalize_row(row, path.name)
+                    if has_explicit_tax_split(row):
+                        txn["_preserve_source_tax_split"] = True
                     type_blob = " ".join(str(row.get(key, "")) for key in row.keys()).lower()
                     if "refund" in type_blob:
                         txn["doc_type"] = "credit_note"

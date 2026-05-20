@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.parsers.base import MarketplaceParser, ParseResult, clean_column, dataframe_from_excel, should_skip_transaction
+from app.parsers.base import MarketplaceParser, ParseResult, clean_column, dataframe_from_excel, has_explicit_tax_split, should_skip_transaction
 from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
 from app.services.transaction_normalizer import finalize_transaction
 
@@ -21,8 +21,11 @@ class CustomExcelParser(MarketplaceParser):
                 else:
                     frame = dataframe_from_excel(path)
                 for index, series in frame.iterrows():
-                    txn = self.normalize_row(series.to_dict(), path.name)
-                    observe_pos_debug(result.debug, int(index) + 2, resolve_pos(series.to_dict(), txn, self.platform), series.to_dict())
+                    row = series.to_dict()
+                    txn = self.normalize_row(row, path.name)
+                    if has_explicit_tax_split(row):
+                        txn["_preserve_source_tax_split"] = True
+                    observe_pos_debug(result.debug, int(index) + 2, resolve_pos(row, txn, self.platform), row)
                     if should_skip_transaction(txn):
                         continue
                     result.transactions.append(finalize_transaction(txn))

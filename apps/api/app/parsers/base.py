@@ -129,6 +129,23 @@ def should_skip_transaction(txn: dict[str, Any]) -> bool:
     return all(money(txn.get(field)) == 0 for field in amount_fields)
 
 
+def has_explicit_tax_split(row: dict[str, Any]) -> bool:
+    keys = {clean_column(key) for key in row.keys()}
+    split_markers = (
+        "igst amount",
+        "igst tax",
+        "integrated tax",
+        "cgst amount",
+        "cgst tax",
+        "central tax",
+        "sgst amount",
+        "sgst tax",
+        "state tax",
+        "utgst",
+    )
+    return any(any(marker in key for marker in split_markers) for key in keys)
+
+
 def first_value(row: dict[str, Any], candidates: list[str]) -> Any:
     lowered = {clean_column(k): v for k, v in row.items()}
     for candidate in candidates:

@@ -61,6 +61,12 @@ def normalize_tax_split(txn: dict) -> dict:
     txn = dict(txn)
     txn["gst_rate"] = infer_rate(txn)
     txn = apply_doc_sign(txn)
+    if txn.get("_preserve_source_tax_split"):
+        txn["igst"] = money(txn.get("igst"))
+        txn["cgst"] = money(txn.get("cgst"))
+        txn["sgst"] = money(txn.get("sgst"))
+        txn["cess"] = money(txn.get("cess"))
+        return txn
     supply_type = classify_supply(str(txn.get("gstin", "")), txn.get("buyer_state_code"))
     taxable = money(txn.get("taxable_value"))
     rate = money(txn.get("gst_rate"))
@@ -84,11 +90,15 @@ def normalize_tax_split(txn: dict) -> dict:
 
 def finalize_transaction(txn: dict) -> dict:
     preserve_source_sign = bool(txn.pop("_preserve_source_sign", False))
+    preserve_source_tax_split = bool(txn.pop("_preserve_source_tax_split", False))
     txn["doc_type"] = str(txn.get("doc_type") or "invoice").lower()
     if preserve_source_sign:
         txn["_preserve_source_sign"] = True
+    if preserve_source_tax_split:
+        txn["_preserve_source_tax_split"] = True
     txn = normalize_tax_split(txn)
     txn.pop("_preserve_source_sign", None)
+    txn.pop("_preserve_source_tax_split", None)
     if isinstance(txn.get("invoice_date"), str):
         text_value = txn["invoice_date"].strip()
         dayfirst = not text_value[:4].isdigit()
