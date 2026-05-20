@@ -104,6 +104,7 @@ class NormalizedTransaction(Base):
     order_item_id: Mapped[str | None] = mapped_column(String(120))
     invoice_no: Mapped[str | None] = mapped_column(String(120), index=True)
     invoice_date: Mapped[datetime | None] = mapped_column(Date)
+    document_date: Mapped[datetime | None] = mapped_column(Date)
     doc_type: Mapped[str] = mapped_column(String(20), default="invoice")
     buyer_state_code: Mapped[str | None] = mapped_column(String(2), index=True)
     buyer_state_name: Mapped[str | None] = mapped_column(String(80))

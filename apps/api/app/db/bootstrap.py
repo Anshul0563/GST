@@ -83,6 +83,20 @@ def run_lightweight_migrations(engine) -> None:
                         """
                     )
                 )
+    if "normalized_transactions" in inspector.get_table_names():
+        transaction_columns = {column["name"] for column in inspector.get_columns("normalized_transactions")}
+        with engine.begin() as connection:
+            if "document_date" not in transaction_columns:
+                connection.execute(text("ALTER TABLE normalized_transactions ADD COLUMN document_date DATE"))
+                connection.execute(
+                    text(
+                        """
+                        UPDATE normalized_transactions
+                        SET document_date = invoice_date
+                        WHERE document_date IS NULL
+                        """
+                    )
+                )
 
 
 def seed_super_admin() -> None:

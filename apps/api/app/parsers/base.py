@@ -40,19 +40,12 @@ class MarketplaceParser:
         raise NotImplementedError
 
     def normalize_row(self, row: dict[str, Any], source_file: str) -> dict:
-        raw_date = first_value(
+        raw_invoice_date = first_value(
             row,
             [
-                "credit_note_date",
-                "credit note date",
-                "debit_note_date",
-                "debit note date",
-                "cancel return date",
-                "return date",
-                "document date",
-                "doc date",
                 "invoice_date",
                 "invoice date",
+                "buyer invoice date",
                 "invoice generated date",
                 "shipment date",
                 "order date",
@@ -66,6 +59,39 @@ class MarketplaceParser:
             doc_type = "debit_note"
         else:
             doc_type = "invoice"
+        if doc_type == "credit_note":
+            raw_document_date = first_value(
+                row,
+                [
+                    "credit_note_date",
+                    "credit note date",
+                    "cancel return date",
+                    "return date",
+                    "document date",
+                    "doc date",
+                    "invoice_date",
+                    "invoice date",
+                    "buyer invoice date",
+                    "order date",
+                ],
+            )
+        elif doc_type == "debit_note":
+            raw_document_date = first_value(
+                row,
+                [
+                    "debit_note_date",
+                    "debit note date",
+                    "document date",
+                    "doc date",
+                    "invoice_date",
+                    "invoice date",
+                    "buyer invoice date",
+                    "order date",
+                ],
+            )
+        else:
+            raw_document_date = raw_invoice_date
+        document_date = parse_date(raw_document_date)
         txn = {
             "platform": self.platform,
             "gstin": self.gstin,
@@ -87,7 +113,8 @@ class MarketplaceParser:
                 "doc no",
                 "voucher no",
             ])),
-            "invoice_date": parse_date(raw_date),
+            "invoice_date": parse_date(raw_invoice_date),
+            "document_date": document_date,
             "doc_type": doc_type,
             "buyer_state_code": text(first_value(row, ["buyer_state_code", "state code", "gst state code"])),
             "buyer_state_name": text(first_value(row, ["buyer_state_name", "state name", "gst state"])),

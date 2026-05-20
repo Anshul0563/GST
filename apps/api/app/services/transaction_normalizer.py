@@ -104,6 +104,11 @@ def finalize_transaction(txn: dict) -> dict:
         dayfirst = not text_value[:4].isdigit()
         parsed = pd.to_datetime(text_value, errors="coerce", dayfirst=dayfirst)
         txn["invoice_date"] = None if pd.isna(parsed) else parsed.date()
+    if isinstance(txn.get("document_date"), str):
+        text_value = txn["document_date"].strip()
+        dayfirst = not text_value[:4].isdigit()
+        parsed = pd.to_datetime(text_value, errors="coerce", dayfirst=dayfirst)
+        txn["document_date"] = None if pd.isna(parsed) else parsed.date()
     errors = validate_transaction(txn)
     zero_only = errors and all(error in {"Zero amount row", "Zero rate and zero taxable row"} for error in errors)
     txn["validation_status"] = "skipped" if zero_only else "invalid" if errors else "valid"

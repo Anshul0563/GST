@@ -75,22 +75,22 @@ def document_period(row: dict[str, Any]) -> str | None:
     doc_type = str(row.get("doc_type") or "").lower()
     if doc_type == "credit_note":
         date_fields = (
-            "credit_note_date",
             "document_date",
+            "credit_note_date",
             "doc_date",
             "invoice_date",
         )
     elif doc_type == "debit_note":
         date_fields = (
-            "debit_note_date",
             "document_date",
+            "debit_note_date",
             "doc_date",
             "invoice_date",
         )
     else:
         date_fields = (
-            "invoice_date",
             "document_date",
+            "invoice_date",
             "doc_date",
             "credit_note_date",
             "debit_note_date",
@@ -120,6 +120,30 @@ def row_belongs_to_period(row: dict[str, Any], period: str) -> bool:
     if row_period is None:
         row_period = str(row.get("filing_period") or "")
     return row_period == str(period)
+
+
+def document_date_value(row: dict[str, Any]) -> date | None:
+    doc_type = str(row.get("doc_type") or "").lower()
+    if doc_type == "credit_note":
+        date_fields = ("document_date", "credit_note_date", "doc_date", "invoice_date")
+    elif doc_type == "debit_note":
+        date_fields = ("document_date", "debit_note_date", "doc_date", "invoice_date")
+    else:
+        date_fields = ("document_date", "invoice_date", "doc_date", "credit_note_date", "debit_note_date")
+    value = next((row.get(field) for field in date_fields if row.get(field) not in (None, "")), None)
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(text[:19], fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def split_tax_evenly(total_tax: Decimal) -> tuple[Decimal, Decimal]:
@@ -721,6 +745,7 @@ def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
 def gstr1_generation_report(
     payload: dict[str, Any], source_rows: list[dict[str, Any]]
 ) -> dict[str, Any]:
+    period = str(payload.get("fp") or "")
     uploaded_platforms = sorted(
         {
             str(row.get("platform") or "unknown")
@@ -728,7 +753,8 @@ def gstr1_generation_report(
             if row.get("platform")
         }
     )
-    valid_rows = [row for row in source_rows if valid_for_b2cs(row)]
+    period_rows = [row for row in source_rows if row_belongs_to_period(row, period)]
+    valid_rows = [row for row in period_rows if valid_for_b2cs(row)]
     valid_by_platform = {
         platform: sum(1 for row in valid_rows if row.get("platform") == platform)
         for platform in uploaded_platforms
@@ -777,9 +803,51 @@ def gstr1_generation_report(
     return {
         "uploaded_platforms": uploaded_platforms,
         "valid_rows_per_platform": valid_by_platform,
+        "period_filter": period_filter_debug(source_rows, period),
         "supeco_etins": supeco_etins,
         "warnings": warnings,
         "errors": errors,
+    }
+
+
+def period_filter_debug(source_rows: list[dict[str, Any]], period: str) -> dict[str, Any]:
+    debug: dict[str, Any] = {}
+    for platform in sorted({str(row.get("platform") or "unknown") for row in source_rows}):
+        platform_rows = [row for row in source_rows if str(row.get("platform") or "unknown") == platform]
+        included = [row for row in platform_rows if row_belongs_to_period(row, period)]
+        excluded = [row for row in platform_rows if not row_belongs_to_period(row, period)]
+        debug[platform] = {
+            "included": period_filter_bucket_debug(included),
+            "excluded": period_filter_bucket_debug(excluded),
+        }
+    return debug
+
+
+def period_filter_bucket_debug(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    dated = [(document_date_value(row), row) for row in rows]
+    dates = sorted(value for value, _ in dated if value is not None)
+
+    def first_last(doc_type: str) -> dict[str, str | None]:
+        values = sorted(
+            {
+                str(row.get("invoice_no") or "")
+                for row in rows
+                if str(row.get("doc_type") or "").lower() == doc_type and row.get("invoice_no")
+            },
+            key=document_sort_key,
+        )
+        return {
+            "first": values[0] if values else None,
+            "last": values[-1] if values else None,
+        }
+
+    return {
+        "rows": len(rows),
+        "date_from": dates[0].isoformat() if dates else None,
+        "date_to": dates[-1].isoformat() if dates else None,
+        "invoice_no": first_last("invoice"),
+        "credit_note_no": first_last("credit_note"),
+        "debit_note_no": first_last("debit_note"),
     }
 
 

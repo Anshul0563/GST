@@ -75,6 +75,7 @@ class TransactionOut(BaseModel):
     order_item_id: str | None
     invoice_no: str | None
     invoice_date: date | None
+    document_date: date | None = None
     doc_type: str
     buyer_state_code: str | None
     buyer_state_name: str | None
