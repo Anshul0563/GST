@@ -69,9 +69,19 @@ export type Gstr1Payload = {
   doc_issue: { doc_det: Array<Record<string, unknown>> };
 };
 
+export type Gstr1ExportMode = "gsttool_compatible" | "clean_portal";
+
+export type Gstr1ParityReport = {
+  match_score: number;
+  exact_match: boolean;
+  differences: Array<Record<string, unknown>>;
+} | null;
+
 export type Gstr1PreviewResponse = {
   can_generate: boolean;
   validation_blockers: number;
+  export_mode?: Gstr1ExportMode;
+  parity_report?: Gstr1ParityReport;
   preview: Gstr1Payload;
 };
 
@@ -274,8 +284,13 @@ export function getTransactions(token: string, profile: Profile) {
   return request<Transaction[]>(`/transactions?profile_id=${profile.id}&period=${profile.return_period}`, {}, token);
 }
 
-export async function getGstrPreview(token: string, profile: Profile) {
-  const result = await request<Gstr1Payload | Gstr1PreviewResponse>(`/gstr1/preview/${profile.return_period}?profile_id=${profile.id}`, {}, token);
+export async function getGstrPreviewResponse(token: string, profile: Profile, exportMode: Gstr1ExportMode = "gsttool_compatible") {
+  const result = await request<Gstr1Payload | Gstr1PreviewResponse>(`/gstr1/preview/${profile.return_period}?profile_id=${profile.id}&export_mode=${exportMode}`, {}, token);
+  return "preview" in result ? result : { can_generate: true, validation_blockers: 0, export_mode: exportMode, parity_report: null, preview: result };
+}
+
+export async function getGstrPreview(token: string, profile: Profile, exportMode: Gstr1ExportMode = "gsttool_compatible") {
+  const result = await getGstrPreviewResponse(token, profile, exportMode);
   return "preview" in result ? result.preview : result;
 }
 
@@ -317,10 +332,10 @@ export function deleteTransaction(token: string, transactionId: number) {
   return request<{ ok: boolean }>(`/transactions/${transactionId}`, { method: "DELETE" }, token);
 }
 
-export function generateGstr1(token: string, profile: Profile) {
-  return request<{ status: string; json: Gstr1Payload; report?: Record<string, unknown>; download_json: string; download_excel: string }>("/gstr1/generate", {
+export function generateGstr1(token: string, profile: Profile, exportMode: Gstr1ExportMode = "gsttool_compatible") {
+  return request<{ status: string; export_mode?: Gstr1ExportMode; json: Gstr1Payload; report?: Record<string, unknown>; parity_report?: Gstr1ParityReport; download_json: string; download_excel: string }>("/gstr1/generate", {
     method: "POST",
-    body: JSON.stringify({ profile_id: profile.id, period: profile.return_period })
+    body: JSON.stringify({ profile_id: profile.id, period: profile.return_period, export_mode: exportMode })
   }, token);
 }
 

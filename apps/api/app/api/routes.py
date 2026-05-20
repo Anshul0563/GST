@@ -56,7 +56,13 @@ from app.services.billing import (
     verify_razorpay_signature,
 )
 from app.services.excel_export import write_gstr1_excel
-from app.services.gst import build_gstr1_json, gstr1_generation_report
+from app.services.gst import (
+    CLEAN_PORTAL,
+    build_gstr1_json,
+    gstr1_generation_report,
+    normalize_export_mode,
+)
+from app.services.gsttool_parity_validator import compare_against_reference
 from app.services.reconciliation import (
     ReconSettings,
     normalize_rows,
@@ -1087,6 +1093,22 @@ def validation_error_count(
     return len(rows)
 
 
+def load_reference_gstr1(gstin: str, period: str) -> dict | None:
+    candidates = [
+        Path(f"/home/jarvis/Downloads/GSTR1_returns_{gstin}_monthly_{period}.json"),
+        Path(f"/home/jarvis/Downloads/gstr1-{period}.json"),
+        Path(f"exports/gst_bharat_gstr1_{gstin}_{period}.json"),
+    ]
+    for path in candidates:
+        if not path.exists():
+            continue
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+    return None
+
+
 @router.post("/gstr1/generate")
 def generate_gstr1(
     payload: GenerateGSTR1In,
@@ -1102,11 +1124,18 @@ def generate_gstr1(
             422,
             f"Resolve {blockers} validation error rows before generating GSTR-1 JSON",
         )
-    rows = transaction_dicts(user.id, profile.id, payload.period, db, valid_only=True)
-    gstr = build_gstr1_json(profile.gstin, payload.period, rows)
+    export_mode = normalize_export_mode(payload.export_mode)
+    rows = transaction_dicts(
+        user.id,
+        profile.id,
+        payload.period,
+        db,
+        valid_only=export_mode == CLEAN_PORTAL,
+    )
+    gstr = build_gstr1_json(profile.gstin, payload.period, rows, export_mode)
     final_validation = validate_gstr1_export(gstr)
 
-    if not final_validation["valid"]:
+    if export_mode == CLEAN_PORTAL and not final_validation["valid"]:
         raise HTTPException(
             422,
             {
@@ -1116,7 +1145,7 @@ def generate_gstr1(
             },
         )
     generation_report = gstr1_generation_report(gstr, rows)
-    if generation_report["errors"]:
+    if export_mode == CLEAN_PORTAL and generation_report["errors"]:
         raise HTTPException(
             422,
             {
@@ -1149,7 +1178,13 @@ def generate_gstr1(
     return {
         "status": "generated",
         "json": gstr,
+        "export_mode": export_mode,
         "report": generation_report,
+        "parity_report": (
+            compare_against_reference(reference, gstr)
+            if (reference := load_reference_gstr1(profile.gstin, payload.period))
+            else None
+        ),
         "download_json": f"/gstr1/export/{export.id}",
         "download_excel": f"/gstr1/export/{export.id}?format=xlsx",
     }
@@ -1210,6 +1245,7 @@ def gstr1_export_download(
 def preview_gstr1(
     period: str,
     profile_id: int,
+    export_mode: str = "gsttool_compatible",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1218,12 +1254,13 @@ def preview_gstr1(
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
 
+    mode = normalize_export_mode(export_mode)
     rows = transaction_dicts(
         user.id,
         profile.id,
         period,
         db,
-        valid_only=True,
+        valid_only=mode == CLEAN_PORTAL,
     )
 
     blockers = validation_error_count(
@@ -1237,11 +1274,15 @@ def preview_gstr1(
         profile.gstin,
         period,
         rows,
+        mode,
     )
+    reference = load_reference_gstr1(profile.gstin, period)
 
     return {
         "can_generate": blockers == 0,
         "validation_blockers": blockers,
+        "export_mode": mode,
+        "parity_report": compare_against_reference(reference, preview) if reference else None,
         "preview": preview,
     }
 
