@@ -103,7 +103,7 @@ export function useWorkspace(): Workspace {
         base ? Promise.resolve(base.profiles) : listProfiles(activeToken),
         needs.summary ? getSummary(activeToken, activeProfile) : Promise.resolve(null),
         needs.transactions ? getTransactions(activeToken, activeProfile) : Promise.resolve([]),
-        needs.batches ? listImportBatches(activeToken, activeProfile.id) : Promise.resolve([]),
+        needs.batches ? listImportBatches(activeToken, activeProfile) : Promise.resolve([]),
         needs.preview ? getGstrPreview(activeToken, activeProfile) : Promise.resolve(null),
         needs.companies ? listTallyCompanies(activeToken, activeProfile.id) : Promise.resolve([])
       ]);

@@ -88,6 +88,7 @@ export type Gstr1PreviewResponse = {
 export type BatchStatus = {
   id: number;
   platform: string;
+  period?: string | null;
   status: string;
   parsed_rows: number;
   error_rows: number;
@@ -302,14 +303,18 @@ export function updateProfile(token: string, profileId: number, payload: Omit<Pr
   return request<Profile>(`/gst-profile/${profileId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
 }
 
-export function uploadMarketplaceFiles(token: string, profileId: number, platform: string, files: FileList | File[]) {
+export function uploadMarketplaceFiles(token: string, profile: Profile, platform: string, files: FileList | File[]) {
   const form = new FormData();
   Array.from(files).forEach((file) => form.append("files", file));
-  return request<BatchStatus>(`/imports/${platform}/upload?profile_id=${profileId}`, { method: "POST", body: form }, token);
+  return request<BatchStatus>(`/imports/${platform}/upload?profile_id=${profile.id}&period=${profile.return_period}`, { method: "POST", body: form }, token);
 }
 
-export function listImportBatches(token: string, profileId?: number) {
-  return request<BatchStatus[]>(`/imports${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
+export function listImportBatches(token: string, profile?: Profile) {
+  return request<BatchStatus[]>(
+    `/imports${profile ? `?profile_id=${profile.id}&period=${profile.return_period}` : ""}`,
+    {},
+    token
+  );
 }
 
 export function getImportStatus(token: string, batchId: number) {

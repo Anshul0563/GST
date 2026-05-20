@@ -437,6 +437,7 @@ def seed_demo(user: User = Depends(get_current_user), db: Session = Depends(get_
     batch = PlatformImportBatch(
         user_id=user.id,
         profile_id=profile.id,
+        period=profile.return_period,
         platform="demo",
         status="completed",
         parsed_rows=6,
@@ -623,8 +624,8 @@ async def upload_import(
     platform: str,
     background_tasks: BackgroundTasks,
     profile_id: int,
-    period: str | None = None,
     files: list[UploadFile] = File(...),
+    period: str | None = None,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -703,9 +704,9 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         db.commit()
         parser = get_parser(batch.platform)(profile.gstin, batch.period or profile.return_period)
         result = parser.parse([Path(path) for path in file_paths])
-        seen_keys: set[tuple[int, str | None, str | None, str | None, str | None]] = (
-            set()
-        )
+        seen_keys: set[
+            tuple[int, str | None, str | None, str | None, str | None, str | None]
+        ] = set()
         inserted_rows = 0
         validation_error_rows = 0
         for txn in result.transactions:

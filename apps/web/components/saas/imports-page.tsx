@@ -40,7 +40,7 @@ export function ImportsPage() {
       return;
     }
     setProgress("Uploading files securely...");
-    const batch = await uploadMarketplaceFiles(workspace.token, workspace.profile.id, selected.key, files);
+    const batch = await uploadMarketplaceFiles(workspace.token, workspace.profile, selected.key, files);
     setActiveBatch(batch);
     setProgress(`Batch ${batch.id} queued. Parser is reading files...`);
     for (let index = 0; index < 8; index += 1) {
@@ -122,8 +122,9 @@ export function ImportsPage() {
           {workspace.batches.length ? <div className="space-y-3">{workspace.batches.map((batch) => {
             const busy = deletingId === batch.id;
             const locked = ["queued", "processing"].includes(batch.status);
-            return <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto_auto_auto]">
+            return <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]">
               <b className="capitalize">{batch.platform}</b>
+              <span>{batch.period || workspace.profile?.return_period || "--"}</span>
               <span>{batch.parsed_rows} parsed</span>
               <span>{batch.error_rows} errors</span>
               <StatusPill status={batch.status} />
