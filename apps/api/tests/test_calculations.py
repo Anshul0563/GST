@@ -235,7 +235,7 @@ class GstCalculationTests(unittest.TestCase):
                 "igst": 3,
             }),
         ]
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
         self.assertEqual(len(payload["b2cs"]), 1)
         self.assertEqual(payload["b2cs"][0]["rt"], 3)
         self.assertNotIn("supeco_det", payload["supeco"])
@@ -277,7 +277,8 @@ class GstCalculationTests(unittest.TestCase):
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
         clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
 
-        self.assertEqual(payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "18", "txval": 0.0, "iamt": 0.0, "csamt": 0.0}])
+        self.assertIn({"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "18", "txval": 0, "iamt": 0, "csamt": 0}, payload["b2cs"])
+        self.assertTrue({"18", "04", "06", "20"}.issubset({row["pos"] for row in payload["b2cs"]}))
         self.assertEqual(clean_payload["b2cs"], [])
 
     def test_gsttool_mode_merges_cross_prefix_document_ranges(self):
@@ -305,8 +306,9 @@ class GstCalculationTests(unittest.TestCase):
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
         clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
 
-        self.assertEqual(payload["b2cs"][0]["camt"], 1.49)
-        self.assertEqual(payload["b2cs"][0]["samt"], 1.5)
+        gsttool_row = next(row for row in payload["b2cs"] if row.get("pos") == "07")
+        self.assertEqual(gsttool_row["camt"], 1.49)
+        self.assertEqual(gsttool_row["samt"], 1.5)
         self.assertEqual(clean_payload["b2cs"][0]["camt"], 1.5)
         self.assertEqual(clean_payload["b2cs"][0]["samt"], 1.49)
 

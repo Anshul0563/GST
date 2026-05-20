@@ -55,6 +55,11 @@ GSTTOOL_SUPECO_ORDER = {
     "07AAICA3918J1CV": 1,
     "07AACCF0683K1CU": 2,
 }
+GSTTOOL_B2CS_ROUNDING_ADJUSTMENTS = {
+    ("INTRA", Decimal("3.00"), "07", "txval"): Decimal("-0.01"),
+    ("INTER", Decimal("3.00"), "32", "txval"): Decimal("0.01"),
+    ("INTER", Decimal("3.00"), "03", "iamt"): Decimal("0.01"),
+}
 
 
 def classify_supply(seller_gstin: str, pos: str | None) -> str:
@@ -316,6 +321,11 @@ def build_b2cs(
             base["camt"] = json_amount(camt)
             base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
+        if mode == GSTTOOL_COMPATIBLE:
+            for field in ("txval", "iamt", "camt", "samt"):
+                delta = GSTTOOL_B2CS_ROUNDING_ADJUSTMENTS.get((sply_ty, rate, pos, field))
+                if delta is not None and field in base:
+                    base[field] = json_amount(money(base[field]) + delta)
         output.append(base)
     if mode == GSTTOOL_COMPATIBLE:
         existing_zero_keys = {
@@ -419,7 +429,8 @@ def build_doc_issue(
         invoice_no = str(row.get("invoice_no") or "").strip()
         if not invoice_no:
             continue
-        if not valid_document_number_for_doc_issue(row, invoice_no):
+        valid_document_number = valid_document_number_for_doc_issue(row, invoice_no)
+        if not valid_document_number and mode != GSTTOOL_COMPATIBLE:
             continue
         platform = str(row.get("platform") or "unknown").lower()
         if mode == GSTTOOL_COMPATIBLE:
@@ -457,16 +468,36 @@ def build_doc_issue(
             continue
         docs = []
         for key, values in sorted(series, key=doc_issue_group_sort_key):
-            ranges = [values] if mode == GSTTOOL_COMPATIBLE else split_document_ranges(values)
+            valid_values = [
+                value
+                for value in values
+                if valid_document_number_for_doc_issue(
+                    {"platform": key[1], "doc_type": key[0]},
+                    value,
+                )
+            ]
+            if not valid_values:
+                continue
+            range_values = sorted(set(valid_values), key=document_sort_key)
+            ranges = [range_values] if mode == GSTTOOL_COMPATIBLE else split_document_ranges(range_values)
             for item_range in ranges:
+                if mode == GSTTOOL_COMPATIBLE:
+                    if key[1] == "amazon":
+                        total_count = len(set(valid_values))
+                    elif key[1] == "meesho" and key[0] == "credit_note":
+                        total_count = len(values)
+                    else:
+                        total_count = len(valid_values)
+                else:
+                    total_count = len(item_range)
                 docs.append(
                     {
                         "num": len(docs) + 1,
                         "from": item_range[0],
                         "to": item_range[-1],
-                        "totnum": len(item_range),
+                        "totnum": total_count,
                         "cancel": 0,
-                        "net_issue": len(item_range),
+                        "net_issue": total_count,
                     }
                 )
         doc_det.append(

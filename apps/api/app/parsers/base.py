@@ -151,10 +151,10 @@ def first_value(row: dict[str, Any], candidates: list[str]) -> Any:
     for candidate in candidates:
         if candidate in lowered and lowered[candidate] not in (None, ""):
             return lowered[candidate]
-    for key, value in lowered.items():
-        for candidate in candidates:
-            if len(candidate) <= 3:
-                continue
+    for candidate in candidates:
+        if len(candidate) <= 3:
+            continue
+        for key, value in lowered.items():
             if candidate in key and value not in (None, ""):
                 return value
     return None
