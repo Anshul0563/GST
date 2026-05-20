@@ -64,9 +64,15 @@ export type Gstr1Payload = {
   fp: string;
   version: string;
   hash: string;
-  b2cs: Array<{ sply_ty: string; rt: number; typ: string; pos: string; txval: number; iamt: number; camt: number; samt: number; csamt: number }>;
+  b2cs: Array<{ sply_ty: string; rt: number; typ: string; pos: string; txval: number; iamt?: number; camt?: number; samt?: number; csamt: number }>;
   supeco: { clttx?: Array<Record<string, string | number>>; supeco_det?: Array<Record<string, string | number>> };
   doc_issue: { doc_det: Array<Record<string, unknown>> };
+};
+
+export type Gstr1PreviewResponse = {
+  can_generate: boolean;
+  validation_blockers: number;
+  preview: Gstr1Payload;
 };
 
 export type BatchStatus = {
@@ -268,8 +274,9 @@ export function getTransactions(token: string, profile: Profile) {
   return request<Transaction[]>(`/transactions?profile_id=${profile.id}&period=${profile.return_period}`, {}, token);
 }
 
-export function getGstrPreview(token: string, profile: Profile) {
-  return request<Gstr1Payload>(`/gstr1/preview/${profile.return_period}?profile_id=${profile.id}`, {}, token);
+export async function getGstrPreview(token: string, profile: Profile) {
+  const result = await request<Gstr1Payload | Gstr1PreviewResponse>(`/gstr1/preview/${profile.return_period}?profile_id=${profile.id}`, {}, token);
+  return "preview" in result ? result.preview : result;
 }
 
 export function createProfile(token: string, payload: Omit<Profile, "id" | "state_code">) {

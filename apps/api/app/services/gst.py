@@ -131,6 +131,29 @@ def document_group_key(row: dict[str, Any], invoice_no: str) -> str:
     return f"{platform}:{document_series_key(invoice_no)}"
 
 
+def valid_document_number_for_doc_issue(row: dict[str, Any], invoice_no: str) -> bool:
+    platform = str(row.get("platform") or "").lower()
+    doc_type = str(row.get("doc_type") or "").lower()
+    invoice = str(invoice_no or "").strip().upper()
+
+    if not invoice:
+        return False
+
+    # Never allow pure fallback/order/suborder ids in document issue
+    if re.fullmatch(r"\d{10,}_\d+", invoice):
+        return False
+
+    # Generic placeholder credit notes should not enter Table 13
+    if doc_type == "credit_note" and re.fullmatch(r"CN-\d+", invoice):
+        return False
+
+    # Meesho valid document series observed in source
+    if platform == "meesho":
+        return bool(re.match(r"^6P5KC\d+C?\d+$", invoice))
+
+    return True
+
+
 def build_b2cs(gstin: str, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[tuple[str, Decimal, str, str], dict[str, Decimal]] = defaultdict(
         lambda: {
@@ -231,6 +254,8 @@ def build_doc_issue(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]
             continue
         invoice_no = str(row.get("invoice_no") or "").strip()
         if not invoice_no:
+            continue
+        if not valid_document_number_for_doc_issue(row, invoice_no):
             continue
         platform = str(row.get("platform") or "unknown").lower()
         grouped[(doc_type, platform, document_group_key(row, invoice_no))].add(

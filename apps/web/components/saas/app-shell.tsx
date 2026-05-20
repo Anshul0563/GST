@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud } from "lucide-react";
+import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud, X } from "lucide-react";
 import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
 
 const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
@@ -97,6 +97,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const pathname = usePathname();
   const router = useRouter();
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
   const activeModule = pathname.startsWith("/modules/online-seller") ? "onlineSeller" : pathname.startsWith("/modules/reconcile") ? "reconcile" : pathname.startsWith("/modules/tally") ? "tally" : "";
   const activeModuleConfig = activeModule ? moduleNav[activeModule] : null;
@@ -130,6 +131,24 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   }
   return (
     <div className="min-h-screen bg-[#f6f8fb] text-slate-950 dark:bg-[#07111f] dark:text-white">
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-sm lg:hidden" onClick={() => setMobileNavOpen(false)}>
+          <aside className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-r border-white/70 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between gap-3">
+              <LogoMark />
+              <button onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" className="grid size-10 place-items-center rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900">
+                <X className="size-5" />
+              </button>
+            </div>
+            <MobileNavContent
+              pathname={pathname}
+              activeModuleConfig={activeModuleConfig}
+              activeModuleIcon={ActiveModuleIcon}
+              onNavigate={() => setMobileNavOpen(false)}
+            />
+          </aside>
+        </div>
+      )}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-white/70 bg-white/90 p-5 shadow-2xl shadow-slate-200/60 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/80 dark:shadow-none lg:block">
         <LogoMark />
         <div
@@ -195,7 +214,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
         <header className="sticky top-0 z-20 border-b border-white/70 bg-white/75 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/70">
           <div className="flex h-20 items-center justify-between px-5 lg:px-8">
             <div className="flex min-w-0 items-center gap-4">
-              <button className="grid size-10 place-items-center rounded-2xl border border-slate-200 bg-white lg:hidden"><Menu className="size-5" /></button>
+              <button onClick={() => setMobileNavOpen(true)} aria-label="Open navigation" className="grid size-10 place-items-center rounded-2xl border border-slate-200 bg-white lg:hidden dark:border-white/10 dark:bg-slate-900"><Menu className="size-5" /></button>
               <div className="hidden min-w-0 md:block">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Current View</p>
                 <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-black text-slate-800 dark:text-white">
@@ -246,6 +265,55 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
         </main>
       </div>
     </div>
+  );
+}
+
+function MobileNavContent({
+  pathname,
+  activeModuleConfig,
+  activeModuleIcon: ActiveModuleIcon,
+  onNavigate,
+}: {
+  pathname: string;
+  activeModuleConfig: (typeof moduleNav)[keyof typeof moduleNav] | null;
+  activeModuleIcon?: typeof Home;
+  onNavigate: () => void;
+}) {
+  return (
+    <>
+      <nav className="mt-7 space-y-1">
+        {nav.map((item) => {
+          const Icon = item.icon;
+          const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
+          return (
+            <Link onClick={onNavigate} key={item.href} href={item.href} className={`group flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition ${active ? "bg-[#10244d] text-white shadow-lg shadow-blue-950/20" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
+              <Icon className={`size-4 ${active ? "text-saffron" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+      {activeModuleConfig && (
+        <div className="mt-7 rounded-3xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
+          <div className="mb-3 flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+            {ActiveModuleIcon && <ActiveModuleIcon className="size-4 text-[#1746A2]" />}
+            {activeModuleConfig.title}
+          </div>
+          <nav className="space-y-1">
+            {activeModuleConfig.items.map((item) => {
+              const Icon = item.icon;
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <Link onClick={onNavigate} key={`${item.href}-${item.label}`} href={item.href} className={`group flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-white text-[#10244d] shadow-sm dark:bg-slate-900 dark:text-white" : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900"}`}>
+                  <Icon className={`size-4 ${active ? "text-saffron" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
+    </>
   );
 }
 
