@@ -248,9 +248,6 @@ def document_series_key(invoice_no: str) -> str:
     if prefix:
         return prefix.group(0).upper()
 
-    if len(text) >= 5:
-        return text[:5].upper()
-
     return text.upper()
 
 
