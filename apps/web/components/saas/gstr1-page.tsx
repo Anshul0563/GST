@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileJson, FileSpreadsheet } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard, StatusPill } from "@/components/saas/ui";
@@ -10,6 +10,7 @@ import { formatCurrency } from "@/lib/utils";
 
 export function Gstr1Page() {
   const workspace = useWorkspace();
+  const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
   const [exportMode, setExportMode] = useState<Gstr1ExportMode>("gsttool_compatible");
   const [modePreview, setModePreview] = useState<Gstr1Payload | null>(null);
   const [parityReport, setParityReport] = useState<Gstr1ParityReport>(null);
@@ -18,37 +19,58 @@ export function Gstr1Page() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const historyRequest = useRef(0);
   const loadHistory = useCallback(async () => {
-    if (!workspace.token) return;
+    const requestId = ++historyRequest.current;
+    if (!workspace.token || !workspace.profile) {
+      setHistory([]);
+      return;
+    }
     setLoadingHistory(true);
+    setHistory([]);
     try {
       const items = await getGstr1History(workspace.token, workspace.profile?.id);
-      setHistory(items);
+      if (requestId !== historyRequest.current) return;
+      setHistory(items.filter((item) => item.period === workspace.profile?.return_period));
     } catch {
-      setHistory([]);
+      if (requestId === historyRequest.current) setHistory([]);
     } finally {
-      setLoadingHistory(false);
+      if (requestId === historyRequest.current) setLoadingHistory(false);
     }
-  }, [workspace.token, workspace.profile?.id]);
+  }, [workspace.token, workspace.profile?.id, workspace.profile?.return_period]);
   useEffect(() => {
     loadHistory();
   }, [loadHistory]);
+  useEffect(() => {
+    setModePreview(null);
+    setParityReport(null);
+    setDownloads(null);
+    setError("");
+  }, [activeProfileKey]);
   useEffect(() => {
     if (!workspace.token || !workspace.profile) {
       setModePreview(null);
       setParityReport(null);
       return;
     }
+    let cancelled = false;
+    setModePreview(null);
+    setParityReport(null);
     getGstrPreviewResponse(workspace.token, workspace.profile, exportMode)
       .then((result) => {
+        if (cancelled) return;
         setModePreview(result.preview);
         setParityReport(result.parity_report ?? null);
       })
       .catch(() => {
+        if (cancelled) return;
         setModePreview(null);
         setParityReport(null);
       });
-  }, [exportMode, workspace.token, workspace.profile]);
+    return () => {
+      cancelled = true;
+    };
+  }, [exportMode, workspace.token, activeProfileKey, workspace.profile]);
   async function generate() {
     if (!workspace.token || !workspace.profile) return;
     setBusy(true);
@@ -94,7 +116,7 @@ export function Gstr1Page() {
     }
   }
   const summary = workspace.summary;
-  const activePreview = modePreview ?? workspace.preview;
+  const activePreview = modePreview ?? (exportMode === "gsttool_compatible" ? workspace.preview : null);
   const previewTotals = (activePreview?.b2cs || []).reduce((total, row) => ({
     taxable: total.taxable + money(row.txval),
     igst: total.igst + money(row.iamt),

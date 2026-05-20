@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowRight, FileSpreadsheet, Trash2, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
@@ -19,6 +19,14 @@ export function ImportsPage() {
   const [activeBatch, setActiveBatch] = useState<BatchStatus | null>(null);
   const [errors, setErrors] = useState<ImportErrors | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
+  useEffect(() => {
+    setFiles([]);
+    setProgress("");
+    setActiveBatch(null);
+    setErrors(null);
+    setDeletingId(null);
+  }, [activeProfileKey]);
   const selected = useMemo(() => marketplaces.find((item) => item.key === platformKey) || marketplaces[0], [platformKey]);
   const canImport = selected.status !== "Coming Soon";
 

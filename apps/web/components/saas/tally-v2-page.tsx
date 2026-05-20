@@ -33,10 +33,17 @@ export function TallyDashboardPage() {
   const [history, setHistory] = useState<TallyExportItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   useEffect(() => {
-    if (!workspace.token) return;
+    if (!workspace.token || !workspace.profile) {
+      setHistory([]);
+      return;
+    }
+    setHistory([]);
     setLoadingHistory(true);
-    getTallyHistory(workspace.token, workspace.profile?.id).then(setHistory).catch(() => setHistory([])).finally(() => setLoadingHistory(false));
-  }, [workspace.token, workspace.profile?.id]);
+    getTallyHistory(workspace.token, workspace.profile.id)
+      .then((items) => setHistory(items.filter((item) => item.period === workspace.profile?.return_period)))
+      .catch(() => setHistory([]))
+      .finally(() => setLoadingHistory(false));
+  }, [workspace.token, workspace.profile?.id, workspace.profile?.return_period]);
   const latest = history[0];
   const importErrors = workspace.batches.reduce((sum, batch) => sum + batch.error_rows, 0);
   const readyTransactions = workspace.transactions.filter((row) => row.validation_status === "valid").length;
@@ -124,6 +131,13 @@ export function TallyImportPage() {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
+  useEffect(() => {
+    setFiles(null);
+    setStatus("");
+    setError("");
+    setBusy(false);
+  }, [activeProfileKey]);
   async function submit() {
     if (!workspace.token || !workspace.profile || !files?.length) return;
     setBusy(true);
@@ -169,6 +183,13 @@ export function TallyMappingPage() {
   const [mapping, setMapping] = useState(defaultMapping);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
+  useEffect(() => {
+    setCompanyId("");
+    setMapping(defaultMapping);
+    setMessage("");
+    setLoading(false);
+  }, [activeProfileKey]);
   async function load(company: string) {
     setCompanyId(company);
     if (!workspace.token || !company) return;
@@ -202,6 +223,14 @@ export function TallyExportPage() {
   const [result, setResult] = useState<{ id: number; voucher_count: number; validation: Record<string, unknown>; download: string; download_excel: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
+  useEffect(() => {
+    setCompanyId("");
+    setMapping(defaultMapping);
+    setResult(null);
+    setBusy(false);
+    setError("");
+  }, [activeProfileKey]);
   async function generate() {
     if (!workspace.token || !workspace.profile || !companyId) return;
     setBusy(true);
@@ -255,10 +284,17 @@ export function TallyHistoryPage() {
   const [history, setHistory] = useState<TallyExportItem[]>([]);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
-    if (!workspace.token) return;
+    if (!workspace.token || !workspace.profile) {
+      setHistory([]);
+      return;
+    }
+    setHistory([]);
     setLoading(true);
-    getTallyHistory(workspace.token, workspace.profile?.id).then(setHistory).catch(() => setHistory([])).finally(() => setLoading(false));
-  }, [workspace.token, workspace.profile?.id]);
+    getTallyHistory(workspace.token, workspace.profile.id)
+      .then((items) => setHistory(items.filter((item) => item.period === workspace.profile?.return_period)))
+      .catch(() => setHistory([]))
+      .finally(() => setLoading(false));
+  }, [workspace.token, workspace.profile?.id, workspace.profile?.return_period]);
   return <AppShell requiresSubscription requiredPlan="ecom_tally" token={workspace.token} user={workspace.user} productName="eCom to Tally" title="Tally Export History" subtitle="Download center for generated XML and voucher Excel files." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}><Panel title="Exports" subtitle="Loaded from backend tally_exports.">{loading ? <EmptyState title="Loading exports" body="Fetching generated XML files." /> : history.length ? <div className="space-y-3">{history.map((item) => <div key={item.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]"><div><b>Export #{item.id}</b><p className="text-xs text-slate-500">{item.period} / {item.voucher_count} vouchers</p></div><StatusPill status={item.status} /><a href={getTallyExportUrl(item.id)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white">XML</a><a href={getTallyExportUrl(item.id, "xlsx")} className="rounded-xl bg-[#1746A2] px-3 py-2 text-xs font-bold text-white">Excel</a></div>)}</div> : <EmptyState title="No exports" body="Generated XML files will appear here." />}</Panel></AppShell>;
 }
 

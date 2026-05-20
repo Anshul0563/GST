@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, Eye, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatusPill } from "@/components/saas/ui";
@@ -17,6 +17,16 @@ export function TransactionsPage() {
   const [state, setState] = useState("all");
   const [errorOnly, setErrorOnly] = useState(false);
   const [detail, setDetail] = useState<Transaction | null>(null);
+  const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
+  useEffect(() => {
+    setQuery("");
+    setPlatform("all");
+    setDocType("all");
+    setRate("all");
+    setState("all");
+    setErrorOnly(false);
+    setDetail(null);
+  }, [activeProfileKey]);
   const platforms = Array.from(new Set(workspace.transactions.map((row) => row.platform))).sort();
   const states = Array.from(new Set(workspace.transactions.map((row) => row.buyer_state_code).filter(Boolean))).sort();
   const rates = Array.from(new Set(workspace.transactions.map((row) => String(row.gst_rate)))).sort();

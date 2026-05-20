@@ -17,10 +17,14 @@ export function ReconcileDashboardPage() {
   const [history, setHistory] = useState<ReconcileHistoryItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   useEffect(() => {
-    if (!workspace.token) return;
+    if (!workspace.token || !workspace.profile) {
+      setHistory([]);
+      return;
+    }
+    setHistory([]);
     setLoadingHistory(true);
     getReconcileHistory(workspace.token, workspace.profile?.id).then(setHistory).catch(() => setHistory([])).finally(() => setLoadingHistory(false));
-  }, [workspace.token, workspace.profile?.id]);
+  }, [workspace.token, workspace.profile?.id, workspace.profile?.return_period]);
   const latest = history[0];
   const chart = history.slice(0, 8).reverse().map((item) => ({ name: `#${item.id}`, matched: item.matched_rows, mismatch: item.mismatch_rows }));
   const totalRuns = history.length;
@@ -71,6 +75,14 @@ export function ReconcileUploadPage() {
   const [result, setResult] = useState<ReconcileReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
+  useEffect(() => {
+    setPortal(null);
+    setBooks(null);
+    setResult(null);
+    setBusy(false);
+    setError("");
+  }, [activeProfileKey]);
   async function submit() {
     if (!workspace.token || !workspace.profile || !portal || !books) return;
     setBusy(true);
@@ -188,9 +200,13 @@ export function ReconcileHistoryPage() {
   const workspace = useWorkspace();
   const [history, setHistory] = useState<ReconcileHistoryItem[]>([]);
   useEffect(() => {
-    if (!workspace.token) return;
+    if (!workspace.token || !workspace.profile) {
+      setHistory([]);
+      return;
+    }
+    setHistory([]);
     getReconcileHistory(workspace.token, workspace.profile?.id).then(setHistory).catch(() => setHistory([]));
-  }, [workspace.token, workspace.profile?.id]);
+  }, [workspace.token, workspace.profile?.id, workspace.profile?.return_period]);
   return <AppShell title="Reconciliation History" subtitle="Download center for previous 2A/2B matching runs." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <Panel title="History" subtitle="All batches are loaded from backend."><HistoryList history={history} /></Panel>
   </AppShell>;

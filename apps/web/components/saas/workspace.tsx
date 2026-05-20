@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   BatchStatus,
@@ -38,7 +38,7 @@ export function useWorkspace(): Workspace {
   const pathname = usePathname();
   const [token, setToken] = useState("");
   const [user, setUser] = useState<Workspace["user"]>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setActiveProfile] = useState<Profile | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -47,6 +47,23 @@ export function useWorkspace(): Workspace {
   const [companies, setCompanies] = useState<TallyCompany[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const refreshSeq = useRef(0);
+
+  const clearPeriodScopedState = useCallback(() => {
+    setSummary(null);
+    setTransactions([]);
+    setBatches([]);
+    setPreview(null);
+    setCompanies([]);
+    setError("");
+  }, []);
+
+  const selectProfile = useCallback((nextProfile: Profile) => {
+    refreshSeq.current += 1;
+    setActiveProfile(nextProfile);
+    clearPeriodScopedState();
+    setLoading(true);
+  }, [clearPeriodScopedState]);
 
   const needs = useMemo(() => {
     const path = pathname || "";
@@ -67,18 +84,17 @@ export function useWorkspace(): Workspace {
 
   const refreshWorkspace = useCallback(async (activeToken: string, activeProfile: Profile | null | undefined, base?: { user: Workspace["user"]; profiles: Profile[] }) => {
     if (!activeToken) return;
+    const requestId = ++refreshSeq.current;
+    const isCurrent = () => requestId === refreshSeq.current;
     setLoading(true);
     try {
       if (!activeProfile) {
         const [nextUser, nextProfiles] = await Promise.all([getCurrentUser(activeToken), listProfiles(activeToken)]);
+        if (!isCurrent()) return;
         setUser(nextUser);
         setProfiles(nextProfiles);
-        setProfile(nextProfiles[0] ?? null);
-        setSummary(null);
-        setTransactions([]);
-        setBatches([]);
-        setPreview(null);
-        setCompanies([]);
+        setActiveProfile(nextProfiles[0] ?? null);
+        clearPeriodScopedState();
         setError("");
         return;
       }
@@ -91,8 +107,10 @@ export function useWorkspace(): Workspace {
         needs.preview ? getGstrPreview(activeToken, activeProfile) : Promise.resolve(null),
         needs.companies ? listTallyCompanies(activeToken, activeProfile.id) : Promise.resolve([])
       ]);
+      if (!isCurrent()) return;
       setUser(nextUser);
       setProfiles(nextProfiles);
+      setActiveProfile(nextProfiles.find((item) => item.id === activeProfile.id) ?? activeProfile);
       setSummary(nextSummary);
       setTransactions(nextRows);
       setBatches(nextBatches);
@@ -100,11 +118,11 @@ export function useWorkspace(): Workspace {
       setCompanies(nextCompanies);
       setError("");
     } catch (exc) {
-      setError(exc instanceof Error ? exc.message : "Could not refresh workspace");
+      if (isCurrent()) setError(exc instanceof Error ? exc.message : "Could not refresh workspace");
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [needs]);
+  }, [clearPeriodScopedState, needs]);
 
   const refresh = useCallback(async (profileOverride?: Profile) => {
     const activeToken = token || (typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") || "" : "");
@@ -125,7 +143,7 @@ export function useWorkspace(): Workspace {
         setToken(token);
         setUser(user);
         setProfiles(profiles);
-        setProfile(profile);
+        setActiveProfile(profile);
         if (profile) {
           await refreshWorkspace(token, profile, { user, profiles });
         } else {
@@ -150,9 +168,9 @@ export function useWorkspace(): Workspace {
     companies,
     loading,
     error,
-    setProfile,
+    setProfile: selectProfile,
     refresh
-  }), [token, user, profile, profiles, summary, transactions, batches, preview, companies, loading, error, refresh]);
+  }), [token, user, profile, profiles, summary, transactions, batches, preview, companies, loading, error, selectProfile, refresh]);
 }
 
 export function money(value: number | string | null | undefined) {
