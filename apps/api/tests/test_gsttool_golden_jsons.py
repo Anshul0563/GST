@@ -1,6 +1,7 @@
 import copy
 import json
 import unittest
+from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -16,6 +17,55 @@ from app.services.excel_template_export import write_gstr1_template_excel
 
 class GstToolGoldenJsonTests(unittest.TestCase):
     gstin = "07TCRPS8655B1ZK"
+
+    def assert_february_summary_contract(self, payload):
+        totals = {
+            "records": len(payload["b2cs"]),
+            "taxable": sum(Decimal(str(row.get("txval", 0))) for row in payload["b2cs"]),
+            "igst": sum(Decimal(str(row.get("iamt", 0))) for row in payload["b2cs"]),
+            "cgst": sum(Decimal(str(row.get("camt", 0))) for row in payload["b2cs"]),
+            "sgst": sum(Decimal(str(row.get("samt", 0))) for row in payload["b2cs"]),
+            "invoice": sum(
+                Decimal(str(row.get("txval", 0)))
+                + Decimal(str(row.get("iamt", 0)))
+                + Decimal(str(row.get("camt", 0)))
+                + Decimal(str(row.get("samt", 0)))
+                + Decimal(str(row.get("csamt", 0)))
+                for row in payload["b2cs"]
+            ),
+        }
+        self.assertEqual(totals["records"], 16)
+        self.assertEqual(totals["taxable"], Decimal("2794.18"))
+        self.assertEqual(totals["igst"], Decimal("68.32"))
+        self.assertEqual(totals["cgst"], Decimal("7.75"))
+        self.assertEqual(totals["sgst"], Decimal("7.75"))
+        self.assertEqual(totals["invoice"], Decimal("2878.00"))
+
+        docs = [
+            (section["doc_typ"], doc["from"], doc["to"], doc["totnum"])
+            for section in payload["doc_issue"]["doc_det"]
+            for doc in section["docs"]
+        ]
+        self.assertEqual(
+            docs,
+            [
+                ("Invoices for outward supply", "6p5kc26113", "6p5kc26132", 31),
+                ("Invoices for outward supply", "IN-4", "IN-4", 1),
+                ("Invoices for outward supply", "FAWRLX2600000076", "FAWRLX2600000081", 6),
+                ("Credit Note", "6p5kc26C57", "6p5kc26C65", 16),
+                ("Credit Note", "RAT6SO2600000024", "RAT6SO2600000027", 4),
+                ("Credit Note", "CANQ1W2600000011", "CANQ1W2600000013", 3),
+                ("Debit Note", "DAL84U2600000004", "DAL84U2600000004", 1),
+            ],
+        )
+        self.assertEqual(
+            payload["supeco"]["clttx"],
+            [
+                {"etin": "07AARCM9332R1CQ", "suppval": 2406.79, "igst": 56.71, "cgst": 7.75, "sgst": 7.75, "cess": 0, "flag": "N"},
+                {"etin": "07AAICA3918J1CV", "suppval": 193.2, "igst": 5.8, "cgst": 0, "sgst": 0, "cess": 0, "flag": "N"},
+                {"etin": "07AACCF0683K1CU", "suppval": 194.19, "igst": 5.81, "cgst": 0, "sgst": 0, "cess": 0, "flag": "N"},
+            ],
+        )
 
     def golden_cases(self):
         return {
@@ -114,6 +164,12 @@ class GstToolGoldenJsonTests(unittest.TestCase):
 
     def test_february_raw_marketplace_files_rebuild_original_gsttool_json_exactly(self):
         self.assert_exact_gsttool_json("022026")
+
+    def test_original_february_json_matches_known_gsttool_summary(self):
+        path = Path("/home/jarvis/Downloads/GSTR1_returns_07TCRPS8655B1ZK_monthly_022026.json")
+        if not path.exists():
+            self.skipTest("Original February GSTTool JSON is not available on this machine.")
+        self.assert_february_summary_contract(json.loads(path.read_text(encoding="utf-8")))
 
     def test_march_raw_marketplace_files_rebuild_original_gsttool_json_exactly(self):
         self.assert_exact_gsttool_json("032026")
