@@ -308,6 +308,27 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual([row["pos"] for row in payload["b2cs"]], ["27"])
         self.assertEqual(payload["doc_issue"]["doc_det"][0]["docs"][0]["from"], "IN-FEB")
 
+    def test_document_date_overrides_wrong_batch_period(self):
+        row = finalize_transaction({
+            "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "032026",
+            "invoice_no": "IN-FEB-BATCHED-MAR", "invoice_date": "2026-02-14", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
+        })
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "022026", [row], GSTTOOL_COMPATIBLE)
+        wrong_month = build_gstr1_json("07ABCDE1234F1Z5", "032026", [row], GSTTOOL_COMPATIBLE)
+
+        self.assertEqual(payload["b2cs"][0]["pos"], "27")
+        self.assertEqual(wrong_month["b2cs"], [])
+
+    def test_credit_note_date_controls_return_period(self):
+        row = {
+            "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "022026",
+            "invoice_no": "CN-MAR", "doc_type": "credit_note", "buyer_state_code": "29", "taxable_value": -100,
+            "gst_rate": 3, "igst": -3, "cess": 0, "credit_note_date": "2026-03-01", "validation_status": "valid",
+        }
+
+        self.assertTrue(row_belongs_to_period(row, "032026"))
+        self.assertFalse(row_belongs_to_period(row, "022026"))
+
     def test_gsttool_mode_merges_cross_prefix_document_ranges(self):
         rows = [
             finalize_transaction({

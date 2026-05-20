@@ -59,6 +59,7 @@ from app.services.excel_export import write_gstr1_excel
 from app.services.gst import (
     CLEAN_PORTAL,
     build_gstr1_json,
+    document_period,
     gstr1_generation_report,
     normalize_export_mode,
     row_belongs_to_period,
@@ -712,7 +713,12 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         validation_error_rows = 0
         for txn in result.transactions:
             txn = dict(txn)
-            txn["filing_period"] = batch.period or txn.get("filing_period")
+            txn["filing_period"] = (
+                document_period(txn)
+                or txn.get("filing_period")
+                or batch.period
+                or profile.return_period
+            )
             key = (
                 batch.profile_id,
                 txn.get("filing_period"),
