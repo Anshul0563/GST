@@ -5,10 +5,13 @@ from typing import Any
 import pandas as pd
 
 from app.services.excel.formatter import safe_excel_value
+from app.services.excel_template_export import template_path, write_gstr1_template_excel
 from app.services.excel.workbook_builder import write_gstr1_workbook
 
 
 def write_gstr1_excel(path: Path, payload: dict, rows: list[dict], errors: list[dict] | None = None) -> Path:
+    if template_path() is not None:
+        return write_gstr1_template_excel(path, payload)
     return write_gstr1_workbook(path, payload)
 
 

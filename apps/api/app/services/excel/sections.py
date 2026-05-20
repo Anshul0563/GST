@@ -117,16 +117,25 @@ def doc_display_order(start: str, doc_typ: str) -> tuple[int, int, int, str]:
     doc = doc_typ.lower()
     if text.startswith("6P5KC"):
         platform = 0
-    elif text.startswith(("LW", "MF", "LY", "LZ")):
-        platform = 1
     elif text.startswith("IN-"):
+        platform = 1
+    elif text.startswith(("LW", "MF", "LY", "LZ", "FAW", "RAT", "CAN", "DAL")):
         platform = 2
     else:
         platform = 3
     type_rank = 0 if "invoice" in doc else 1 if "credit" in doc else 2 if "debit" in doc else 3
     prefix_rank = 0
-    if platform == 1:
-        prefix_rank = 0 if text.startswith("LW") else 1 if text.startswith("MF") else 2 if text.startswith("LY") else 3
+    if platform == 2:
+        if text.startswith(("FAW", "LW")):
+            prefix_rank = 0
+        elif text.startswith(("MFA", "RAT")):
+            prefix_rank = 1
+        elif text.startswith(("DAL", "LZ")):
+            prefix_rank = 2
+        elif text.startswith(("CAN", "LY")):
+            prefix_rank = 3
+        else:
+            prefix_rank = 4
     return (platform, type_rank, prefix_rank, start)
 
 
