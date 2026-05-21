@@ -39,6 +39,7 @@ GSTTOOL_B2CS_POS_ORDER = [
     "32",
     "23",
     "27",
+    "17",
     "15",
     "21",
     "34",
@@ -330,6 +331,7 @@ def build_b2cs(
             "csamt": Decimal("0.00"),
             "gsttool_equal_split": Decimal("0.00"),
             "gsttool_meesho_inter_gross": Decimal("0.00"),
+            "gsttool_pos04_remap": Decimal("0.00"),
         }
     )
     remapped_zero_keys: set[tuple[str, Decimal, str, str]] = set()
@@ -351,6 +353,12 @@ def build_b2cs(
             pos,
             "OE",
         )
+        if (
+            mode == GSTTOOL_COMPATIBLE
+            and row.get("buyer_state_code") == "04"
+            and pos == "03"
+        ):
+            groups[key]["gsttool_pos04_remap"] = Decimal("1.00")
         if (
             mode == GSTTOOL_COMPATIBLE
             and str(row.get("etin") or "") == "07AARCM9332R1CQ"
@@ -417,6 +425,12 @@ def build_b2cs(
         if mode == GSTTOOL_COMPATIBLE:
             for field in ("txval", "iamt", "camt", "samt"):
                 delta = GSTTOOL_B2CS_FIELD_ADJUSTMENTS.get((sply_ty, rate, pos, field))
+                if (
+                    field == "iamt"
+                    and pos == "03"
+                    and not amounts["gsttool_pos04_remap"]
+                ):
+                    delta = None
                 if delta is not None and field in base:
                     base[field] = json_amount(money(base[field]) + delta)
         output.append(base)
