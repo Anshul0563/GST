@@ -280,31 +280,31 @@ class MeeshoParser(MarketplaceParser):
                 if should_skip_transaction(txn):
                     continue
 
-            finalized = finalize_transaction(txn)
+                finalized = finalize_transaction(txn)
 
-            if not belongs_to_period(
-                finalized.get("document_date"),
-                finalized.get("filing_period"),
-            ):
-                result.debug.setdefault(
-                    "period_excluded_rows",
-                    [],
-                ).append(
-                    {
-                        "file": path.name,
-                        "sheet": sheet_name,
-                        "row": int(index) + 2,
-                        "invoice_no": finalized.get("invoice_no"),
-                        "doc_type": finalized.get("doc_type"),
-                        "document_date": str(finalized.get("document_date")),
-                        "taxable_value": str(finalized.get("taxable_value")),
-                        "reason": "document date outside filing period",
-                    }
-                )
+                if not belongs_to_period(
+                    finalized.get("document_date"),
+                    finalized.get("filing_period"),
+                ):
+                    result.debug.setdefault(
+                        "period_excluded_rows",
+                        [],
+                    ).append(
+                        {
+                            "file": path.name,
+                            "sheet": sheet_name,
+                            "row": int(index) + 2,
+                            "invoice_no": finalized.get("invoice_no"),
+                            "doc_type": finalized.get("doc_type"),
+                            "document_date": str(finalized.get("document_date")),
+                            "taxable_value": str(finalized.get("taxable_value")),
+                            "reason": "document date outside filing period",
+                        }
+                    )
 
-                continue
+                    continue
 
-        result.transactions.append(finalized)
+                result.transactions.append(finalized)
 
         result.debug["meesho_metadata_rows"] = len(metadata_by_suborder)
 
