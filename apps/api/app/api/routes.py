@@ -714,8 +714,8 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         for txn in result.transactions:
             txn = dict(txn)
             txn["filing_period"] = (
-                document_period(txn)
-                or txn.get("filing_period")
+                txn.get("filing_period")
+                or document_period(txn)
                 or batch.period
                 or profile.return_period
             )
