@@ -24,6 +24,34 @@ from app.services.transaction_normalizer import finalize_transaction
 class FlipkartParser(MarketplaceParser):
     platform = "flipkart"
 
+    def _debug_row(
+        self,
+        result: ParseResult,
+        *,
+        file_name: str,
+        sheet_name: str,
+        row_number: int,
+        txn: dict,
+        included: bool,
+        reason: str,
+    ) -> None:
+        result.debug.setdefault("row_level_debug", []).append(
+            {
+                "file": file_name,
+                "sheet_name": sheet_name,
+                "source_row_number": row_number,
+                "invoice_doc_no": txn.get("invoice_no"),
+                "doc_type": txn.get("doc_type"),
+                "document_date_used": str(txn.get("document_date")),
+                "taxable": str(txn.get("taxable_value")),
+                "igst": str(txn.get("igst")),
+                "cgst": str(txn.get("cgst")),
+                "sgst": str(txn.get("sgst")),
+                "included": included,
+                "reason": reason,
+            }
+        )
+
     def parse(self, files: list[Path]) -> ParseResult:
         result = ParseResult()
         result.debug = new_pos_debug(self.platform)
@@ -118,7 +146,18 @@ class FlipkartParser(MarketplaceParser):
                             row,
                         )
 
+                        source_row_number = int(index) + 1
+
                         if should_skip_transaction(txn):
+                            self._debug_row(
+                                result,
+                                file_name=path.name,
+                                sheet_name=sheet.title,
+                                row_number=source_row_number,
+                                txn=txn,
+                                included=False,
+                                reason="empty transaction row",
+                            )
                             continue
 
                         finalized = finalize_transaction(txn)
@@ -147,8 +186,26 @@ class FlipkartParser(MarketplaceParser):
                                 }
                             )
 
+                            self._debug_row(
+                                result,
+                                file_name=path.name,
+                                sheet_name=sheet.title,
+                                row_number=source_row_number,
+                                txn=finalized,
+                                included=False,
+                                reason="document date outside filing period",
+                            )
                             continue
 
+                        self._debug_row(
+                            result,
+                            file_name=path.name,
+                            sheet_name=sheet.title,
+                            row_number=source_row_number,
+                            txn=finalized,
+                            included=True,
+                            reason="document date is inside filing period",
+                        )
                         result.transactions.append(finalized)
 
             except Exception as exc:

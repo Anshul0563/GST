@@ -639,7 +639,10 @@ def validate_doc_issue_ranges(doc_issue: dict[str, Any]) -> list[str]:
     return errors
 
 
-def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
+def validate_gstr1_schema(
+    payload: dict[str, Any], export_mode: str = GSTTOOL_COMPATIBLE
+) -> list[str]:
+    mode = normalize_export_mode(export_mode)
     errors: list[str] = []
 
     expected_top_keys = [
@@ -706,18 +709,16 @@ def validate_gstr1_schema(payload: dict[str, Any]) -> list[str]:
             + money(item.get("csamt"))
         )
 
-        if (
-            normalize_export_mode(GSTTOOL_COMPATIBLE) != CLEAN_PORTAL
-        ):
+        if mode != CLEAN_PORTAL:
             pass
-        elif(
+        elif (
             money(item.get("txval")) == Decimal("0.00")
             and tax_total != Decimal("0.00")
         ):
             errors.append(
                 f"B2CS taxable value is zero but tax is non-zero for POS {item.get('pos')}"
         )
-            
+
         if item.get("sply_ty") == "INTRA" and abs(
             money(item.get("camt")) - money(item.get("samt"))
         ) > Decimal("0.01"):

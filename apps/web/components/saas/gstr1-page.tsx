@@ -79,6 +79,7 @@ export function Gstr1Page() {
     setError("");
     try {
       const result = await generateGstr1(workspace.token, workspace.profile, exportMode);
+      setModePreview(result.json);
       setDownloads({ download_json: result.download_json, download_excel: result.download_excel });
       setParityReport(result.parity_report ?? null);
       await workspace.refresh();
@@ -95,6 +96,7 @@ export function Gstr1Page() {
     setError("");
     try {
       const result = await generateGstr1(workspace.token, workspace.profile, exportMode);
+      setModePreview(result.json);
       setDownloads({ download_json: result.download_json, download_excel: result.download_excel });
       setParityReport(result.parity_report ?? null);
       await workspace.refresh();
@@ -144,11 +146,11 @@ export function Gstr1Page() {
       <div className="space-y-6">
         {!workspace.token ? <EmptyState title="Login required" body="GSTR-1 preview and generation use authenticated backend APIs." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="GSTR-1 generation needs GSTIN, filing frequency and return period." /> : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard label="Taxable value" value={formatCurrency(money(summary?.total_taxable_value))} tone="blue" />
-          <StatCard label="IGST" value={formatCurrency(money(summary?.igst))} tone="green" />
-          <StatCard label="CGST" value={formatCurrency(money(summary?.cgst))} tone="saffron" />
-          <StatCard label="SGST" value={formatCurrency(money(summary?.sgst))} tone="saffron" />
-          <StatCard label="Total GST" value={formatCurrency(money(summary?.total_gst))} tone="green" />
+          <StatCard label="Taxable value" value={formatCurrency(previewTotals.taxable)} tone="blue" />
+          <StatCard label="IGST" value={formatCurrency(previewTotals.igst)} tone="green" />
+          <StatCard label="CGST" value={formatCurrency(previewTotals.cgst)} tone="saffron" />
+          <StatCard label="SGST" value={formatCurrency(previewTotals.sgst)} tone="saffron" />
+          <StatCard label="Total GST" value={formatCurrency(previewGst)} tone="green" />
         </div>
         <Panel title="Export Mode" subtitle="GSTTool Compatible preserves original GSTTool quirks; Clean Portal Optimized applies strict cleanup.">
           <div className="flex flex-wrap items-center gap-3">
