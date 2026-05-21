@@ -2,7 +2,15 @@ from pathlib import Path
 
 import pandas as pd
 
-from app.parsers.base import MarketplaceParser, ParseResult, clean_column, dataframe_from_excel, has_explicit_tax_split, should_skip_transaction
+from app.parsers.base import (
+    MarketplaceParser,
+    ParseResult,
+    belongs_to_period,
+    clean_column,
+    dataframe_from_excel,
+    has_explicit_tax_split,
+    should_skip_transaction,
+)
 from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
 from app.services.transaction_normalizer import finalize_transaction
 
@@ -25,10 +33,32 @@ class CustomExcelParser(MarketplaceParser):
                     txn = self.normalize_row(row, path.name)
                     if has_explicit_tax_split(row):
                         txn["_preserve_source_tax_split"] = True
-                    observe_pos_debug(result.debug, int(index) + 2, resolve_pos(row, txn, self.platform), row)
+                    observe_pos_debug(
+                        result.debug,
+                        int(index) + 2,
+                        resolve_pos(row, txn, self.platform),
+                        row,
+                    )
                     if should_skip_transaction(txn):
                         continue
-                    result.transactions.append(finalize_transaction(txn))
+                    finalized = finalize_transaction(txn)
+                    if not belongs_to_period(
+                        finalized.get("document_date"),
+                        finalized.get("filing_period"),
+                    ):
+                        result.debug.setdefault("period_excluded_rows", []).append(
+                            {
+                                "file": path.name,
+                                "row": int(index) + 2,
+                                "invoice_no": finalized.get("invoice_no"),
+                                "doc_type": finalized.get("doc_type"),
+                                "document_date": str(finalized.get("document_date")),
+                                "taxable_value": str(finalized.get("taxable_value")),
+                                "reason": "document date outside filing period",
+                            }
+                        )
+                        continue
+                    result.transactions.append(finalized)
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})
         return result

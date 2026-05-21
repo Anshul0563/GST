@@ -1,6 +1,4 @@
-from operator import index
 from pathlib import Path
-from unittest import result
 
 from app.parsers.base import (
     MarketplaceParser,
