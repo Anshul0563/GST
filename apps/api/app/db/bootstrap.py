@@ -97,6 +97,118 @@ def run_lightweight_migrations(engine) -> None:
                         """
                     )
                 )
+        transaction_constraints = inspector.get_unique_constraints("normalized_transactions")
+        has_period_aware_constraint = any(
+            constraint.get("column_names")
+            == ["profile_id", "filing_period", "platform", "doc_type", "invoice_no", "order_item_id"]
+            for constraint in transaction_constraints
+        )
+        if not has_period_aware_constraint and engine.dialect.name == "sqlite":
+            with engine.begin() as connection:
+                connection.execute(text("PRAGMA foreign_keys=OFF"))
+                connection.execute(
+                    text(
+                        """
+                        CREATE TABLE normalized_transactions_new (
+                            id INTEGER NOT NULL,
+                            user_id INTEGER NOT NULL,
+                            profile_id INTEGER NOT NULL,
+                            batch_id INTEGER,
+                            platform VARCHAR(40) NOT NULL,
+                            gstin VARCHAR(15) NOT NULL,
+                            etin VARCHAR(15),
+                            filing_period VARCHAR(6) NOT NULL,
+                            order_id VARCHAR(120),
+                            order_item_id VARCHAR(120),
+                            invoice_no VARCHAR(120),
+                            invoice_date DATE,
+                            document_date DATE,
+                            doc_type VARCHAR(20) NOT NULL,
+                            buyer_state_code VARCHAR(2),
+                            buyer_state_name VARCHAR(80),
+                            hsn VARCHAR(20),
+                            product_name VARCHAR(255),
+                            sku VARCHAR(120),
+                            qty NUMERIC(14, 3) NOT NULL,
+                            taxable_value NUMERIC(14, 2) NOT NULL,
+                            gst_rate NUMERIC(6, 2) NOT NULL,
+                            igst NUMERIC(14, 2) NOT NULL,
+                            cgst NUMERIC(14, 2) NOT NULL,
+                            sgst NUMERIC(14, 2) NOT NULL,
+                            cess NUMERIC(14, 2) NOT NULL,
+                            tcs NUMERIC(14, 2) NOT NULL,
+                            tds NUMERIC(14, 2) NOT NULL,
+                            gross_amount NUMERIC(14, 2) NOT NULL,
+                            discount_seller NUMERIC(14, 2) NOT NULL,
+                            discount_platform NUMERIC(14, 2) NOT NULL,
+                            settlement_amount NUMERIC(14, 2) NOT NULL,
+                            source_file VARCHAR(255),
+                            raw_row_json TEXT,
+                            validation_status VARCHAR(20) NOT NULL,
+                            validation_errors TEXT,
+                            created_at DATETIME NOT NULL,
+                            PRIMARY KEY (id),
+                            CONSTRAINT uq_txn_doc_item_period UNIQUE (
+                                profile_id,
+                                filing_period,
+                                platform,
+                                doc_type,
+                                invoice_no,
+                                order_item_id
+                            ),
+                            FOREIGN KEY(user_id) REFERENCES users (id),
+                            FOREIGN KEY(profile_id) REFERENCES gst_profiles (id),
+                            FOREIGN KEY(batch_id) REFERENCES platform_import_batches (id)
+                        )
+                        """
+                    )
+                )
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO normalized_transactions_new (
+                            id, user_id, profile_id, batch_id, platform, gstin, etin,
+                            filing_period, order_id, order_item_id, invoice_no,
+                            invoice_date, document_date, doc_type, buyer_state_code,
+                            buyer_state_name, hsn, product_name, sku, qty,
+                            taxable_value, gst_rate, igst, cgst, sgst, cess, tcs,
+                            tds, gross_amount, discount_seller, discount_platform,
+                            settlement_amount, source_file, raw_row_json,
+                            validation_status, validation_errors, created_at
+                        )
+                        SELECT
+                            id, user_id, profile_id, batch_id, platform, gstin, etin,
+                            filing_period, order_id, order_item_id, invoice_no,
+                            invoice_date, document_date, doc_type, buyer_state_code,
+                            buyer_state_name, hsn, product_name, sku, qty,
+                            taxable_value, gst_rate, igst, cgst, sgst, cess, tcs,
+                            tds, gross_amount, discount_seller, discount_platform,
+                            settlement_amount, source_file, raw_row_json,
+                            validation_status, validation_errors, created_at
+                        FROM normalized_transactions
+                        """
+                    )
+                )
+                connection.execute(text("DROP TABLE normalized_transactions"))
+                connection.execute(text("ALTER TABLE normalized_transactions_new RENAME TO normalized_transactions"))
+                for column in (
+                    "batch_id",
+                    "buyer_state_code",
+                    "etin",
+                    "filing_period",
+                    "gstin",
+                    "invoice_no",
+                    "platform",
+                    "profile_id",
+                    "user_id",
+                ):
+                    connection.execute(
+                        text(
+                            f"CREATE INDEX ix_normalized_transactions_{column} "
+                            f"ON normalized_transactions ({column})"
+                        )
+                    )
+                connection.execute(text("PRAGMA foreign_keys=ON"))
 
 
 def seed_super_admin() -> None:
