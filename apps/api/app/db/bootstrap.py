@@ -105,6 +105,18 @@ def run_lightweight_migrations(engine) -> None:
         )
         if not has_period_aware_constraint and engine.dialect.name == "sqlite":
             with engine.begin() as connection:
+                table_sql = connection.execute(
+                    text(
+                        """
+                        SELECT sql
+                        FROM sqlite_master
+                        WHERE type = 'table' AND name = 'normalized_transactions'
+                        """
+                    )
+                ).scalar() or ""
+            has_period_aware_constraint = "uq_txn_doc_item_period" in table_sql
+        if not has_period_aware_constraint and engine.dialect.name == "sqlite":
+            with engine.begin() as connection:
                 connection.execute(text("PRAGMA foreign_keys=OFF"))
                 connection.execute(
                     text(
