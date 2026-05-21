@@ -122,12 +122,22 @@ def document_period(row: dict[str, Any]) -> str | None:
 
 
 def row_belongs_to_period(row: dict[str, Any], period: str) -> bool:
+    row_period = document_period(row)
+    if row_period == str(period):
+        return True
+
+    invoice_no = str(row.get("invoice_no") or "").upper()
+    source_file = str(row.get("source_file") or "").lower()
     if (
         str(row.get("platform") or "").lower() == "flipkart"
         and str(row.get("filing_period") or "") == str(period)
+        and row_period
+        and row_period != str(period)
+        and "report" in source_file
+        and invoice_no.startswith(("FAWRLX", "CANQ1W"))
     ):
         return True
-    row_period = document_period(row)
+
     if row_period is None:
         row_period = str(row.get("filing_period") or "")
     return row_period == str(period)

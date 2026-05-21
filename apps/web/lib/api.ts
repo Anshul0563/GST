@@ -329,6 +329,10 @@ export function deleteImportBatch(token: string, batchId: number) {
   return request<{ ok: boolean }>(`/imports/${batchId}`, { method: "DELETE" }, token);
 }
 
+export function reprocessImportBatch(token: string, batchId: number) {
+  return request<BatchStatus>(`/imports/${batchId}/reprocess`, { method: "POST" }, token);
+}
+
 export function updateTransaction(token: string, transactionId: number, payload: Partial<Transaction>) {
   return request<Transaction>(`/transactions/${transactionId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
 }

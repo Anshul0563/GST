@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowRight, FileSpreadsheet, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, ArrowRight, FileSpreadsheet, RotateCw, Trash2, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatusPill } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
 import { marketplaces } from "@/lib/marketplaces";
-import { BatchStatus, ImportErrors, deleteImportBatch, getImportErrors, getImportStatus, uploadMarketplaceFiles } from "@/lib/api";
+import { BatchStatus, ImportErrors, deleteImportBatch, getImportErrors, getImportStatus, reprocessImportBatch, uploadMarketplaceFiles } from "@/lib/api";
 
 export function ImportsPage() {
   const params = useSearchParams();
@@ -19,6 +19,7 @@ export function ImportsPage() {
   const [activeBatch, setActiveBatch] = useState<BatchStatus | null>(null);
   const [errors, setErrors] = useState<ImportErrors | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [reprocessingId, setReprocessingId] = useState<number | null>(null);
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
   useEffect(() => {
     setFiles([]);
@@ -26,6 +27,7 @@ export function ImportsPage() {
     setActiveBatch(null);
     setErrors(null);
     setDeletingId(null);
+    setReprocessingId(null);
   }, [activeProfileKey]);
   const selected = useMemo(() => marketplaces.find((item) => item.key === platformKey) || marketplaces[0], [platformKey]);
   const canImport = selected.status !== "Coming Soon";
@@ -82,6 +84,24 @@ export function ImportsPage() {
     }
   }
 
+  async function reprocessBatch(batch: BatchStatus) {
+    if (!workspace.token) return;
+    setReprocessingId(batch.id);
+    setProgress(`Reprocessing ${batch.platform} batch #${batch.id} with current parser...`);
+    try {
+      const status = await reprocessImportBatch(workspace.token, batch.id);
+      setActiveBatch(status);
+      if (status.error_rows) setErrors(await getImportErrors(workspace.token, batch.id));
+      else setErrors(null);
+      await workspace.refresh();
+      setProgress(`Batch #${batch.id} reprocessed. Parsed ${status.parsed_rows}, errors ${status.error_rows}.`);
+    } catch (exc) {
+      setProgress(exc instanceof Error ? exc.message : "Could not reprocess import batch.");
+    } finally {
+      setReprocessingId(null);
+    }
+  }
+
   return (
     <AppShell requiresSubscription requiredPlan="online_seller" token={workspace.token} user={workspace.user} productName="GST Online Seller" title="Marketplace Upload" subtitle="Select profile, platform, required files and track parser progress from upload to normalized transactions." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
       {!workspace.token ? <EmptyState title="Login required" body="Imports are connected to secure backend APIs. Login before uploading marketplace files." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="Uploads require a GST profile and return period so normalized rows are stored against the correct GSTIN." /> : null}
@@ -122,13 +142,16 @@ export function ImportsPage() {
           {workspace.batches.length ? <div className="space-y-3">{workspace.batches.map((batch) => {
             const busy = deletingId === batch.id;
             const locked = ["queued", "processing"].includes(batch.status);
-            return <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]">
+            return <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto_auto]">
               <b className="capitalize">{batch.platform}</b>
               <span>{batch.period || workspace.profile?.return_period || "--"}</span>
               <span>{batch.parsed_rows} parsed</span>
               <span>{batch.error_rows} errors</span>
               <StatusPill status={batch.status} />
               {batch.error_rows ? <button onClick={() => openErrors(batch.id)} className="inline-flex items-center gap-1 rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700"><AlertTriangle className="size-3" /> Errors</button> : <span />}
+              <button onClick={() => reprocessBatch(batch)} disabled={reprocessingId === batch.id || locked} className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-bold text-blue-700 shadow-sm ring-1 ring-blue-100 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-slate-900 dark:ring-white/10">
+                <RotateCw className={`size-3 ${reprocessingId === batch.id ? "animate-spin" : ""}`} /> {reprocessingId === batch.id ? "Reprocessing" : "Reprocess"}
+              </button>
               <button onClick={() => removeBatch(batch)} disabled={busy || locked} className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-bold text-rose-700 shadow-sm ring-1 ring-rose-100 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-slate-900 dark:ring-white/10">
                 <Trash2 className="size-3" /> {busy ? "Deleting" : "Delete"}
               </button>

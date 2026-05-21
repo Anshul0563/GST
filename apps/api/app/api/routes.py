@@ -855,17 +855,46 @@ def import_status(
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
     settle_stale_import(batch, db)
-    parser_errors, debug = read_import_report(batch)
-    return BatchStatus(
-        id=batch.id,
-        platform=batch.platform,
-        period=batch.period,
-        status=batch.status,
-        parsed_rows=batch.parsed_rows,
-        error_rows=batch.error_rows,
-        errors=parser_errors,
-        debug=debug,
-    )
+    return batch_status_response(batch)
+
+
+@router.post("/imports/{batch_id}/reprocess", response_model=BatchStatus)
+def reprocess_import_batch(
+    batch_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    batch = db.get(PlatformImportBatch, batch_id)
+    if not batch or batch.user_id != user.id:
+        raise HTTPException(404, "Batch not found")
+    settle_stale_import(batch, db)
+    if batch.status in {"queued", "processing"}:
+        raise HTTPException(409, "Import is still processing")
+
+    try:
+        paths = stored_import_paths(batch, db)
+        run_import_parser(batch, paths, db, replace_existing_batch_rows=True)
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="import.reprocess",
+                entity_type="platform_import_batch",
+                entity_id=str(batch.id),
+            )
+        )
+        db.commit()
+        db.refresh(batch)
+        return batch_status_response(batch)
+    except FileNotFoundError as exc:
+        db.rollback()
+        raise HTTPException(404, str(exc)) from exc
+    except Exception as exc:
+        db.rollback()
+        batch.status = "failed"
+        batch.error_report_json = json.dumps([{"error": str(exc)}])
+        batch.completed_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(500, str(exc)) from exc
 
 
 @router.get("/imports", response_model=list[BatchStatus])
@@ -888,18 +917,7 @@ def list_imports(
     for batch in batches:
         settle_stale_import(batch, db)
     return [
-        (
-            lambda report: BatchStatus(
-                id=batch.id,
-                platform=batch.platform,
-                period=batch.period,
-                status=batch.status,
-                parsed_rows=batch.parsed_rows,
-                error_rows=batch.error_rows,
-                errors=report[0],
-                debug=report[1],
-            )
-        )(read_import_report(batch))
+        batch_status_response(batch)
         for batch in batches
     ]
 
