@@ -182,6 +182,45 @@ def validation_summary(transactions: list[dict], parser_errors: list[dict]) -> d
     return summary
 
 
+def batch_status_response(batch: PlatformImportBatch) -> BatchStatus:
+    parser_errors, debug = read_import_report(batch)
+    return BatchStatus(
+        id=batch.id,
+        platform=batch.platform,
+        period=batch.period,
+        status=batch.status,
+        parsed_rows=batch.parsed_rows,
+        error_rows=batch.error_rows,
+        errors=parser_errors,
+        debug=debug,
+    )
+
+
+def stored_import_paths(batch: PlatformImportBatch, db: Session) -> list[str]:
+    uploads = db.scalars(
+        select(UploadedFile)
+        .where(UploadedFile.batch_id == batch.id, UploadedFile.user_id == batch.user_id)
+        .order_by(UploadedFile.id.asc())
+    ).all()
+    paths = [uploaded.stored_path for uploaded in uploads if uploaded.stored_path]
+    missing = [path for path in paths if not Path(path).exists()]
+    if missing:
+        raise FileNotFoundError(f"Uploaded source file missing: {missing[0]}")
+    return paths
+
+
+def clear_batch_transactions(batch: PlatformImportBatch, db: Session) -> None:
+    rows = db.scalars(
+        select(NormalizedTransaction).where(
+            NormalizedTransaction.batch_id == batch.id,
+            NormalizedTransaction.user_id == batch.user_id,
+        )
+    ).all()
+    for row in rows:
+        db.delete(row)
+    db.flush()
+
+
 @router.post("/auth/register", response_model=Token)
 def register(payload: RegisterIn, db: Session = Depends(get_db)):
     existing = db.scalar(select(User).where(User.email == payload.email.lower()))
@@ -693,6 +732,92 @@ async def upload_import(
     )
 
 
+def run_import_parser(
+    batch: PlatformImportBatch,
+    file_paths: list[str],
+    db: Session,
+    *,
+    replace_existing_batch_rows: bool = False,
+) -> PlatformImportBatch:
+    profile = db.get(GSTProfile, batch.profile_id)
+    if not profile:
+        raise RuntimeError("GST profile for import batch no longer exists")
+
+    batch.status = "processing"
+    batch.error_rows = 0
+    batch.error_report_json = None
+    db.commit()
+
+    if replace_existing_batch_rows:
+        clear_batch_transactions(batch, db)
+
+    parser = get_parser(batch.platform)(
+        profile.gstin,
+        batch.period or profile.return_period,
+    )
+    result = parser.parse([Path(path) for path in file_paths])
+    seen_keys: set[
+        tuple[int, str | None, str | None, str | None, str | None, str | None]
+    ] = set()
+    inserted_rows = 0
+    validation_error_rows = 0
+
+    for txn in result.transactions:
+        txn = dict(txn)
+        txn["filing_period"] = (
+            txn.get("filing_period")
+            or document_period(txn)
+            or batch.period
+            or profile.return_period
+        )
+        key = (
+            batch.profile_id,
+            txn.get("filing_period"),
+            txn.get("platform"),
+            txn.get("doc_type"),
+            txn.get("invoice_no"),
+            txn.get("order_item_id"),
+        )
+        duplicate = key in seen_keys or db.scalar(
+            select(NormalizedTransaction).where(
+                NormalizedTransaction.profile_id == key[0],
+                NormalizedTransaction.filing_period == key[1],
+                NormalizedTransaction.platform == key[2],
+                NormalizedTransaction.doc_type == key[3],
+                NormalizedTransaction.invoice_no == key[4],
+                NormalizedTransaction.order_item_id == key[5],
+            )
+        )
+        if duplicate:
+            continue
+        seen_keys.add(key)
+        db.add(
+            NormalizedTransaction(
+                user_id=batch.user_id,
+                profile_id=batch.profile_id,
+                batch_id=batch.id,
+                **txn,
+            )
+        )
+        inserted_rows += 1
+        validation_error_rows += (
+            1 if txn.get("validation_status") in {"error", "invalid"} else 0
+        )
+
+    batch.parsed_rows = inserted_rows
+    batch.error_rows = len(result.errors) + validation_error_rows
+    result.debug["validation_summary"] = validation_summary(
+        result.transactions, result.errors
+    )
+    batch.error_report_json = json.dumps(
+        {"parser_errors": result.errors, "debug": result.debug},
+        default=str,
+    )
+    batch.status = "completed" if batch.error_rows == 0 else "completed_with_errors"
+    batch.completed_at = datetime.utcnow()
+    return batch
+
+
 def process_import_batch(batch_id: int, file_paths: list[str]):
     from app.db.session import SessionLocal
 
@@ -701,67 +826,7 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         batch = db.get(PlatformImportBatch, batch_id)
         if not batch:
             return
-        profile = db.get(GSTProfile, batch.profile_id)
-        batch.status = "processing"
-        db.commit()
-        parser = get_parser(batch.platform)(profile.gstin, batch.period or profile.return_period)
-        result = parser.parse([Path(path) for path in file_paths])
-        seen_keys: set[
-            tuple[int, str | None, str | None, str | None, str | None, str | None]
-        ] = set()
-        inserted_rows = 0
-        validation_error_rows = 0
-        for txn in result.transactions:
-            txn = dict(txn)
-            txn["filing_period"] = (
-                txn.get("filing_period")
-                or document_period(txn)
-                or batch.period
-                or profile.return_period
-            )
-            key = (
-                batch.profile_id,
-                txn.get("filing_period"),
-                txn.get("platform"),
-                txn.get("doc_type"),
-                txn.get("invoice_no"),
-                txn.get("order_item_id"),
-            )
-            duplicate = key in seen_keys or db.scalar(
-                select(NormalizedTransaction).where(
-                    NormalizedTransaction.profile_id == key[0],
-                    NormalizedTransaction.filing_period == key[1],
-                    NormalizedTransaction.platform == key[2],
-                    NormalizedTransaction.doc_type == key[3],
-                    NormalizedTransaction.invoice_no == key[4],
-                    NormalizedTransaction.order_item_id == key[5],
-                )
-            )
-            if duplicate:
-                continue
-            seen_keys.add(key)
-            db.add(
-                NormalizedTransaction(
-                    user_id=batch.user_id,
-                    profile_id=batch.profile_id,
-                    batch_id=batch.id,
-                    **txn,
-                )
-            )
-            inserted_rows += 1
-            validation_error_rows += (
-                1 if txn.get("validation_status") in {"error", "invalid"} else 0
-            )
-        batch.parsed_rows = inserted_rows
-        batch.error_rows = len(result.errors) + validation_error_rows
-        result.debug["validation_summary"] = validation_summary(
-            result.transactions, result.errors
-        )
-        batch.error_report_json = json.dumps(
-            {"parser_errors": result.errors, "debug": result.debug}, default=str
-        )
-        batch.status = "completed" if batch.error_rows == 0 else "completed_with_errors"
-        batch.completed_at = datetime.utcnow()
+        run_import_parser(batch, file_paths, db)
         db.add(
             AuditLog(
                 user_id=batch.user_id,
