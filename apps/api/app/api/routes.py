@@ -84,6 +84,7 @@ from app.utils.security import create_access_token, hash_password, verify_passwo
 router = APIRouter()
 ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
 STALE_IMPORT_AFTER = timedelta(minutes=5)
+USABLE_IMPORT_STATUSES = {"completed", "completed_with_errors"}
 
 
 def paid_until(order: PaymentOrder | None) -> datetime | None:
@@ -219,6 +220,31 @@ def clear_batch_transactions(batch: PlatformImportBatch, db: Session) -> None:
     for row in rows:
         db.delete(row)
     db.flush()
+
+
+def transaction_row_import_is_usable(row: NormalizedTransaction, db: Session) -> bool:
+    if row.batch_id is None:
+        return True
+    batch = db.get(PlatformImportBatch, row.batch_id)
+    return bool(batch and batch.status in USABLE_IMPORT_STATUSES)
+
+
+def usable_transaction_rows(
+    rows: list[NormalizedTransaction],
+    db: Session,
+) -> list[NormalizedTransaction]:
+    batch_ids = sorted({row.batch_id for row in rows if row.batch_id is not None})
+    if not batch_ids:
+        return rows
+    batches = db.scalars(
+        select(PlatformImportBatch).where(PlatformImportBatch.id.in_(batch_ids))
+    ).all()
+    statuses = {batch.id: batch.status for batch in batches}
+    return [
+        row
+        for row in rows
+        if row.batch_id is None or statuses.get(row.batch_id) in USABLE_IMPORT_STATUSES
+    ]
 
 
 @router.post("/auth/register", response_model=Token)
@@ -778,7 +804,7 @@ def run_import_parser(
             txn.get("invoice_no"),
             txn.get("order_item_id"),
         )
-        duplicate = key in seen_keys or db.scalar(
+        existing = db.scalar(
             select(NormalizedTransaction).where(
                 NormalizedTransaction.profile_id == key[0],
                 NormalizedTransaction.filing_period == key[1],
@@ -788,6 +814,11 @@ def run_import_parser(
                 NormalizedTransaction.order_item_id == key[5],
             )
         )
+        if existing and not transaction_row_import_is_usable(existing, db):
+            db.delete(existing)
+            db.flush()
+            existing = None
+        duplicate = key in seen_keys or existing is not None
         if duplicate:
             continue
         seen_keys.add(key)
@@ -840,6 +871,8 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         db.rollback()
         batch = db.get(PlatformImportBatch, batch_id)
         if batch:
+            clear_batch_transactions(batch, db)
+            batch.parsed_rows = 0
             batch.status = "failed"
             batch.error_report_json = json.dumps([{"error": str(exc)}])
             db.commit()
@@ -891,6 +924,8 @@ def reprocess_import_batch(
     except Exception as exc:
         db.rollback()
         batch.status = "failed"
+        clear_batch_transactions(batch, db)
+        batch.parsed_rows = 0
         batch.error_report_json = json.dumps([{"error": str(exc)}])
         batch.completed_at = datetime.utcnow()
         db.commit()
@@ -1038,7 +1073,7 @@ def transactions(
         stmt = stmt.where(NormalizedTransaction.profile_id == profile_id)
     if platform:
         stmt = stmt.where(NormalizedTransaction.platform == platform)
-    rows = db.scalars(stmt).all()
+    rows = usable_transaction_rows(db.scalars(stmt).all(), db)
     if period:
         rows = [row for row in rows if transaction_matches_period(row, period)]
     return rows[:1000]
@@ -1054,7 +1089,7 @@ def dashboard_summary(
     stmt = select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id)
     if profile_id:
         stmt = stmt.where(NormalizedTransaction.profile_id == profile_id)
-    rows = db.scalars(stmt).all()
+    rows = usable_transaction_rows(db.scalars(stmt).all(), db)
     if period:
         rows = [row for row in rows if transaction_matches_period(row, period)]
     platform_totals: dict[str, dict] = {}
@@ -1187,7 +1222,7 @@ def transaction_dicts(
     )
     if valid_only:
         stmt = stmt.where(NormalizedTransaction.validation_status == "valid")
-    rows = db.scalars(stmt).all()
+    rows = usable_transaction_rows(db.scalars(stmt).all(), db)
     return [
         transaction_to_dict(row)
         for row in rows
@@ -1205,6 +1240,7 @@ def validation_error_count(
             NormalizedTransaction.validation_status.in_(["error", "invalid"]),
         )
     ).all()
+    rows = usable_transaction_rows(rows, db)
     return sum(1 for row in rows if transaction_matches_period(row, period))
 
 
