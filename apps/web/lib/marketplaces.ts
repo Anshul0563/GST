@@ -13,7 +13,7 @@ export type Marketplace = {
 
 export const marketplaces: Marketplace[] = [
   { key: "amazon", name: "Amazon", category: "Ecommerce", status: "Active", requiredFiles: ["MTR_B2C CSV", "MTR_B2B CSV optional"], guide: "Reports > Manage Taxes > GST Monthly Reports", accent: "from-orange-400 to-slate-900", icon: ShoppingBag },
-  { key: "flipkart", name: "Flipkart", category: "Ecommerce", status: "Active", requiredFiles: ["Sales report Excel", "Cash Back report if available"], guide: "Reports Center > Tax Reports > Sales report", accent: "from-yellow-300 to-blue-600", icon: PackageCheck },
+  { key: "flipkart", name: "Flipkart", category: "Ecommerce", status: "Active", requiredFiles: ["Sales report Excel", "Cash Back report if available", "Next month report if needed"], guide: "Reports Center > Tax Reports > Sales report", accent: "from-yellow-300 to-blue-600", icon: PackageCheck },
   { key: "meesho", name: "Meesho", category: "Ecommerce", status: "Active", requiredFiles: ["tcs_sales.xlsx", "tcs_sales_return.xlsx", "Tax_invoice_details.xlsx"], guide: "Payments > Download GST Reports", accent: "from-pink-500 to-rose-600", icon: Store },
   { key: "myntra", name: "Myntra", category: "Ecommerce", status: "Beta", requiredFiles: ["Sales report"], guide: "Upload Myntra GST report", accent: "from-pink-500 to-orange-400", icon: ShoppingBag },
   { key: "ajio", name: "Ajio", category: "Ecommerce", status: "Coming Soon", requiredFiles: ["Sales report"], guide: "Ajio seller tax report", accent: "from-slate-800 to-slate-500", icon: ShoppingBag },
