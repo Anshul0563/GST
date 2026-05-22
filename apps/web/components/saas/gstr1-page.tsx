@@ -13,7 +13,7 @@ export function Gstr1Page() {
   const activeProfileId = workspace.profile?.id;
   const activeProfilePeriod = workspace.profile?.return_period;
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
-  const [exportMode, setExportMode] = useState<Gstr1ExportMode>("gsttool_compatible");
+  const [exportMode, setExportMode] = useState<Gstr1ExportMode>("clean_portal");
   const [modePreview, setModePreview] = useState<Gstr1Payload | null>(null);
   const [parityReport, setParityReport] = useState<Gstr1ParityReport>(null);
   const [downloads, setDownloads] = useState<{ download_json: string; download_excel: string } | null>(null);
@@ -120,7 +120,7 @@ export function Gstr1Page() {
     }
   }
   const summary = workspace.summary;
-  const activePreview = modePreview ?? (exportMode === "gsttool_compatible" ? workspace.preview : null);
+  const activePreview = modePreview ?? workspace.preview;
   const previewTotals = (activePreview?.b2cs || []).reduce((total, row) => ({
     taxable: total.taxable + money(row.txval),
     igst: total.igst + money(row.iamt),
@@ -152,7 +152,7 @@ export function Gstr1Page() {
           <StatCard label="SGST" value={formatCurrency(previewTotals.sgst)} tone="saffron" />
           <StatCard label="Total GST" value={formatCurrency(previewGst)} tone="green" />
         </div>
-        <Panel title="Export Mode" subtitle="GSTTool Compatible preserves original GSTTool quirks; Clean Portal Optimized applies strict cleanup.">
+        <Panel title="Export Mode" subtitle="Clean Portal Optimized is default. GSTTool Compatible is optional and may differ for Flipkart due to report-cycle logic.">
           <div className="flex flex-wrap items-center gap-3">
             {([
               ["gsttool_compatible", "GSTTool Compatible"],
@@ -171,6 +171,11 @@ export function Gstr1Page() {
               {zeroRows ? <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">{zeroRows} zero B2CS rows preserved</span> : null}
             </div>
           </div>
+          {compatible ? (
+            <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
+              May differ for Flipkart due to report-cycle logic.
+            </div>
+          ) : null}
         </Panel>
         <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
           <Panel title="B2CS preview" subtitle="Grouped by supply type, rate, POS and OE type.">

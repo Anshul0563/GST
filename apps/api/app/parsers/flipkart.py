@@ -7,9 +7,9 @@ import pandas as pd
 from app.parsers.base import (
     MarketplaceParser,
     ParseResult,
-    belongs_to_period,
     clean_column,
     detect_header_row_frame,
+    first_value,
     has_explicit_tax_split,
     should_skip_transaction,
     unique_headers,
@@ -29,7 +29,11 @@ class FlipkartParser(MarketplaceParser):
         month = int(self.filing_period[:2])
         year = int(self.filing_period[2:])
         start = date(year, month, 1)
-        next_month = date(year + (1 if month == 12 else 0), 1 if month == 12 else month + 1, 1)
+        next_month = date(
+            year + (1 if month == 12 else 0),
+            1 if month == 12 else month + 1,
+            1,
+        )
         following_month = date(
             next_month.year + (1 if next_month.month == 12 else 0),
             1 if next_month.month == 12 else next_month.month + 1,
@@ -37,66 +41,63 @@ class FlipkartParser(MarketplaceParser):
         )
         return start, next_month, following_month
 
-    def _flipkart_series(self, txn: dict) -> str:
-        doc_no = str(txn.get("invoice_no") or "").upper()
-        if doc_no.startswith("FAWRLX"):
+    def _series_key(self, txn: dict, sheet_name: str) -> str:
+        invoice_no = str(txn.get("invoice_no") or "").upper()
+        sheet = sheet_name.lower()
+        if "cash back report" in sheet:
+            if invoice_no.startswith("CAN"):
+                return "legacy_cashback_credit"
+            if invoice_no.startswith("DAL"):
+                return "legacy_cashback_debit"
+            if invoice_no.startswith("LYAA"):
+                return "new_cashback_credit"
+            if invoice_no.startswith("LZAA"):
+                return "new_cashback_debit"
+            return f"cashback:{txn.get('doc_type')}"
+        if invoice_no.startswith("FAWRLX"):
             return "legacy_sales"
-        if doc_no.startswith("RAT"):
+        if invoice_no.startswith("RAT"):
             return "legacy_returns"
-        if doc_no.startswith("CAN"):
-            return "legacy_cashback_credit"
-        if doc_no.startswith("DAL"):
-            return "legacy_cashback_debit"
-        if doc_no.startswith("LWAB"):
+        if invoice_no.startswith("LWAB"):
             return "new_sales"
-        if doc_no.startswith("MFAB"):
+        if invoice_no.startswith("MFAB"):
             return "new_returns"
-        if doc_no.startswith("LYAA"):
-            return "new_cashback_credit"
-        if doc_no.startswith("LZAA"):
-            return "new_cashback_debit"
-        return "other"
+        return f"sales:{txn.get('doc_type')}"
 
-    def _gsttool_window_filter(self, candidates: list[dict]) -> tuple[set[int], dict[int, str]]:
+    def _report_cycle_filter(
+        self, candidates: list[dict]
+    ) -> tuple[set[int], dict[int, str]]:
         period_start, next_month, following_month = self._period_bounds()
-        in_period_ids: set[int] = set()
-        next_period_rows: dict[str, list[tuple[int, date]]] = {}
+        included: set[int] = set()
+        reasons: dict[int, str] = {}
         current_rows: dict[str, list[tuple[int, date]]] = {}
+        next_rows: dict[str, list[tuple[int, date]]] = {}
         has_new_series_in_period = False
 
         for index, item in enumerate(candidates):
-            txn = item["txn"]
-            document_date = txn.get("document_date")
+            document_date = item["txn"].get("document_date")
             if not isinstance(document_date, date):
+                reasons[index] = "document date unavailable"
                 continue
-            series = self._flipkart_series(txn)
+            series = self._series_key(item["txn"], item["sheet_name"])
             if period_start <= document_date < next_month:
-                in_period_ids.add(index)
+                included.add(index)
+                reasons[index] = "document date is inside filing period"
                 current_rows.setdefault(series, []).append((index, document_date))
                 if series.startswith("new_"):
                     has_new_series_in_period = True
             elif next_month <= document_date < following_month:
-                next_period_rows.setdefault(series, []).append((index, document_date))
-
-        included = set(in_period_ids)
-        reasons = {index: "document date is inside filing period" for index in included}
-
-        for series, values in next_period_rows.items():
-            if series not in {"legacy_sales", "legacy_cashback_credit"}:
-                continue
-            ordered = sorted(values, key=lambda item: item[1])
-            if not ordered:
-                continue
-            previous = ordered[0][1]
-            for index, document_date in ordered:
-                if (document_date - previous).days > 1:
-                    break
-                included.add(index)
-                reasons[index] = "Flipkart GSTTool opening next-month continuation"
-                previous = document_date
+                next_rows.setdefault(series, []).append((index, document_date))
+                reasons[index] = "document date outside filing period"
+            else:
+                reasons[index] = "document date outside filing period"
 
         if not has_new_series_in_period:
-            for series in ("legacy_sales", "legacy_returns", "legacy_cashback_credit"):
+            for series in (
+                "legacy_sales",
+                "legacy_returns",
+                "legacy_cashback_credit",
+            ):
                 ordered = sorted(current_rows.get(series, []), key=lambda item: item[1])
                 cutoff = None
                 previous = None
@@ -108,13 +109,41 @@ class FlipkartParser(MarketplaceParser):
                 if cutoff is None:
                     continue
                 for index, document_date in ordered:
-                    if document_date < cutoff and index in included:
-                        included.remove(index)
-                        reasons[index] = "Flipkart GSTTool pre-window legacy row"
-                    elif document_date >= cutoff and index in included:
-                        reasons[index] = "Flipkart GSTTool legacy window row"
+                    if document_date < cutoff:
+                        included.discard(index)
+                        reasons[index] = "Flipkart report-cycle pre-window row"
+                    else:
+                        included.add(index)
+                        reasons[index] = "Flipkart report-cycle current window row"
+
+            for series in ("legacy_sales", "legacy_cashback_credit"):
+                ordered = sorted(next_rows.get(series, []), key=lambda item: item[1])
+                if not ordered:
+                    continue
+                previous = ordered[0][1]
+                for index, document_date in ordered:
+                    if (document_date - previous).days >= 5:
+                        break
+                    included.add(index)
+                    reasons[index] = "Flipkart report-cycle next-month opening row"
+                    previous = document_date
 
         return included, reasons
+
+    def _classify_doc_type(self, row: dict, sheet_name: str) -> str:
+        sheet = sheet_name.lower()
+        if "cash back report" in sheet:
+            document_type = str(
+                first_value(row, ["document type", "doc type", "type"]) or ""
+            ).lower()
+            if "debit" in document_type:
+                return "debit_note"
+            return "credit_note"
+
+        event_type = str(first_value(row, ["event type"]) or "").lower()
+        if "return" in event_type or "cancellation" in event_type:
+            return "credit_note"
+        return "invoice"
 
     def _debug_row(
         self,
@@ -124,23 +153,36 @@ class FlipkartParser(MarketplaceParser):
         sheet_name: str,
         row_number: int,
         txn: dict,
+        source_row: dict,
         included: bool,
         reason: str,
+        running_total: dict,
     ) -> None:
         result.debug.setdefault("row_level_debug", []).append(
             {
-                "file": file_name,
-                "sheet_name": sheet_name,
-                "source_row_number": row_number,
-                "invoice_doc_no": txn.get("invoice_no"),
+                "source_file": file_name,
+                "sheet": sheet_name,
+                "row": row_number,
+                "invoice_no": txn.get("invoice_no"),
+                "event_type": first_value(source_row, ["event type"]),
+                "document_type": first_value(
+                    source_row,
+                    ["document type", "doc type", "type"],
+                ),
                 "doc_type": txn.get("doc_type"),
-                "document_date_used": str(txn.get("document_date")),
-                "taxable": str(txn.get("taxable_value")),
+                "document_date": str(txn.get("document_date")),
+                "taxable_value": str(txn.get("taxable_value")),
                 "igst": str(txn.get("igst")),
                 "cgst": str(txn.get("cgst")),
                 "sgst": str(txn.get("sgst")),
                 "included": included,
                 "reason": reason,
+                "running_total": {
+                    "taxable_value": str(running_total["taxable_value"]),
+                    "igst": str(running_total["igst"]),
+                    "cgst": str(running_total["cgst"]),
+                    "sgst": str(running_total["sgst"]),
+                },
             }
         )
 
@@ -148,6 +190,12 @@ class FlipkartParser(MarketplaceParser):
         result = ParseResult()
         result.debug = new_pos_debug(self.platform)
         candidates: list[dict] = []
+        running_total = {
+            "taxable_value": 0,
+            "igst": 0,
+            "cgst": 0,
+            "sgst": 0,
+        }
 
         for path in files:
             try:
@@ -201,36 +249,10 @@ class FlipkartParser(MarketplaceParser):
                             row,
                             f"{path.name}:{sheet.title}",
                         )
-
+                        txn["_preserve_source_sign"] = True
+                        txn["doc_type"] = self._classify_doc_type(row, sheet.title)
                         if has_explicit_tax_split(row):
                             txn["_preserve_source_tax_split"] = True
-
-                        blob = " ".join(
-                            str(value) for value in row.values()
-                        ).lower()
-
-                        document_no = str(
-                            txn.get("invoice_no") or ""
-                        ).upper()
-
-                        if (
-                            document_no.startswith("LZAA")
-                            or "debit note" in blob
-                        ):
-                            txn["doc_type"] = "debit_note"
-
-                        elif (
-                            document_no.startswith(("LYAA", "CAN"))
-                            or "credit note" in blob
-                            or "return" in blob
-                        ):
-                            txn["doc_type"] = "credit_note"
-
-                        if "cash back report" in sheet.title.lower():
-                            txn["_preserve_source_sign"] = True
-
-                            if document_no.startswith("DAL"):
-                                txn["doc_type"] = "debit_note"
 
                         observe_pos_debug(
                             result.debug,
@@ -248,16 +270,18 @@ class FlipkartParser(MarketplaceParser):
                                 sheet_name=sheet.title,
                                 row_number=source_row_number,
                                 txn=txn,
+                                source_row=row,
                                 included=False,
                                 reason="empty transaction row",
+                                running_total=running_total,
                             )
                             continue
 
                         finalized = finalize_transaction(txn)
-
                         candidates.append(
                             {
                                 "txn": finalized,
+                                "source_row": row,
                                 "file_name": path.name,
                                 "sheet_name": sheet.title,
                                 "source_row_number": source_row_number,
@@ -272,13 +296,17 @@ class FlipkartParser(MarketplaceParser):
                     }
                 )
 
-        included, reasons = self._gsttool_window_filter(candidates)
+        included, reasons = self._report_cycle_filter(candidates)
         for index, item in enumerate(candidates):
             txn = item["txn"]
             is_included = index in included
-            reason = reasons.get(index, "document date outside Flipkart GSTTool window")
+            reason = reasons.get(index, "document date outside filing period")
             if is_included:
                 result.transactions.append(txn)
+                running_total["taxable_value"] += txn.get("taxable_value", 0)
+                running_total["igst"] += txn.get("igst", 0)
+                running_total["cgst"] += txn.get("cgst", 0)
+                running_total["sgst"] += txn.get("sgst", 0)
             else:
                 result.debug.setdefault("period_excluded_rows", []).append(
                     {
@@ -298,8 +326,10 @@ class FlipkartParser(MarketplaceParser):
                 sheet_name=item["sheet_name"],
                 row_number=item["source_row_number"],
                 txn=txn,
+                source_row=item["source_row"],
                 included=is_included,
                 reason=reason,
+                running_total=running_total,
             )
 
         return result

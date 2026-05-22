@@ -121,16 +121,17 @@ export function ImportsPage() {
             <div className="flex items-center justify-between"><div><h3 className="font-black">{selected.name}</h3><p className="text-sm text-slate-500">{selected.guide}</p></div><StatusPill status={selected.status} /></div>
             {!canImport && <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-800">{selected.name} upload is coming soon. Choose Amazon, Flipkart, Meesho, Custom Excel, or a beta parser.</div>}
             <div className="mt-4 grid gap-3">
-              {selected.requiredFiles.map((file, index) => <label key={file} className={`flex min-h-16 items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm dark:border-white/10 dark:bg-slate-900 ${canImport ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}><FileSpreadsheet className="size-5 text-emerald-600" /><span className="w-44 font-bold">{file}</span><input type="file" disabled={!canImport} className="flex-1 text-xs" onChange={(event) => {
-                const selectedFile = event.target.files?.[0];
-                if (!selectedFile) return;
+              {selected.requiredFiles.map((file, index) => <label key={file} className={`flex min-h-16 items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm dark:border-white/10 dark:bg-slate-900 ${canImport ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}><FileSpreadsheet className="size-5 text-emerald-600" /><span className="w-44 font-bold">{file}</span><input type="file" multiple disabled={!canImport} className="flex-1 text-xs" onChange={(event) => {
+                const selectedFiles = Array.from(event.target.files || []);
+                if (!selectedFiles.length) return;
                 setFiles((current) => {
                   const next = [...current];
-                  next[index] = selectedFile;
+                  next.splice(index, 1, ...selectedFiles);
                   return next.filter(Boolean);
                 });
               }} /></label>)}
             </div>
+            {files.length ? <div className="mt-4 rounded-2xl bg-white p-4 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">{files.length} file{files.length === 1 ? "" : "s"} selected</div> : null}
             <button onClick={startImport} disabled={!canImport || !workspace.profile} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><UploadCloud className="size-4" /> {canImport ? "Start import" : "Coming soon"} <ArrowRight className="size-4" /></button>
             {progress && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{progress}</div>}
             {activeBatch && <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 text-sm dark:bg-slate-900 md:grid-cols-3"><b>Batch #{activeBatch.id}</b><span>{activeBatch.parsed_rows} parsed</span><span>{activeBatch.error_rows} errors</span></div>}

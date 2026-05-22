@@ -130,7 +130,7 @@ class BatchStatus(BaseModel):
 class GenerateGSTR1In(BaseModel):
     profile_id: int
     period: str
-    export_mode: str = "gsttool_compatible"
+    export_mode: str = "clean_portal"
 
 
 class TallyCompanyIn(BaseModel):

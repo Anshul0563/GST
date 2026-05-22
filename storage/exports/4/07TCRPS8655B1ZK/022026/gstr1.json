@@ -8,82 +8,9 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
-      "pos": "37",
-      "txval": 488.35,
-      "iamt": 14.65,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "10",
-      "txval": 0,
-      "iamt": 0,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTRA",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "07",
-      "txval": 516.5,
-      "camt": 7.75,
-      "samt": 7.75,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "24",
-      "txval": 219.42,
-      "iamt": 6.58,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
       "pos": "02",
       "txval": 200,
       "iamt": 6,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "29",
-      "txval": 335.92,
-      "iamt": 10.08,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "27",
-      "txval": 193.2,
-      "iamt": 5.8,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "17",
-      "txval": 152.43,
-      "iamt": 4.57,
-      "csamt": 0
-    },
-    {
-      "sply_ty": "INTER",
-      "rt": 3,
-      "typ": "OE",
-      "pos": "21",
-      "txval": 0,
-      "iamt": 0,
       "csamt": 0
     },
     {
@@ -108,6 +35,51 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
+      "pos": "09",
+      "txval": -11.65,
+      "iamt": -0.35,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "17",
+      "txval": 152.43,
+      "iamt": 4.57,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "24",
+      "txval": 219.42,
+      "iamt": 6.58,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "27",
+      "txval": 193.2,
+      "iamt": 5.8,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
+      "pos": "29",
+      "txval": 335.92,
+      "iamt": 10.08,
+      "csamt": 0
+    },
+    {
+      "sply_ty": "INTER",
+      "rt": 3,
+      "typ": "OE",
       "pos": "33",
       "txval": 410.68,
       "iamt": 12.32,
@@ -126,29 +98,30 @@
       "sply_ty": "INTER",
       "rt": 3,
       "typ": "OE",
-      "pos": "09",
-      "txval": -11.65,
-      "iamt": -0.35,
+      "pos": "37",
+      "txval": 488.35,
+      "iamt": 14.65,
       "csamt": 0
     },
     {
-      "sply_ty": "INTER",
+      "sply_ty": "INTRA",
       "rt": 3,
       "typ": "OE",
-      "pos": "19",
-      "txval": 0,
-      "iamt": 0,
+      "pos": "07",
+      "txval": 516.51,
+      "camt": 7.75,
+      "samt": 7.74,
       "csamt": 0
     }
   ],
   "supeco": {
     "clttx": [
       {
-        "etin": "07AARCM9332R1CQ",
-        "suppval": 2406.8,
-        "igst": 56.71,
-        "cgst": 7.75,
-        "sgst": 7.75,
+        "etin": "07AACCF0683K1CU",
+        "suppval": -14.55,
+        "igst": -0.45,
+        "cgst": 0,
+        "sgst": 0,
         "cess": 0,
         "flag": "N"
       },
@@ -162,11 +135,11 @@
         "flag": "N"
       },
       {
-        "etin": "07AACCF0683K1CU",
-        "suppval": -14.55,
-        "igst": -0.45,
-        "cgst": 0,
-        "sgst": 0,
+        "etin": "07AARCM9332R1CQ",
+        "suppval": 2406.8,
+        "igst": 56.71,
+        "cgst": 7.75,
+        "sgst": 7.74,
         "cess": 0,
         "flag": "N"
       }
@@ -188,19 +161,19 @@
           },
           {
             "num": 2,
-            "from": "IN-4",
-            "to": "IN-4",
-            "totnum": 1,
-            "cancel": 0,
-            "net_issue": 1
-          },
-          {
-            "num": 3,
             "from": "FAWRLX2600000076",
             "to": "FAWRLX2600000079",
             "totnum": 4,
             "cancel": 0,
             "net_issue": 4
+          },
+          {
+            "num": 3,
+            "from": "IN-4",
+            "to": "IN-4",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
           }
         ]
       },
@@ -211,18 +184,18 @@
           {
             "num": 1,
             "from": "6p5kc26C50",
-            "to": "6p5kc26C65",
-            "totnum": 16,
+            "to": "6p5kc26C51",
+            "totnum": 2,
             "cancel": 0,
-            "net_issue": 16
+            "net_issue": 2
           },
           {
             "num": 2,
-            "from": "RAT6SO2600000024",
-            "to": "RAT6SO2600000027",
-            "totnum": 4,
+            "from": "6p5kc26C54",
+            "to": "6p5kc26C65",
+            "totnum": 12,
             "cancel": 0,
-            "net_issue": 4
+            "net_issue": 12
           },
           {
             "num": 3,
@@ -231,6 +204,14 @@
             "totnum": 2,
             "cancel": 0,
             "net_issue": 2
+          },
+          {
+            "num": 4,
+            "from": "RAT6SO2600000024",
+            "to": "RAT6SO2600000027",
+            "totnum": 4,
+            "cancel": 0,
+            "net_issue": 4
           }
         ]
       },

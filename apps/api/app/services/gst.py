@@ -122,6 +122,16 @@ def document_period(row: dict[str, Any]) -> str | None:
 
 
 def row_belongs_to_period(row: dict[str, Any], period: str) -> bool:
+    if (
+        str(row.get("platform") or "").lower() == "flipkart"
+        and str(row.get("filing_period") or "") == str(period)
+        and (
+            "sales report" in str(row.get("source_file") or "").lower()
+            or "cash back report" in str(row.get("source_file") or "").lower()
+        )
+    ):
+        return True
+
     row_period = document_period(row)
 
     if row_period is None:
@@ -173,7 +183,7 @@ def split_tax_gsttool(total_tax: Decimal) -> tuple[Decimal, Decimal]:
 
 
 def normalize_export_mode(export_mode: str | None) -> str:
-    normalized = str(export_mode or GSTTOOL_COMPATIBLE).strip().lower()
+    normalized = str(export_mode or CLEAN_PORTAL).strip().lower()
     aliases = {
         "gsttool": GSTTOOL_COMPATIBLE,
         "gsttool_compatible": GSTTOOL_COMPATIBLE,
@@ -183,7 +193,7 @@ def normalize_export_mode(export_mode: str | None) -> str:
         "clean_portal": CLEAN_PORTAL,
         "clean_portal_mode": CLEAN_PORTAL,
     }
-    return aliases.get(normalized, GSTTOOL_COMPATIBLE)
+    return aliases.get(normalized, CLEAN_PORTAL)
 
 
 def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool:
@@ -315,7 +325,7 @@ def valid_document_number_for_doc_issue(row: dict[str, Any], invoice_no: str) ->
 
 
 def build_b2cs(
-    gstin: str, rows: list[dict[str, Any]], export_mode: str = GSTTOOL_COMPATIBLE
+    gstin: str, rows: list[dict[str, Any]], export_mode: str = CLEAN_PORTAL
 ) -> list[dict[str, Any]]:
     mode = normalize_export_mode(export_mode)
     groups: dict[tuple[str, Decimal, str, str], dict[str, Decimal]] = defaultdict(
@@ -466,7 +476,7 @@ def build_b2cs(
 
 
 def build_supeco(
-    rows: list[dict[str, Any]], export_mode: str = GSTTOOL_COMPATIBLE
+    rows: list[dict[str, Any]], export_mode: str = CLEAN_PORTAL
 ) -> list[dict[str, Any]]:
     mode = normalize_export_mode(export_mode)
     groups: dict[str, dict[str, Decimal]] = defaultdict(
@@ -533,7 +543,7 @@ def build_supeco(
 
 
 def build_doc_issue(
-    rows: list[dict[str, Any]], export_mode: str = GSTTOOL_COMPATIBLE
+    rows: list[dict[str, Any]], export_mode: str = CLEAN_PORTAL
 ) -> dict[str, list[dict[str, Any]]]:
     mode = normalize_export_mode(export_mode)
     grouped: dict[tuple[str, str, str], list[str]] = defaultdict(list)
@@ -655,7 +665,7 @@ def validate_doc_issue_ranges(doc_issue: dict[str, Any]) -> list[str]:
 
 
 def validate_gstr1_schema(
-    payload: dict[str, Any], export_mode: str = GSTTOOL_COMPATIBLE
+    payload: dict[str, Any], export_mode: str = CLEAN_PORTAL
 ) -> list[str]:
     mode = normalize_export_mode(export_mode)
     errors: list[str] = []
@@ -796,8 +806,11 @@ def validate_gstr1_schema(
 
 
 def gstr1_generation_report(
-    payload: dict[str, Any], source_rows: list[dict[str, Any]]
+    payload: dict[str, Any],
+    source_rows: list[dict[str, Any]],
+    export_mode: str = CLEAN_PORTAL,
 ) -> dict[str, Any]:
+    mode = normalize_export_mode(export_mode)
     period = str(payload.get("fp") or "")
     uploaded_platforms = sorted(
         {
@@ -816,6 +829,8 @@ def gstr1_generation_report(
         row.get("etin") for row in payload.get("supeco", {}).get("clttx", [])
     ]
     warnings = []
+    if mode == GSTTOOL_COMPATIBLE and "flipkart" in uploaded_platforms:
+        warnings.append("May differ for Flipkart due to report-cycle logic.")
     for platform, count in valid_by_platform.items():
         if count == 0:
             if platform == "meesho":
@@ -827,7 +842,7 @@ def gstr1_generation_report(
                     f"No valid {platform.title()} rows found for period {payload.get('fp')}"
                 )
 
-    errors = validate_gstr1_schema(payload, GSTTOOL_COMPATIBLE)
+    errors = validate_gstr1_schema(payload, mode)
     errors.extend(validate_doc_issue_ranges(payload.get("doc_issue", {})))
     valid_etins = sorted(
         {str(row.get("etin")) for row in valid_rows if row.get("etin")}
@@ -919,7 +934,7 @@ def build_gstr1_json(
     gstin: str,
     period: str,
     rows: list[dict],
-    export_mode: str = GSTTOOL_COMPATIBLE,
+    export_mode: str = CLEAN_PORTAL,
 ) -> dict:
     mode = normalize_export_mode(export_mode)
     valid_rows = [row for row in rows if row_belongs_to_period(row, period)]

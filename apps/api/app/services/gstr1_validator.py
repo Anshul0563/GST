@@ -2,7 +2,6 @@ from decimal import Decimal
 
 from app.services.gst import (
     CLEAN_PORTAL,
-    GSTTOOL_COMPATIBLE,
     normalize_export_mode,
     validate_doc_issue_ranges,
     validate_gstr1_schema,
@@ -10,7 +9,7 @@ from app.services.gst import (
 from app.services.validation import money
 
 
-def validate_gstr1_export(payload, export_mode=GSTTOOL_COMPATIBLE):
+def validate_gstr1_export(payload, export_mode=CLEAN_PORTAL):
     mode = normalize_export_mode(export_mode)
 
     errors = []
@@ -29,9 +28,6 @@ def validate_gstr1_export(payload, export_mode=GSTTOOL_COMPATIBLE):
         samt = money(row.get("samt"))
         csamt = money(row.get("csamt"))
 
-        if mode == CLEAN_PORTAL and txval < Decimal("0.00"):
-            errors.append(f"Negative B2CS taxable for POS {row.get('pos')}")
-
         if (
             mode == CLEAN_PORTAL
             and row.get("sply_ty") == "INTER"
@@ -49,6 +45,12 @@ def validate_gstr1_export(payload, export_mode=GSTTOOL_COMPATIBLE):
             if total_tax != Decimal("0.00"):
                 errors.append(
                     f"B2CS taxable is zero but GST is non-zero for POS {row.get('pos')}"
+                )
+        elif mode == CLEAN_PORTAL:
+            total_tax = iamt + camt + samt + csamt
+            if total_tax != Decimal("0.00") and (total_tax > 0) != (txval > 0):
+                errors.append(
+                    f"B2CS taxable and GST signs differ for POS {row.get('pos')}"
                 )
 
     b2cs_txval = sum(money(x.get("txval")) for x in b2cs)

@@ -58,6 +58,7 @@ from app.services.billing import (
 from app.services.excel_export import write_gstr1_excel
 from app.services.gst import (
     CLEAN_PORTAL,
+    GSTTOOL_COMPATIBLE,
     build_gstr1_json,
     document_period,
     gstr1_generation_report,
@@ -1284,7 +1285,7 @@ def generate_gstr1(
         valid_only=export_mode == CLEAN_PORTAL,
     )
     gstr = build_gstr1_json(profile.gstin, payload.period, rows, export_mode)
-    final_validation = validate_gstr1_export(gstr)
+    final_validation = validate_gstr1_export(gstr, export_mode)
 
     if export_mode == CLEAN_PORTAL and not final_validation["valid"]:
         raise HTTPException(
@@ -1295,7 +1296,7 @@ def generate_gstr1(
                 "warnings": final_validation["warnings"],
             },
         )
-    generation_report = gstr1_generation_report(gstr, rows)
+    generation_report = gstr1_generation_report(gstr, rows, export_mode)
     if export_mode == CLEAN_PORTAL and generation_report["errors"]:
         raise HTTPException(
             422,
@@ -1333,7 +1334,8 @@ def generate_gstr1(
         "report": generation_report,
         "parity_report": (
             compare_against_reference(reference, gstr)
-            if (reference := load_reference_gstr1(profile.gstin, payload.period))
+            if export_mode == GSTTOOL_COMPATIBLE
+            and (reference := load_reference_gstr1(profile.gstin, payload.period))
             else None
         ),
         "download_json": f"/gstr1/export/{export.id}",
@@ -1396,7 +1398,7 @@ def gstr1_export_download(
 def preview_gstr1(
     period: str,
     profile_id: int,
-    export_mode: str = "gsttool_compatible",
+    export_mode: str = CLEAN_PORTAL,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1433,7 +1435,11 @@ def preview_gstr1(
         "can_generate": blockers == 0,
         "validation_blockers": blockers,
         "export_mode": mode,
-        "parity_report": compare_against_reference(reference, preview) if reference else None,
+        "parity_report": (
+            compare_against_reference(reference, preview)
+            if mode == GSTTOOL_COMPATIBLE and reference
+            else None
+        ),
         "preview": preview,
     }
 

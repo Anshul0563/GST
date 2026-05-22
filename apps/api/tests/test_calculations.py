@@ -559,6 +559,47 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(eco.iloc[4, 1], "07AARCM9332R1CQ")
         self.assertEqual(list(docs.iloc[3, :5]), ["Nature of Document", "Sr. No. From", "Sr. No. To", "Total Number", "Cancelled"])
 
+    def test_flipkart_february_and_march_report_cycle_totals_stay_stable(self):
+        paths = [
+            Path("/home/jarvis/Downloads/68b9958b-9e39-4c6b-877d-dac7f386164d_1779267751000.xlsx"),
+            Path("/home/jarvis/Downloads/11d11828-0221-4866-b714-b5a26595f116_1779106486000.xlsx"),
+        ]
+        if not all(path.exists() for path in paths):
+            self.skipTest("Flipkart February/March source files are not available on this machine.")
+
+        expected = {
+            "022026": {
+                "suppval": 194.19,
+                "igst": 5.81,
+                "cgst": 0,
+                "sgst": 0,
+            },
+            "032026": {
+                "suppval": 2653.73,
+                "igst": 76.66,
+                "cgst": 1.49,
+                "sgst": 1.49,
+            },
+        }
+
+        for period, values in expected.items():
+            result = FlipkartParser("07TCRPS8655B1ZK", period).parse(paths)
+            payload = build_gstr1_json(
+                "07TCRPS8655B1ZK",
+                period,
+                result.transactions,
+                CLEAN_PORTAL,
+            )
+            supeco = payload["supeco"]["clttx"]
+
+            self.assertEqual(result.errors, [])
+            self.assertEqual(len(supeco), 1)
+            self.assertEqual(supeco[0]["etin"], "07AACCF0683K1CU")
+            self.assertEqual(supeco[0]["suppval"], values["suppval"])
+            self.assertEqual(supeco[0]["igst"], values["igst"])
+            self.assertEqual(supeco[0]["cgst"], values["cgst"])
+            self.assertEqual(supeco[0]["sgst"], values["sgst"])
+
     def test_real_marketplace_files_match_official_summary(self):
         paths = {
             "flipkart": "/home/jarvis/Downloads/d5407d8e-bffa-4b10-8a44-6cace40f5f48_1778999957000.xlsx",
