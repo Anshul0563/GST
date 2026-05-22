@@ -39,6 +39,20 @@ def validate_gstr1_export(payload, export_mode=CLEAN_PORTAL):
         if row.get("sply_ty") == "INTRA":
             if abs(camt - samt) > Decimal("0.01"):
                 errors.append(f"CGST/SGST mismatch for POS {row.get('pos')}")
+        if row.get("sply_ty") == "INTRA" and abs(camt - samt) > Decimal("0.01"):
+            errors.append(f"CGST/SGST mismatch for POS {row.get('pos')}")
+
+        total_tax = iamt + camt + samt + csamt
+        if mode == CLEAN_PORTAL and txval == Decimal("0.00"):
+            if total_tax != Decimal("0.00"):
+                errors.append(
+                    f"B2CS taxable is zero but GST is non-zero for POS {row.get('pos')}"
+                )
+        elif mode == CLEAN_PORTAL:
+            if total_tax != Decimal("0.00") and (total_tax > 0) != (txval > 0):
+                errors.append(
+                    f"B2CS taxable and GST signs differ for POS {row.get('pos')}"
+                )
 
         if mode == CLEAN_PORTAL and txval == Decimal("0.00"):
             total_tax = iamt + camt + samt + csamt

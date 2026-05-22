@@ -171,11 +171,15 @@ export function Gstr1Page() {
               {zeroRows ? <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">{zeroRows} zero B2CS rows preserved</span> : null}
             </div>
           </div>
+<<<<<<< Updated upstream
           {compatible ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
               May differ for Flipkart due to report-cycle logic.
             </div>
           ) : null}
+=======
+          {compatible ? <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">May differ for Flipkart due to report-cycle logic.</div> : null}
+>>>>>>> Stashed changes
         </Panel>
         <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
           <Panel title="B2CS preview" subtitle="Grouped by supply type, rate, POS and OE type.">
