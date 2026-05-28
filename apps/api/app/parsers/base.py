@@ -7,6 +7,7 @@ from typing import Any
 import pandas as pd
 
 from app.services.pos_resolver import apply_pos_resolution
+from app.services.transaction_normalizer import finalize_transaction
 from app.services.validation import money
 
 
@@ -195,13 +196,13 @@ class MarketplaceParser:
                 )
             ),
             "gst_rate": money(
-                first_value(
+                first_tax_value(
                     row,
                     ["gst_rate", "gst rate", "tax rate", "igst rate", "total tax rate"],
                 )
             ),
             "igst": money(
-                first_value(
+                first_tax_value(
                     row,
                     [
                         "igst tax",
@@ -215,14 +216,37 @@ class MarketplaceParser:
                 )
             ),
             "cgst": money(
-                first_value(row, ["cgst tax", "cgst amount", "central tax", "cgst"])
+                first_tax_value(row, ["cgst tax", "cgst amount", "central tax", "cgst"])
             ),
             "sgst": money(
-                first_value(row, ["sgst tax", "sgst amount", "state tax", "sgst"])
+                first_tax_value(row, ["sgst tax", "sgst amount", "state tax", "sgst"])
             ),
             "cess": money(first_value(row, ["cess", "cess amount"])),
-            "tcs": money(first_value(row, ["total tcs deducted", "tcs amount", "tcs"])),
-            "tds": money(first_value(row, ["tds amount", "tds"])),
+            "tcs": money(
+                first_value(
+                    row,
+                    [
+                        "total tcs deducted",
+                        "tcs amount",
+                        "tcs igst amount",
+                        "tcs cgst amount",
+                        "tcs sgst amount",
+                        "tcs",
+                    ],
+                )
+            ),
+            "tds": money(
+                first_value(
+                    row,
+                    [
+                        "tds amount",
+                        "tds igst amount",
+                        "tds cgst amount",
+                        "tds sgst amount",
+                        "tds",
+                    ],
+                )
+            ),
             "gross_amount": money(
                 first_value(
                     row,
@@ -319,6 +343,51 @@ def should_skip_transaction(txn: dict[str, Any]) -> bool:
     return all(money(txn.get(field)) == 0 for field in amount_fields)
 
 
+def record_period_exclusion(
+    result: ParseResult,
+    *,
+    source_file: str,
+    row_number: int,
+    txn: dict[str, Any],
+    sheet_name: str | None = None,
+    reason: str = "document date outside filing period",
+) -> None:
+    entry = {
+        "file": source_file,
+        "row": row_number,
+        "invoice_no": txn.get("invoice_no"),
+        "doc_type": txn.get("doc_type"),
+        "document_date": str(txn.get("document_date")),
+        "taxable_value": str(txn.get("taxable_value")),
+        "reason": reason,
+    }
+    if sheet_name is not None:
+        entry["sheet"] = sheet_name
+    result.debug.setdefault("period_excluded_rows", []).append(entry)
+
+
+def finalize_period_transaction(
+    result: ParseResult,
+    txn: dict[str, Any],
+    *,
+    source_file: str,
+    row_number: int,
+    sheet_name: str | None = None,
+) -> dict[str, Any] | None:
+    finalized = finalize_transaction(txn)
+    if belongs_to_period(finalized.get("document_date"), finalized.get("filing_period")):
+        return finalized
+
+    record_period_exclusion(
+        result,
+        source_file=source_file,
+        sheet_name=sheet_name,
+        row_number=row_number,
+        txn=finalized,
+    )
+    return None
+
+
 def has_explicit_tax_split(row: dict[str, Any]) -> bool:
     keys = {clean_column(key) for key in row.keys()}
     split_markers = (
@@ -333,7 +402,11 @@ def has_explicit_tax_split(row: dict[str, Any]) -> bool:
         "state tax",
         "utgst",
     )
-    return any(any(marker in key for marker in split_markers) for key in keys)
+    return any(
+        any(marker in key for marker in split_markers)
+        for key in keys
+        if not is_collection_column(key)
+    )
 
 
 def first_value(row: dict[str, Any], candidates: list[str]) -> Any:
@@ -354,6 +427,22 @@ def first_value(row: dict[str, Any], candidates: list[str]) -> Any:
                 return value
 
     return None
+
+
+def is_collection_column(key: str) -> bool:
+    tokens = set(clean_column(key).split())
+    return bool(tokens.intersection({"tcs", "tds"}))
+
+
+def first_tax_value(row: dict[str, Any], candidates: list[str]) -> Any:
+    return first_value(
+        {
+            key: value
+            for key, value in row.items()
+            if not is_collection_column(str(key))
+        },
+        candidates,
+    )
 
 
 def unique_headers(headers: list[str]) -> list[str]:

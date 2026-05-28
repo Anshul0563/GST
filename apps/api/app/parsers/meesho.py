@@ -3,8 +3,8 @@ from pathlib import Path
 from app.parsers.base import (
     MarketplaceParser,
     ParseResult,
-    belongs_to_period,
     excel_frames,
+    finalize_period_transaction,
     first_value,
     money,
     should_skip_transaction,
@@ -15,7 +15,6 @@ from app.services.pos_resolver import (
     observe_pos_debug,
     resolve_pos,
 )
-from app.services.transaction_normalizer import finalize_transaction
 
 SUBORDER_ALIASES = [
     "suborder no.",
@@ -247,14 +246,12 @@ class MeeshoParser(MarketplaceParser):
                         row["credit note date"] = return_date
                         row["invoice date"] = return_date
 
+                row["doc_type"] = "credit_note" if is_return else "invoice"
+
                 txn = self.normalize_row(
                     row,
                     f"{path.name}:{sheet_name}",
                 )
-
-                # Convert return invoice → credit note
-                if is_return and txn["doc_type"] == "invoice":
-                    txn["doc_type"] = "credit_note"
 
                 if not txn.get("invoice_no"):
                     result.errors.append(
@@ -278,28 +275,14 @@ class MeeshoParser(MarketplaceParser):
                 if should_skip_transaction(txn):
                     continue
 
-                finalized = finalize_transaction(txn)
-
-                if not belongs_to_period(
-                    finalized.get("document_date"),
-                    finalized.get("filing_period"),
-                ):
-                    result.debug.setdefault(
-                        "period_excluded_rows",
-                        [],
-                    ).append(
-                        {
-                            "file": path.name,
-                            "sheet": sheet_name,
-                            "row": int(index) + 2,
-                            "invoice_no": finalized.get("invoice_no"),
-                            "doc_type": finalized.get("doc_type"),
-                            "document_date": str(finalized.get("document_date")),
-                            "taxable_value": str(finalized.get("taxable_value")),
-                            "reason": "document date outside filing period",
-                        }
-                    )
-
+                finalized = finalize_period_transaction(
+                    result,
+                    txn,
+                    source_file=path.name,
+                    sheet_name=sheet_name,
+                    row_number=int(index) + 2,
+                )
+                if finalized is None:
                     continue
 
                 result.transactions.append(finalized)

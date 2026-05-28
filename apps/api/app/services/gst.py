@@ -619,7 +619,6 @@ def build_doc_issue(
             )
             for item_range in ranges:
                 if mode == GSTTOOL_COMPATIBLE:
-                    if key[1] == "meesho" and key[0] == "credit_note":
                     if key[1] == "amazon":
                         total_count = len(set(valid_values))
                     elif key[1] == "meesho" and key[0] == "credit_note":

@@ -13,8 +13,8 @@ class Settings(BaseSettings):
     upload_dir: Path = Path("../../storage/uploads")
     export_dir: Path = Path("../../storage/exports")
     max_upload_mb: int = 60
-    admin_email: str = "anshulshakya5632@gmail.com"
-    admin_password: str = "Jarvis@563"
+    admin_email: str | None = None
+    admin_password: str | None = None
     razorpay_key_id: str | None = None
     razorpay_key_secret: str | None = None
     razorpay_webhook_secret: str | None = None

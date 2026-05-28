@@ -227,6 +227,9 @@ def seed_super_admin() -> None:
     from app.db.session import SessionLocal
 
     settings = get_settings()
+    if not settings.admin_email or not settings.admin_password:
+        return
+
     db: Session = SessionLocal()
     try:
         email = settings.admin_email.lower()

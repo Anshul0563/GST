@@ -79,13 +79,20 @@ from app.services.tally import (
     write_voucher_excel,
 )
 from app.services.transaction_normalizer import finalize_transaction
-from app.services.validation import money, validate_gstin
+from app.services.validation import money, validate_gstin, validate_period
 from app.utils.security import create_access_token, hash_password, verify_password
 
 router = APIRouter()
 ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
 STALE_IMPORT_AFTER = timedelta(minutes=5)
 USABLE_IMPORT_STATUSES = {"completed", "completed_with_errors"}
+
+
+def require_valid_period(period: str | None) -> str:
+    normalized = str(period or "").strip()
+    if not validate_period(normalized):
+        raise HTTPException(422, "Invalid filing period")
+    return normalized
 
 
 def paid_until(order: PaymentOrder | None) -> datetime | None:
@@ -442,6 +449,7 @@ def create_profile(
     gstin = payload.gstin.upper()
     if not validate_gstin(gstin):
         raise HTTPException(422, "Invalid GSTIN")
+    return_period = require_valid_period(payload.return_period)
     profile = GSTProfile(
         user_id=user.id,
         gstin=gstin,
@@ -450,7 +458,7 @@ def create_profile(
         state_code=gstin[:2],
         filing_frequency=payload.filing_frequency,
         financial_year=payload.financial_year,
-        return_period=payload.return_period,
+        return_period=return_period,
     )
     db.add(profile)
     db.add(
@@ -678,10 +686,12 @@ def update_profile(
     gstin = payload.gstin.upper()
     if not validate_gstin(gstin):
         raise HTTPException(422, "Invalid GSTIN")
+    return_period = require_valid_period(payload.return_period)
     for key, value in payload.model_dump().items():
         setattr(profile, key, value)
     profile.gstin = gstin
     profile.state_code = gstin[:2]
+    profile.return_period = return_period
     db.commit()
     db.refresh(profile)
     return profile
@@ -700,7 +710,13 @@ async def upload_import(
     profile = db.get(GSTProfile, profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
-    import_period = period or profile.return_period
+    import_period = require_valid_period(period or profile.return_period)
+    if not files:
+        raise HTTPException(422, "At least one file is required")
+    for upload in files:
+        suffix = Path(upload.filename or "").suffix.lower()
+        if suffix not in ALLOWED_EXTENSIONS:
+            raise HTTPException(422, f"Unsupported file type: {upload.filename}")
     settings = get_settings()
     batch = PlatformImportBatch(
         user_id=user.id,
@@ -714,8 +730,6 @@ async def upload_import(
     stored_paths: list[Path] = []
     for upload in files:
         suffix = Path(upload.filename or "").suffix.lower()
-        if suffix not in ALLOWED_EXTENSIONS:
-            raise HTTPException(422, f"Unsupported file type: {upload.filename}")
         stored = (
             settings.upload_dir
             / str(user.id)
@@ -1185,8 +1199,7 @@ def update_transaction(
     txn = db.get(NormalizedTransaction, transaction_id)
     if not txn or txn.user_id != user.id:
         raise HTTPException(404, "Transaction not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(txn, key, value)
+    apply_transaction_update(txn, payload.model_dump(exclude_unset=True))
     db.commit()
     db.refresh(txn)
     return txn
@@ -1208,6 +1221,38 @@ def delete_transaction(
 
 def transaction_to_dict(row: NormalizedTransaction) -> dict:
     return TransactionOut.model_validate(row).model_dump(mode="json")
+
+
+def apply_transaction_update(row: NormalizedTransaction, values: dict) -> None:
+    for key, value in values.items():
+        setattr(row, key, value)
+
+    recalculated = finalize_transaction(transaction_to_dict(row))
+    for key in (
+        "qty",
+        "taxable_value",
+        "gst_rate",
+        "igst",
+        "cgst",
+        "sgst",
+        "cess",
+        "tcs",
+        "tds",
+        "gross_amount",
+        "discount_seller",
+        "discount_platform",
+        "settlement_amount",
+        "invoice_date",
+        "document_date",
+        "doc_type",
+        "buyer_state_code",
+        "buyer_state_name",
+        "hsn",
+        "validation_status",
+        "validation_errors",
+    ):
+        if key in recalculated:
+            setattr(row, key, recalculated[key])
 
 
 def transaction_matches_period(row: NormalizedTransaction, period: str) -> bool:
@@ -1270,6 +1315,7 @@ def generate_gstr1(
     profile = db.get(GSTProfile, payload.profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
+    require_valid_period(payload.period)
     blockers = validation_error_count(user.id, profile.id, payload.period, db)
     if blockers:
         raise HTTPException(
@@ -1406,6 +1452,7 @@ def preview_gstr1(
 
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
+    require_valid_period(period)
 
     mode = normalize_export_mode(export_mode)
     rows = transaction_dicts(

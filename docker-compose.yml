@@ -23,8 +23,8 @@ services:
       UPLOAD_DIR: /data/uploads
       EXPORT_DIR: /data/exports
       REDIS_URL: redis://redis:6379/0
-      ADMIN_EMAIL: anshulshakya5632@gmail.com
-      ADMIN_PASSWORD: Jarvis@563
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-}
       RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}

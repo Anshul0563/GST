@@ -8,6 +8,10 @@ import pandas as pd
 from app.parsers.amazon import AmazonParser
 from app.parsers.flipkart import FlipkartParser
 from app.parsers.meesho import MeeshoParser
+from fastapi import HTTPException
+
+from app.api.routes import apply_transaction_update, require_valid_period
+from app.models.entities import NormalizedTransaction
 from app.services.excel_export import write_gstr1_excel
 from app.services.gst import CLEAN_PORTAL, GSTTOOL_COMPATIBLE, build_gstr1_json, gstr1_generation_report, row_belongs_to_period
 from app.services.gsttool_parity_validator import compare_against_reference
@@ -17,6 +21,47 @@ from app.services.validation import money
 
 
 class GstCalculationTests(unittest.TestCase):
+    def test_require_valid_period_rejects_bad_periods(self):
+        self.assertEqual(require_valid_period("042026"), "042026")
+        with self.assertRaises(HTTPException):
+            require_valid_period("2026-04")
+
+    def test_transaction_update_recalculates_validation_status(self):
+        row = NormalizedTransaction(
+            id=1,
+            user_id=1,
+            profile_id=1,
+            platform="custom",
+            gstin="07ABCDE1234F1Z5",
+            etin="07AAICA4872D1C8",
+            filing_period="042026",
+            invoice_no="INV-1",
+            invoice_date="2026-04-01",
+            document_date="2026-04-01",
+            doc_type="invoice",
+            buyer_state_code=None,
+            taxable_value=Decimal("100.00"),
+            gst_rate=Decimal("3.00"),
+            igst=Decimal("3.00"),
+            cgst=Decimal("0.00"),
+            sgst=Decimal("0.00"),
+            cess=Decimal("0.00"),
+            tcs=Decimal("0.00"),
+            tds=Decimal("0.00"),
+            gross_amount=Decimal("0.00"),
+            discount_seller=Decimal("0.00"),
+            discount_platform=Decimal("0.00"),
+            settlement_amount=Decimal("0.00"),
+            qty=Decimal("1.000"),
+            validation_status="invalid",
+            validation_errors="Missing POS",
+        )
+
+        apply_transaction_update(row, {"buyer_state_code": "27"})
+
+        self.assertEqual(row.validation_status, "valid")
+        self.assertIsNone(row.validation_errors)
+
     def test_amazon_mtr_fraction_rate_and_iso_dates_parse_correctly(self):
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "amazon.csv"
@@ -47,6 +92,38 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(result.errors, [])
         self.assertEqual(result.transactions, [])
 
+    def test_amazon_refund_prefers_credit_note_number_and_date(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "amazon.csv"
+            path.write_text(
+                '"Seller Gstin","Invoice Number","Credit Note Number","Invoice Date","Credit Note Date","Transaction Type","Order Id","Shipment Item Id","Quantity","Ship To State","Tax Exclusive Gross","Igst Rate","Igst Tax"\n'
+                '07TCRPS8655B1ZK,IN-FEB,CN-MAR,"2026-02-28","2026-03-03",Refund,406-1,556-1,1,ODISHA,100,3,3\n'
+            )
+            march = AmazonParser("07TCRPS8655B1ZK", "032026").parse([path])
+            february = AmazonParser("07TCRPS8655B1ZK", "022026").parse([path])
+
+        self.assertEqual(march.errors, [])
+        self.assertEqual(len(march.transactions), 1)
+        self.assertEqual(march.transactions[0]["invoice_no"], "CN-MAR")
+        self.assertEqual(str(march.transactions[0]["document_date"]), "2026-03-03")
+        self.assertEqual(february.transactions, [])
+
+    def test_tcs_igst_columns_are_not_treated_as_sale_igst(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "amazon.csv"
+            path.write_text(
+                '"Seller Gstin","Invoice Number","Invoice Date","Transaction Type","Order Id","Quantity","Ship To State","Tax Exclusive Gross","Total Tax Rate","TCS IGST Amount"\n'
+                '07TCRPS8655B1ZK,IN-TCS,"2026-03-08",Shipment,406-1,1,ODISHA,100,3,0.50\n'
+            )
+            result = AmazonParser("07TCRPS8655B1ZK", "032026").parse([path])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 1)
+        txn = result.transactions[0]
+        self.assertEqual(txn["igst"], Decimal("3.00"))
+        self.assertEqual(txn["tcs"], Decimal("0.50"))
+        self.assertEqual(txn["validation_status"], "valid")
+
     def test_flipkart_cashback_document_number_and_tcs_are_parsed(self):
         parser = FlipkartParser("07TCRPS8655B1ZK", "032026")
         txn = parser.normalize_row({
@@ -75,6 +152,72 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(txn["tcs"], Decimal("-0.04"))
         self.assertEqual(txn["tds"], Decimal("-0.01"))
         self.assertEqual(txn["validation_status"], "valid")
+
+    def test_flipkart_return_period_uses_return_document_date(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "flipkart.xlsx"
+            pd.DataFrame(
+                [
+                    {
+                        "Event Type": "Return",
+                        "Invoice No": "RAT6SO2600000031",
+                        "Invoice Date": "2026-02-28",
+                        "Return Date": "2026-03-02",
+                        "Taxable Value": 100,
+                        "IGST Rate": 3,
+                        "IGST Amount": 3,
+                        "Customer's Delivery State": "Maharashtra",
+                    }
+                ]
+            ).to_excel(path, sheet_name="Sales Report", index=False)
+
+            march = FlipkartParser("07TCRPS8655B1ZK", "032026").parse([path])
+            february = FlipkartParser("07TCRPS8655B1ZK", "022026").parse([path])
+
+        self.assertEqual(march.errors, [])
+        self.assertEqual(len(march.transactions), 1)
+        self.assertEqual(march.transactions[0]["doc_type"], "credit_note")
+        self.assertEqual(str(march.transactions[0]["document_date"]), "2026-03-02")
+        self.assertEqual(february.transactions, [])
+
+    def test_flipkart_csv_report_is_supported(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "flipkart.csv"
+            path.write_text(
+                '"Event Type","Invoice No","Invoice Date","Taxable Value","IGST Rate","IGST Amount","Customer Delivery State"\n'
+                'Sale,LWAB260000001,"2026-03-05",100,3,3,Maharashtra\n'
+            )
+            result = FlipkartParser("07TCRPS8655B1ZK", "032026").parse([path])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(result.transactions[0]["invoice_no"], "LWAB260000001")
+        self.assertEqual(result.transactions[0]["validation_status"], "valid")
+
+    def test_amazon_excel_report_is_supported(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "amazon.xlsx"
+            pd.DataFrame(
+                [
+                    {
+                        "Seller Gstin": "07TCRPS8655B1ZK",
+                        "Invoice Number": "IN-XLS",
+                        "Invoice Date": "2026-03-08",
+                        "Transaction Type": "Shipment",
+                        "Order Id": "406-1",
+                        "Quantity": 1,
+                        "Ship To State": "ODISHA",
+                        "Tax Exclusive Gross": 100,
+                        "Total Tax Rate": 3,
+                    }
+                ]
+            ).to_excel(path, index=False)
+            result = AmazonParser("07TCRPS8655B1ZK", "032026").parse([path])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(result.transactions[0]["invoice_no"], "IN-XLS")
+        self.assertEqual(result.transactions[0]["validation_status"], "valid")
 
     def test_inter_state_invoice_uses_igst(self):
         txn = finalize_transaction({

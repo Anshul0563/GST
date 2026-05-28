@@ -1,8 +1,6 @@
 from datetime import date
 from pathlib import Path
-from datetime import date
 
-from openpyxl import load_workbook
 import pandas as pd
 
 from app.parsers.base import (
@@ -12,6 +10,7 @@ from app.parsers.base import (
     detect_header_row_frame,
     first_value,
     has_explicit_tax_split,
+    record_period_exclusion,
     should_skip_transaction,
     unique_headers,
 )
@@ -41,24 +40,6 @@ class FlipkartParser(MarketplaceParser):
             1,
         )
         return start, next_month, following_month
-
-<<<<<<< Updated upstream
-    def _series_key(self, txn: dict, sheet_name: str) -> str:
-        invoice_no = str(txn.get("invoice_no") or "").upper()
-        sheet = sheet_name.lower()
-        if "cash back report" in sheet:
-=======
-    def _classify_doc_type(self, row: dict, sheet_name: str) -> str:
-        if "cash back report" in sheet_name.lower():
-            document_type = str(
-                first_value(row, ["document type", "doc type", "type"]) or ""
-            ).lower()
-            return "debit_note" if "debit" in document_type else "credit_note"
-
-        event_type = str(first_value(row, ["event type"]) or "").lower()
-        if "return" in event_type or "cancellation" in event_type:
-            return "credit_note"
-        return "invoice"
 
     def _series_key(self, txn: dict, sheet_name: str) -> str:
         invoice_no = str(txn.get("invoice_no") or "").upper()
@@ -217,14 +198,12 @@ class FlipkartParser(MarketplaceParser):
 
         for path in files:
             try:
-                workbook = load_workbook(path, data_only=True, read_only=False)
+                sheets = pd.read_excel(path, sheet_name=None, header=None, dtype=object)
 
-                for sheet in workbook.worksheets:
-                    rows = list(sheet.iter_rows(values_only=True))
-                    if not rows:
+                for sheet_name, frame in sheets.items():
+                    if frame.dropna(how="all").empty:
                         continue
 
-                    frame = pd.DataFrame(rows)
                     header_index = detect_header_row_frame(
                         frame,
                         ["order", "invoice", "taxable", "igst", "cgst", "sgst"],
@@ -232,7 +211,7 @@ class FlipkartParser(MarketplaceParser):
                     result.debug["header_rows"].append(
                         {
                             "file": path.name,
-                            "sheet": sheet.title,
+                            "sheet": str(sheet_name),
                             "header_row": int(header_index) + 1,
                         }
                     )
@@ -253,17 +232,16 @@ class FlipkartParser(MarketplaceParser):
 
                     for index, series in data.iterrows():
                         row = series.to_dict()
-<<<<<<< Updated upstream
+                        sheet_title = str(sheet_name)
+                        doc_type = self._classify_doc_type(row, sheet_title)
+                        row_for_normalization = {**row, "doc_type": doc_type}
 
                         txn = self.normalize_row(
-                            row,
-                            f"{path.name}:{sheet.title}",
+                            row_for_normalization,
+                            f"{path.name}:{sheet_title}",
                         )
-=======
-                        txn = self.normalize_row(row, f"{path.name}:{sheet.title}")
->>>>>>> Stashed changes
                         txn["_preserve_source_sign"] = True
-                        txn["doc_type"] = self._classify_doc_type(row, sheet.title)
+                        txn["doc_type"] = doc_type
                         if has_explicit_tax_split(row):
                             txn["_preserve_source_tax_split"] = True
 
@@ -275,15 +253,12 @@ class FlipkartParser(MarketplaceParser):
                         )
 
                         source_row_number = int(index) + 1
-<<<<<<< Updated upstream
 
-=======
->>>>>>> Stashed changes
                         if should_skip_transaction(txn):
                             self._debug_row(
                                 result,
                                 file_name=path.name,
-                                sheet_name=sheet.title,
+                                sheet_name=sheet_title,
                                 row_number=source_row_number,
                                 txn=txn,
                                 source_row=row,
@@ -299,7 +274,7 @@ class FlipkartParser(MarketplaceParser):
                                 "txn": finalized,
                                 "source_row": row,
                                 "file_name": path.name,
-                                "sheet_name": sheet.title,
+                                "sheet_name": sheet_title,
                                 "source_row_number": source_row_number,
                             }
                         )
@@ -319,17 +294,13 @@ class FlipkartParser(MarketplaceParser):
                 running_total["cgst"] += txn.get("cgst", 0)
                 running_total["sgst"] += txn.get("sgst", 0)
             else:
-                result.debug.setdefault("period_excluded_rows", []).append(
-                    {
-                        "file": item["file_name"],
-                        "sheet": item["sheet_name"],
-                        "row": item["source_row_number"],
-                        "invoice_no": txn.get("invoice_no"),
-                        "doc_type": txn.get("doc_type"),
-                        "document_date": str(txn.get("document_date")),
-                        "taxable_value": str(txn.get("taxable_value")),
-                        "reason": reason,
-                    }
+                record_period_exclusion(
+                    result,
+                    source_file=item["file_name"],
+                    sheet_name=item["sheet_name"],
+                    row_number=item["source_row_number"],
+                    txn=txn,
+                    reason=reason,
                 )
             self._debug_row(
                 result,
@@ -343,43 +314,4 @@ class FlipkartParser(MarketplaceParser):
                 running_total=running_total,
             )
 
-<<<<<<< Updated upstream
-        included, reasons = self._report_cycle_filter(candidates)
-        for index, item in enumerate(candidates):
-            txn = item["txn"]
-            is_included = index in included
-            reason = reasons.get(index, "document date outside filing period")
-            if is_included:
-                result.transactions.append(txn)
-                running_total["taxable_value"] += txn.get("taxable_value", 0)
-                running_total["igst"] += txn.get("igst", 0)
-                running_total["cgst"] += txn.get("cgst", 0)
-                running_total["sgst"] += txn.get("sgst", 0)
-            else:
-                result.debug.setdefault("period_excluded_rows", []).append(
-                    {
-                        "file": item["file_name"],
-                        "sheet": item["sheet_name"],
-                        "row": item["source_row_number"],
-                        "invoice_no": txn.get("invoice_no"),
-                        "doc_type": txn.get("doc_type"),
-                        "document_date": str(txn.get("document_date")),
-                        "taxable_value": str(txn.get("taxable_value")),
-                        "reason": reason,
-                    }
-                )
-            self._debug_row(
-                result,
-                file_name=item["file_name"],
-                sheet_name=item["sheet_name"],
-                row_number=item["source_row_number"],
-                txn=txn,
-                source_row=item["source_row"],
-                included=is_included,
-                reason=reason,
-                running_total=running_total,
-            )
-
-=======
->>>>>>> Stashed changes
         return result

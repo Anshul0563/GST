@@ -17,6 +17,7 @@ export function TransactionsPage() {
   const [state, setState] = useState("all");
   const [errorOnly, setErrorOnly] = useState(false);
   const [detail, setDetail] = useState<Transaction | null>(null);
+  const [actionError, setActionError] = useState("");
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
   useEffect(() => {
     setQuery("");
@@ -26,6 +27,7 @@ export function TransactionsPage() {
     setState("all");
     setErrorOnly(false);
     setDetail(null);
+    setActionError("");
   }, [activeProfileKey]);
   const platforms = Array.from(new Set(workspace.transactions.map((row) => row.platform))).sort();
   const states = Array.from(new Set(workspace.transactions.map((row) => row.buyer_state_code).filter(Boolean))).sort();
@@ -41,14 +43,24 @@ export function TransactionsPage() {
 
   async function remove(row: Transaction) {
     if (!workspace.token) return;
-    await deleteTransaction(workspace.token, row.id);
-    await workspace.refresh();
+    setActionError("");
+    try {
+      await deleteTransaction(workspace.token, row.id);
+      await workspace.refresh();
+    } catch (exc) {
+      setActionError(exc instanceof Error ? exc.message : "Could not delete transaction.");
+    }
   }
 
   async function inlineUpdate(row: Transaction, field: keyof Transaction, value: string) {
     if (!workspace.token) return;
-    await updateTransaction(workspace.token, row.id, { [field]: value });
-    await workspace.refresh();
+    setActionError("");
+    try {
+      await updateTransaction(workspace.token, row.id, { [field]: value });
+      await workspace.refresh();
+    } catch (exc) {
+      setActionError(exc instanceof Error ? exc.message : "Could not update transaction.");
+    }
   }
 
   function exportCsv() {
@@ -74,6 +86,7 @@ export function TransactionsPage() {
           <select value={docType} onChange={(event) => setDocType(event.target.value)} className="rounded-2xl border border-slate-200 px-3 py-3 text-sm dark:border-white/10 dark:bg-slate-900"><option value="all">All docs</option><option value="invoice">Invoice</option><option value="credit_note">Credit note</option><option value="debit_note">Debit note</option></select>
         </div>
         <label className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-600"><input type="checkbox" checked={errorOnly} onChange={(event) => setErrorOnly(event.target.checked)} /> Show errors only</label>
+        {actionError && <div className="mb-4 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{actionError}</div>}
         {rows.length ? <div className="max-h-[620px] overflow-auto rounded-3xl border border-slate-200 dark:border-white/10"><table className="min-w-[1280px] text-left text-sm"><thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-900"><tr>{["Platform", "Invoice", "Order", "Date", "POS", "HSN", "Taxable", "Rate", "IGST", "CGST", "SGST", "Doc", "Status", ""].map((head) => <th key={head} className="px-4 py-3">{head}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 dark:divide-white/10">{rows.map((row) => <tr key={row.id} className="bg-white hover:bg-slate-50 dark:bg-slate-950 dark:hover:bg-white/5"><td className="px-4 py-3 font-bold capitalize">{row.platform}</td><td>{row.invoice_no}</td><td>{row.order_id}</td><td>{row.invoice_date}</td><td><input defaultValue={row.buyer_state_code || ""} onBlur={(event) => inlineUpdate(row, "buyer_state_code", event.target.value)} className="w-14 rounded-lg border px-2 py-1 dark:border-white/10 dark:bg-slate-900" /></td><td>{row.hsn}</td><td>{formatCurrency(money(row.taxable_value))}</td><td>{row.gst_rate}%</td><td>{row.igst}</td><td>{row.cgst}</td><td>{row.sgst}</td><td>{row.doc_type}</td><td><StatusPill status={row.validation_status} /></td><td className="flex gap-2 px-4 py-3"><button onClick={() => setDetail(row)} className="rounded-xl bg-slate-100 p-2 dark:bg-white/10"><Eye className="size-4" /></button><button onClick={() => remove(row)} className="rounded-xl bg-rose-50 p-2 text-rose-600"><Trash2 className="size-4" /></button></td></tr>)}</tbody></table></div> : <EmptyState title="No transactions found" body="Upload marketplace files or clear filters to see normalized rows." />}
       </Panel>
       {detail && <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/40" onClick={() => setDetail(null)}><aside onClick={(event) => event.stopPropagation()} className="h-full w-full max-w-xl overflow-auto bg-white p-6 shadow-2xl dark:bg-slate-950"><h2 className="text-2xl font-black">Row details</h2><p className="mt-1 text-sm text-slate-500">{detail.invoice_no || detail.order_id}</p><pre className="mt-6 whitespace-pre-wrap rounded-3xl bg-slate-950 p-5 text-xs text-slate-100">{JSON.stringify(detail, null, 2)}</pre></aside></div>}

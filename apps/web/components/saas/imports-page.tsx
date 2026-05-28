@@ -9,6 +9,10 @@ import { useWorkspace } from "@/components/saas/workspace";
 import { marketplaces } from "@/lib/marketplaces";
 import { BatchStatus, ImportErrors, deleteImportBatch, getImportErrors, getImportStatus, reprocessImportBatch, uploadMarketplaceFiles } from "@/lib/api";
 
+const ACCEPTED_IMPORT_FILES = ".csv,.xls,.xlsx,.xlsm";
+const TERMINAL_IMPORT_STATUSES = new Set(["completed", "completed_with_errors", "failed"]);
+const MAX_IMPORT_POLLS = 20;
+
 export function ImportsPage() {
   const params = useSearchParams();
   const workspace = useWorkspace();
@@ -31,6 +35,20 @@ export function ImportsPage() {
   }, [activeProfileKey]);
   const selected = useMemo(() => marketplaces.find((item) => item.key === platformKey) || marketplaces[0], [platformKey]);
   const canImport = selected.status !== "Coming Soon";
+  const canStartImport = canImport && Boolean(workspace.profile) && files.length > 0;
+
+  function addFiles(index: number, selectedFiles: File[]) {
+    if (!selectedFiles.length) return;
+    setFiles((current) => {
+      const next = [...current];
+      next.splice(index, 1, ...selectedFiles);
+      return next.filter(Boolean);
+    });
+  }
+
+  function removeFile(index: number) {
+    setFiles((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  }
 
   async function startImport() {
     if (!canImport) {
@@ -41,22 +59,28 @@ export function ImportsPage() {
       setProgress("Choose files before starting import.");
       return;
     }
-    setProgress("Uploading files securely...");
-    const batch = await uploadMarketplaceFiles(workspace.token, workspace.profile, selected.key, files);
-    setActiveBatch(batch);
-    setProgress(`Batch ${batch.id} queued. Parser is reading files...`);
-    for (let index = 0; index < 8; index += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 900));
-      const status = await getImportStatus(workspace.token, batch.id);
-      setActiveBatch(status);
-      setProgress(`Status: ${status.status}. Parsed ${status.parsed_rows}, errors ${status.error_rows}.`);
-      if (!["queued", "processing"].includes(status.status)) break;
+    setErrors(null);
+    try {
+      setProgress("Uploading files securely...");
+      const batch = await uploadMarketplaceFiles(workspace.token, workspace.profile, selected.key, files);
+      setActiveBatch(batch);
+      setProgress(`Batch ${batch.id} queued. Parser is reading files...`);
+      let finalStatus = batch;
+      for (let index = 0; index < MAX_IMPORT_POLLS; index += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        const status = await getImportStatus(workspace.token, batch.id);
+        finalStatus = status;
+        setActiveBatch(status);
+        setProgress(`Status: ${status.status}. Parsed ${status.parsed_rows}, errors ${status.error_rows}.`);
+        if (TERMINAL_IMPORT_STATUSES.has(status.status)) break;
+      }
+      if (finalStatus.error_rows) {
+        setErrors(await getImportErrors(workspace.token, batch.id));
+      }
+      await workspace.refresh();
+    } catch (exc) {
+      setProgress(exc instanceof Error ? exc.message : "Import failed.");
     }
-    const finalStatus = await getImportStatus(workspace.token, batch.id);
-    if (finalStatus.error_rows) {
-      setErrors(await getImportErrors(workspace.token, batch.id));
-    }
-    await workspace.refresh();
   }
 
   async function openErrors(batchId: number) {
@@ -123,16 +147,12 @@ export function ImportsPage() {
             <div className="mt-4 grid gap-3">
               {selected.requiredFiles.map((file, index) => <label key={file} className={`flex min-h-16 items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm dark:border-white/10 dark:bg-slate-900 ${canImport ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}><FileSpreadsheet className="size-5 text-emerald-600" /><span className="w-44 font-bold">{file}</span><input type="file" multiple disabled={!canImport} className="flex-1 text-xs" onChange={(event) => {
                 const selectedFiles = Array.from(event.target.files || []);
-                if (!selectedFiles.length) return;
-                setFiles((current) => {
-                  const next = [...current];
-                  next.splice(index, 1, ...selectedFiles);
-                  return next.filter(Boolean);
-                });
-              }} /></label>)}
+                addFiles(index, selectedFiles);
+                event.currentTarget.value = "";
+              }} accept={ACCEPTED_IMPORT_FILES} /></label>)}
             </div>
-            {files.length ? <div className="mt-4 rounded-2xl bg-white p-4 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">{files.length} file{files.length === 1 ? "" : "s"} selected</div> : null}
-            <button onClick={startImport} disabled={!canImport || !workspace.profile} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><UploadCloud className="size-4" /> {canImport ? "Start import" : "Coming soon"} <ArrowRight className="size-4" /></button>
+            {files.length ? <div className="mt-4 space-y-2 rounded-2xl bg-white p-4 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">{files.map((file, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 dark:bg-white/5"><span className="min-w-0 truncate">{file.name}</span><button type="button" onClick={() => removeFile(index)} className="rounded-lg px-2 py-1 text-rose-700 hover:bg-rose-50">Remove</button></div>)}</div> : null}
+            <button onClick={startImport} disabled={!canStartImport} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><UploadCloud className="size-4" /> {canImport ? "Start import" : "Coming soon"} <ArrowRight className="size-4" /></button>
             {progress && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{progress}</div>}
             {activeBatch && <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 text-sm dark:bg-slate-900 md:grid-cols-3"><b>Batch #{activeBatch.id}</b><span>{activeBatch.parsed_rows} parsed</span><span>{activeBatch.error_rows} errors</span></div>}
           </div>

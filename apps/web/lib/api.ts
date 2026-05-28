@@ -1,5 +1,16 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
 
+function queryString(params: Record<string, string | number | boolean | undefined | null>) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      search.set(key, String(value));
+    }
+  });
+  const text = search.toString();
+  return text ? `?${text}` : "";
+}
+
 export type Profile = {
   id: number;
   gstin: string;
@@ -225,7 +236,10 @@ export async function request<T>(path: string, options: RequestInit = {}, token?
     const body = await response.text();
     throw new Error(readApiError(body));
   }
-  return response.json();
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 function readApiError(body: string) {
@@ -278,15 +292,27 @@ export function listProfiles(token: string) {
 }
 
 export function getSummary(token: string, profile: Profile) {
-  return request<DashboardSummary>(`/dashboard/summary?profile_id=${profile.id}&period=${profile.return_period}`, {}, token);
+  return request<DashboardSummary>(
+    `/dashboard/summary${queryString({ profile_id: profile.id, period: profile.return_period })}`,
+    {},
+    token
+  );
 }
 
 export function getTransactions(token: string, profile: Profile) {
-  return request<Transaction[]>(`/transactions?profile_id=${profile.id}&period=${profile.return_period}`, {}, token);
+  return request<Transaction[]>(
+    `/transactions${queryString({ profile_id: profile.id, period: profile.return_period })}`,
+    {},
+    token
+  );
 }
 
 export async function getGstrPreviewResponse(token: string, profile: Profile, exportMode: Gstr1ExportMode = "clean_portal") {
-  const result = await request<Gstr1Payload | Gstr1PreviewResponse>(`/gstr1/preview/${profile.return_period}?profile_id=${profile.id}&export_mode=${exportMode}`, {}, token);
+  const result = await request<Gstr1Payload | Gstr1PreviewResponse>(
+    `/gstr1/preview/${profile.return_period}${queryString({ profile_id: profile.id, export_mode: exportMode })}`,
+    {},
+    token
+  );
   return "preview" in result ? result : { can_generate: true, validation_blockers: 0, export_mode: exportMode, parity_report: null, preview: result };
 }
 
@@ -306,12 +332,16 @@ export function updateProfile(token: string, profileId: number, payload: Omit<Pr
 export function uploadMarketplaceFiles(token: string, profile: Profile, platform: string, files: FileList | File[]) {
   const form = new FormData();
   Array.from(files).forEach((file) => form.append("files", file));
-  return request<BatchStatus>(`/imports/${platform}/upload?profile_id=${profile.id}&period=${profile.return_period}`, { method: "POST", body: form }, token);
+  return request<BatchStatus>(
+    `/imports/${encodeURIComponent(platform)}/upload${queryString({ profile_id: profile.id, period: profile.return_period })}`,
+    { method: "POST", body: form },
+    token
+  );
 }
 
 export function listImportBatches(token: string, profile?: Profile) {
   return request<BatchStatus[]>(
-    `/imports${profile ? `?profile_id=${profile.id}&period=${profile.return_period}` : ""}`,
+    `/imports${profile ? queryString({ profile_id: profile.id, period: profile.return_period }) : ""}`,
     {},
     token
   );
@@ -349,7 +379,11 @@ export function generateGstr1(token: string, profile: Profile, exportMode: Gstr1
 }
 
 export function getGstr1History(token: string, profileId?: number) {
-  return request<Gstr1ExportItem[]>(`/gstr1/history${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
+  return request<Gstr1ExportItem[]>(
+    `/gstr1/history${queryString({ profile_id: profileId })}`,
+    {},
+    token
+  );
 }
 
 export function downloadUrl(path: string) {
@@ -382,7 +416,11 @@ export function createTallyCompany(token: string, payload: { profile_id: number;
 }
 
 export function listTallyCompanies(token: string, profileId?: number) {
-  return request<TallyCompany[]>(`/tally/companies${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
+  return request<TallyCompany[]>(
+    `/tally/companies${queryString({ profile_id: profileId })}`,
+    {},
+    token
+  );
 }
 
 export function generateTallyXml(token: string, payload: { profile_id: number; period: string; company_id: number; ledger_mapping: Record<string, string>; auto_create_ledgers?: boolean }) {
@@ -392,7 +430,11 @@ export function generateTallyXml(token: string, payload: { profile_id: number; p
 export function uploadTallyImport(token: string, profileId: number, platform: string, files: FileList | File[]) {
   const form = new FormData();
   Array.from(files).forEach((file) => form.append("files", file));
-  return request<BatchStatus>(`/tally/import?platform=${platform}&profile_id=${profileId}`, { method: "POST", body: form }, token);
+  return request<BatchStatus>(
+    `/tally/import${queryString({ platform, profile_id: profileId })}`,
+    { method: "POST", body: form },
+    token
+  );
 }
 
 export function getTallyMapping(token: string, companyId: number) {
@@ -429,11 +471,19 @@ export function getReconcileReport(token: string, batchId: number) {
 }
 
 export function getReconcileResults(token: string, batchId: number, category?: string) {
-  return request<ReconcileReport>(`/reconcile/results/${batchId}${category ? `?category=${category}` : ""}`, {}, token);
+  return request<ReconcileReport>(
+    `/reconcile/results/${batchId}${queryString({ category })}`,
+    {},
+    token
+  );
 }
 
 export function getReconcileHistory(token: string, profileId?: number) {
-  return request<ReconcileHistoryItem[]>(`/reconcile/history${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
+  return request<ReconcileHistoryItem[]>(
+    `/reconcile/history${queryString({ profile_id: profileId })}`,
+    {},
+    token
+  );
 }
 
 export function getReconcileDownloadUrl(batchId: number) {
@@ -457,9 +507,13 @@ export function verifyBillingPayment(token: string, payload: { order_id: number;
 }
 
 export function getTallyHistory(token: string, profileId?: number) {
-  return request<TallyExportItem[]>(`/tally/history${profileId ? `?profile_id=${profileId}` : ""}`, {}, token);
+  return request<TallyExportItem[]>(
+    `/tally/history${queryString({ profile_id: profileId })}`,
+    {},
+    token
+  );
 }
 
 export function getTallyExportUrl(exportId: number, format: "xml" | "xlsx" = "xml") {
-  return downloadUrl(`/tally/export/${exportId}${format === "xlsx" ? "?format=xlsx" : ""}`);
+  return downloadUrl(`/tally/export/${exportId}${queryString({ format: format === "xlsx" ? format : undefined })}`);
 }
