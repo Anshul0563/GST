@@ -1,11 +1,10 @@
 from pathlib import Path
 
-import pandas as pd
-
 from app.parsers.base import (
     MarketplaceParser,
     ParseResult,
     clean_column,
+    dataframe_from_path,
     finalize_period_transaction,
     has_explicit_tax_split,
     should_skip_transaction,
@@ -22,8 +21,7 @@ class AmazonParser(MarketplaceParser):
 
         for path in files:
             try:
-                frame = pd.read_csv(path, dtype=object, encoding_errors="ignore")
-                frame.columns = [clean_column(col) for col in frame.columns]
+                frame = dataframe_from_path(path)
 
                 for index, series in frame.iterrows():
                     row = series.to_dict()

@@ -510,6 +510,23 @@ def dataframe_from_excel(
     return frame.dropna(how="all")
 
 
+def dataframe_from_path(path: Path) -> pd.DataFrame:
+    if path.suffix.lower() == ".csv":
+        frame = pd.read_csv(path, dtype=object, encoding_errors="ignore")
+        frame.columns = [clean_column(col) for col in frame.columns]
+        return frame.dropna(how="all")
+    return dataframe_from_excel(path)
+
+
+def raw_frames(path: Path) -> list[tuple[str, pd.DataFrame]]:
+    if path.suffix.lower() == ".csv":
+        frame = pd.read_csv(path, header=None, dtype=object, encoding_errors="ignore")
+        return [(path.stem, frame)]
+
+    sheets = pd.read_excel(path, sheet_name=None, header=None, dtype=object)
+    return [(str(sheet_name), frame) for sheet_name, frame in sheets.items()]
+
+
 def excel_frames(path: Path) -> list[tuple[str, pd.DataFrame]]:
     sheets = pd.read_excel(path, sheet_name=None, header=None, dtype=object)
     frames: list[tuple[str, pd.DataFrame]] = []

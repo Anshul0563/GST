@@ -11,6 +11,7 @@ from app.parsers.base import (
     first_value,
     has_explicit_tax_split,
     record_period_exclusion,
+    raw_frames,
     should_skip_transaction,
     unique_headers,
 )
@@ -198,9 +199,7 @@ class FlipkartParser(MarketplaceParser):
 
         for path in files:
             try:
-                sheets = pd.read_excel(path, sheet_name=None, header=None, dtype=object)
-
-                for sheet_name, frame in sheets.items():
+                for sheet_name, frame in raw_frames(path):
                     if frame.dropna(how="all").empty:
                         continue
 
