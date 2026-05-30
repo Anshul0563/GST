@@ -21,8 +21,7 @@ const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array
       { href: "/modules/online-seller", label: "Mini Dashboard", icon: Home },
       { href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", icon: UploadCloud },
       { href: "/modules/online-seller/manage-data", label: "Manage Data", icon: ReceiptText },
-      { href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson },
-      { href: "/modules/online-seller/marketplaces", label: "Upload History", icon: UploadCloud }
+      { href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson }
     ]
   },
   reconcile: {
@@ -108,7 +107,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const pageContext = currentItem?.label || activeModuleConfig?.title || "Product Suite";
   const workspaceName = profile?.trade_name || profile?.legal_name || "Workspace";
   const workspaceInitial = workspaceName.trim().charAt(0).toUpperCase() || "G";
-  const locked = requiresSubscription && !hasPaidAccess(user ?? null, requiredPlan);
+  const locked = Boolean(token && user && requiresSubscription && !hasPaidAccess(user, requiredPlan));
   function logout() {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem("gst_bharat_token");

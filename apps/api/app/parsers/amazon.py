@@ -3,7 +3,6 @@ from pathlib import Path
 from app.parsers.base import (
     MarketplaceParser,
     ParseResult,
-    clean_column,
     dataframe_from_path,
     finalize_period_transaction,
     has_explicit_tax_split,

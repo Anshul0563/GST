@@ -85,8 +85,13 @@ export function ImportsPage() {
 
   async function openErrors(batchId: number) {
     if (!workspace.token) return;
-    setActiveBatch(workspace.batches.find((batch) => batch.id === batchId) || null);
-    setErrors(await getImportErrors(workspace.token, batchId));
+    setProgress("");
+    try {
+      setActiveBatch(workspace.batches.find((batch) => batch.id === batchId) || null);
+      setErrors(await getImportErrors(workspace.token, batchId));
+    } catch (exc) {
+      setProgress(exc instanceof Error ? exc.message : "Could not load import errors.");
+    }
   }
 
   async function removeBatch(batch: BatchStatus) {
@@ -111,6 +116,7 @@ export function ImportsPage() {
   async function reprocessBatch(batch: BatchStatus) {
     if (!workspace.token) return;
     setReprocessingId(batch.id);
+    setErrors(null);
     setProgress(`Reprocessing ${batch.platform} batch #${batch.id} with current parser...`);
     try {
       const status = await reprocessImportBatch(workspace.token, batch.id);
@@ -163,7 +169,7 @@ export function ImportsPage() {
           {workspace.batches.length ? <div className="space-y-3">{workspace.batches.map((batch) => {
             const busy = deletingId === batch.id;
             const locked = ["queued", "processing"].includes(batch.status);
-            return <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto_auto]">
+            return <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]">
               <b className="capitalize">{batch.platform}</b>
               <span>{batch.period || workspace.profile?.return_period || "--"}</span>
               <span>{batch.parsed_rows} parsed</span>
