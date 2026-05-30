@@ -884,13 +884,16 @@ def process_import_batch(batch_id: int, file_paths: list[str]):
         db.commit()
     except Exception as exc:
         db.rollback()
-        batch = db.get(PlatformImportBatch, batch_id)
-        if batch:
-            clear_batch_transactions(batch, db)
-            batch.parsed_rows = 0
-            batch.status = "failed"
-            batch.error_report_json = json.dumps([{"error": str(exc)}])
-            db.commit()
+        try:
+            batch = db.get(PlatformImportBatch, batch_id)
+            if batch:
+                clear_batch_transactions(batch, db)
+                batch.parsed_rows = 0
+                batch.status = "failed"
+                batch.error_report_json = json.dumps([{"error": str(exc)}])
+                db.commit()
+        except Exception:
+            db.rollback()
     finally:
         db.close()
 
@@ -938,12 +941,17 @@ def reprocess_import_batch(
         raise HTTPException(404, str(exc)) from exc
     except Exception as exc:
         db.rollback()
-        batch.status = "failed"
-        clear_batch_transactions(batch, db)
-        batch.parsed_rows = 0
-        batch.error_report_json = json.dumps([{"error": str(exc)}])
-        batch.completed_at = datetime.utcnow()
-        db.commit()
+        try:
+            batch = db.get(PlatformImportBatch, batch_id)
+            if batch:
+                batch.status = "failed"
+                clear_batch_transactions(batch, db)
+                batch.parsed_rows = 0
+                batch.error_report_json = json.dumps([{"error": str(exc)}])
+                batch.completed_at = datetime.utcnow()
+                db.commit()
+        except Exception:
+            db.rollback()
         raise HTTPException(500, str(exc)) from exc
 
 

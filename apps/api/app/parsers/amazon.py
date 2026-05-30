@@ -5,10 +5,30 @@ from app.parsers.base import (
     ParseResult,
     dataframe_from_path,
     finalize_period_transaction,
+    first_value,
     has_explicit_tax_split,
     should_skip_transaction,
+    text,
 )
 from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
+
+
+AMAZON_TRANSACTION_TYPE_FIELDS = [
+    "transaction type",
+    "transaction_type",
+    "document type",
+    "doc_type",
+    "type",
+    "event type",
+    "transaction event type",
+]
+
+AMAZON_CREDIT_NOTE_FIELDS = [
+    "credit note no",
+    "credit note number",
+    "credit_note_no",
+    "credit_note_number",
+]
 
 
 class AmazonParser(MarketplaceParser):
@@ -24,24 +44,21 @@ class AmazonParser(MarketplaceParser):
 
                 for index, series in frame.iterrows():
                     row = series.to_dict()
-                    type_blob = " ".join(
-                        str(row.get(key, "")) for key in row.keys()
+                    transaction_type = (
+                        text(first_value(row, AMAZON_TRANSACTION_TYPE_FIELDS)) or ""
                     ).lower()
                     doc_type = None
 
-                    if "refund" in type_blob:
+                    if any(
+                        marker in transaction_type
+                        for marker in ("refund", "return", "cancel", "credit")
+                    ):
                         doc_type = "credit_note"
-                        credit_note_no = row.get("credit note no") or row.get(
-                            "credit note number"
+                        credit_note_no = text(
+                            first_value(row, AMAZON_CREDIT_NOTE_FIELDS)
                         )
-                        if (
-                            credit_note_no not in (None, "")
-                            and str(credit_note_no).lower() != "nan"
-                        ):
-                            row["invoice_no"] = str(credit_note_no).strip()
-
-                    elif "cancel" in type_blob:
-                        doc_type = "credit_note"
+                        if credit_note_no:
+                            row["invoice_no"] = credit_note_no
 
                     if doc_type:
                         row["doc_type"] = doc_type

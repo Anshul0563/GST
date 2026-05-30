@@ -108,6 +108,21 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(str(march.transactions[0]["document_date"]), "2026-03-03")
         self.assertEqual(february.transactions, [])
 
+    def test_amazon_product_text_does_not_change_document_type(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "amazon.csv"
+            path.write_text(
+                '"Seller Gstin","Invoice Number","Invoice Date","Transaction Type","Order Id","Quantity","Item Description","Ship To State","Tax Exclusive Gross","Igst Rate","Igst Tax"\n'
+                '07TCRPS8655B1ZK,IN-REFUND-WORD,"2026-03-08",Shipment,406-1,1,"Refund style jewellery",ODISHA,100,3,3\n'
+            )
+            result = AmazonParser("07TCRPS8655B1ZK", "032026").parse([path])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 1)
+        txn = result.transactions[0]
+        self.assertEqual(txn["doc_type"], "invoice")
+        self.assertEqual(txn["taxable_value"], Decimal("100.00"))
+
     def test_tcs_igst_columns_are_not_treated_as_sale_igst(self):
         with TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "amazon.csv"
@@ -608,6 +623,23 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(invoices["6p5kc26244"]["taxable_value"], Decimal("100.00"))
         self.assertEqual(invoices["6p5kcC26244"]["doc_type"], "credit_note")
         self.assertEqual(invoices["6p5kcC26244"]["taxable_value"], Decimal("-50.00"))
+
+    def test_meesho_parser_accepts_csv_uploads(self):
+        with TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "tcs_sales.csv"
+            path.write_text(
+                '"sub order num","order date","invoice no.","hsn code","quantity","gst rate","total taxable sale value","tax amount","total invoice value","end customer state new","eco tcs gstin"\n'
+                'SO-CSV,"2026-03-22",MSH-CSV-1,711790,1,3,100,3,103,TELANGANA,07AARCM9332R1CQ\n'
+            )
+
+            result = MeeshoParser("07TCRPS8655B1ZK", "032026").parse([path])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 1)
+        txn = result.transactions[0]
+        self.assertEqual(txn["invoice_no"], "MSH-CSV-1")
+        self.assertEqual(txn["buyer_state_code"], "36")
+        self.assertEqual(txn["taxable_value"], Decimal("100.00"))
 
     def test_meesho_parser_uses_suborder_fallback_when_invoice_metadata_is_missing(self):
         with TemporaryDirectory() as temp_dir:

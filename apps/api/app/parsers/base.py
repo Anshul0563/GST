@@ -528,6 +528,12 @@ def raw_frames(path: Path) -> list[tuple[str, pd.DataFrame]]:
 
 
 def excel_frames(path: Path) -> list[tuple[str, pd.DataFrame]]:
+    if path.suffix.lower() == ".csv":
+        frame = dataframe_from_path(path)
+        if frame.empty:
+            return []
+        return [(path.stem, frame)]
+
     sheets = pd.read_excel(path, sheet_name=None, header=None, dtype=object)
     frames: list[tuple[str, pd.DataFrame]] = []
 
