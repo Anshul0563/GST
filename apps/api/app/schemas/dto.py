@@ -2,7 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class Token(BaseModel):
@@ -22,6 +22,8 @@ class LoginIn(BaseModel):
 
 
 class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     email: EmailStr
     full_name: str | None = None
@@ -29,9 +31,6 @@ class UserOut(BaseModel):
     plan: str = "free"
     subscription_status: str = "inactive"
     free_access_reason: str | None = None
-
-    class Config:
-        from_attributes = True
 
 
 class DashboardSummary(BaseModel):
@@ -58,14 +57,15 @@ class GSTProfileIn(BaseModel):
 
 
 class GSTProfileOut(GSTProfileIn):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     state_code: str
 
-    class Config:
-        from_attributes = True
-
 
 class TransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     platform: str
     gstin: str
@@ -98,9 +98,6 @@ class TransactionOut(BaseModel):
     source_file: str | None
     validation_status: str
     validation_errors: str | None
-
-    class Config:
-        from_attributes = True
 
 
 class TransactionUpdate(BaseModel):
