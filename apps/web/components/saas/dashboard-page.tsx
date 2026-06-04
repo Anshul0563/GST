@@ -23,7 +23,7 @@ const tools = [
     type: "Seller GST",
     href: "/modules/online-seller",
     icon: UploadCloud,
-    accent: "from-[#12396f] via-[#0e5fd8] to-[#00a3a3]",
+    accent: "border-blue-200 bg-blue-50 text-blue-700",
     description:
       "Marketplace sales imports, data cleanup, GSTR-1 preview, JSON/Excel export and filing reports.",
     points: [
@@ -38,7 +38,7 @@ const tools = [
     type: "ITC Control",
     href: "/modules/reconcile",
     icon: GitCompareArrows,
-    accent: "from-[#5b4bdb] via-[#2563eb] to-[#0f9f6e]",
+    accent: "border-emerald-200 bg-emerald-50 text-emerald-700",
     description:
       "Upload portal 2A/2B and purchase books, reconcile invoices, inspect mismatches and download Excel.",
     points: [
@@ -53,7 +53,7 @@ const tools = [
     type: "Accounting",
     href: "/modules/tally",
     icon: Building2,
-    accent: "from-[#10244d] via-[#1746A2] to-[#f58220]",
+    accent: "border-orange-200 bg-orange-50 text-orange-700",
     description:
       "Turn eCommerce transactions into mapped Tally vouchers and XML downloads.",
     points: [
@@ -102,10 +102,10 @@ export function DashboardSaasPage() {
           }
         />
       ) : null}
-      <section className="rounded-[2rem] border border-white/70 bg-white p-6 shadow-2xl shadow-slate-200/70 dark:border-white/10 dark:bg-slate-950 dark:shadow-none">
+      <section className="surface rounded-2xl p-6">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-2xl font-black tracking-tight">
+            <h2 className="text-xl font-black tracking-tight">
               GST Bharat product suite
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
@@ -113,7 +113,7 @@ export function DashboardSaasPage() {
               workflow, menu and dashboard.
             </p>
           </div>
-          <span className="w-fit rounded-full bg-emerald-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-700">
+          <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-700">
             Suite Active
           </span>
         </div>
@@ -164,24 +164,21 @@ export function DashboardSaasPage() {
             return (
               <article
                 key={tool.title}
-                className="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white text-left shadow-xl shadow-slate-200/70 transition hover:-translate-y-1 hover:shadow-2xl dark:border-white/10 dark:bg-slate-900 dark:shadow-none"
+                className="group overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:border-[#1746A2]/35 hover:shadow-xl hover:shadow-slate-200/70 dark:border-white/10 dark:bg-slate-900 dark:shadow-none"
               >
-                <div
-                  className={`relative min-h-48 bg-gradient-to-br ${tool.accent} p-6 text-white`}
-                >
-                  <div className="absolute inset-0 opacity-20 [background-image:linear-gradient(135deg,rgba(255,255,255,.35)_1px,transparent_1px)] [background-size:28px_28px]" />
-                  <div className="relative flex items-start justify-between gap-4">
-                    <div className="grid size-14 place-items-center rounded-2xl bg-white/18 backdrop-blur">
+                <div className="border-b border-slate-100 p-5 dark:border-white/10">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className={`grid size-12 place-items-center rounded-xl border ${tool.accent}`}>
                       <Icon className="size-7" />
                     </div>
-                    <span className="rounded-full bg-white/16 px-3 py-1 text-xs font-black uppercase tracking-wide">
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-500 dark:border-white/10 dark:bg-white/5">
                       {tool.type}
                     </span>
                   </div>
-                  <h3 className="relative mt-7 text-2xl font-black tracking-tight">
+                  <h3 className="mt-6 text-2xl font-black tracking-tight">
                     {tool.title}
                   </h3>
-                  <p className="relative mt-2 text-sm leading-6 text-white/82">
+                  <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">
                     {tool.description}
                   </p>
                 </div>
@@ -190,7 +187,7 @@ export function DashboardSaasPage() {
                     {stats.map((stat) => (
                       <div
                         key={stat.label}
-                        className="rounded-2xl bg-slate-50 p-3 dark:bg-white/5"
+                        className="surface-muted rounded-xl p-3"
                       >
                         <p className="text-xs font-semibold text-slate-500">
                           {stat.label}
@@ -215,7 +212,7 @@ export function DashboardSaasPage() {
                     />
                     <Link
                       href={tool.href}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-4 py-3 text-sm font-bold text-white"
+                      className="btn-primary"
                     >
                       Open Module <ArrowRight className="size-4" />
                     </Link>

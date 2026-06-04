@@ -15,9 +15,52 @@
 }
 
 body {
-  background: #ffffff;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(241, 245, 249, 0.98)),
+    radial-gradient(circle at 0 0, rgba(23, 70, 162, 0.08), transparent 32rem);
   color: #111827;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(23, 70, 162, 0.16);
+}
+
+@layer components {
+  .surface {
+    @apply border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.05),0_18px_44px_rgba(15,23,42,0.07)] dark:border-white/10 dark:bg-slate-950 dark:shadow-none;
+  }
+
+  .surface-muted {
+    @apply border border-slate-200/80 bg-slate-50/80 dark:border-white/10 dark:bg-white/[0.04];
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-[#12284f] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1746A2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1746A2]/40 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-[#1746A2]/35 hover:text-[#1746A2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1746A2]/30 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#1746A2]/60 focus:ring-4 focus:ring-[#1746A2]/10 dark:border-white/10 dark:bg-slate-900 dark:text-white;
+  }
 }
 
 .table-scroll {
