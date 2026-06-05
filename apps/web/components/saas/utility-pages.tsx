@@ -280,10 +280,8 @@ export function SettingsPage() {
   </AppShell>;
 }
 
-export function BillingPage() {
+export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
   const workspace = useWorkspace();
-  const searchParams = useSearchParams();
-  const selectedPlanId = searchParams.get("plan");
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [cycle, setCycle] = useState("monthly");
