@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud, X } from "lucide-react";
 import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
 
@@ -129,10 +130,29 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
     window.localStorage.setItem("gst_bharat_theme", nextTheme);
   }
   return (
-    <div className="min-h-screen bg-[#f3f6fa] text-slate-950 dark:bg-[#07111f] dark:text-white">
-      {mobileNavOpen && (
-        <div className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-sm lg:hidden" onClick={() => setMobileNavOpen(false)}>
-          <aside className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-r border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950" onClick={(event) => event.stopPropagation()}>
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: "easeOut" }}
+      className="min-h-screen bg-[#f3f6fa] text-slate-950 dark:bg-[#07111f] dark:text-white"
+    >
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-sm lg:hidden"
+            onClick={() => setMobileNavOpen(false)}
+          >
+            <motion.aside
+              initial={{ x: -32, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -32, opacity: 0 }}
+              transition={{ duration: 0.3, ease: "easeOut" }}
+              className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-r border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950"
+              onClick={(event) => event.stopPropagation()}
+            >
             <div className="flex items-center justify-between gap-3">
               <LogoMark />
               <button onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900">
@@ -145,9 +165,10 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
               activeModuleIcon={ActiveModuleIcon}
               onNavigate={() => setMobileNavOpen(false)}
             />
-          </aside>
-        </div>
-      )}
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-slate-200/80 bg-white/95 p-5 shadow-[8px_0_30px_rgba(15,23,42,0.04)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90 dark:shadow-none lg:block">
         <LogoMark />
         <div
@@ -186,9 +207,10 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             const Icon = item.icon;
             const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
             return (
-              <Link key={item.href} href={item.href} className={`group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-bold transition ${active ? "bg-[#12284f] text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
-                <Icon className={`size-4 ${active ? "text-orange-300" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
-                {item.label}
+              <Link key={item.href} href={item.href} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3.5 py-2.5 text-sm font-bold transition duration-300 ${active ? "bg-[#12284f] text-white shadow-soft" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
+                {active && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[#6EA8FF] to-[#F58220] shadow-soft" />}
+                <Icon className={`size-4 ${active ? "text-white" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
+                <span className="relative z-10">{item.label}</span>
               </Link>
             );
           })}
@@ -202,9 +224,10 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             {activeModuleConfig.items.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return <Link key={`${item.href}-${item.label}`} href={item.href} className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-white text-[#12284f] shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900 dark:text-white dark:ring-white/10" : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900"}`}>
+              return <Link key={`${item.href}-${item.label}`} href={item.href} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-semibold transition duration-300 ${active ? "bg-white text-[#12284f] shadow-soft ring-1 ring-slate-200/70 dark:bg-slate-900 dark:text-white dark:ring-white/10" : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900"}`}>
+                {active && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[#6EA8FF] to-[#F58220]" />}
                 <Icon className={`size-4 ${active ? "text-orange-500" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
-                {item.label}
+                <span className="relative z-10">{item.label}</span>
               </Link>;
             })}
           </nav>
@@ -264,7 +287,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
           {locked ? <SubscriptionGate token={token || ""} user={user ?? null} productName={productName || activeModuleConfig?.title || title} requiredPlan={requiredPlan} /> : children}
         </main>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -286,9 +309,10 @@ function MobileNavContent({
           const Icon = item.icon;
           const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
           return (
-            <Link onClick={onNavigate} key={item.href} href={item.href} className={`group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-bold transition ${active ? "bg-[#12284f] text-white shadow-sm" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
-              <Icon className={`size-4 ${active ? "text-orange-300" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
-              {item.label}
+            <Link onClick={onNavigate} key={item.href} href={item.href} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3.5 py-2.5 text-sm font-bold transition duration-300 ${active ? "bg-[#12284f] text-white shadow-soft" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
+              {active && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[#6EA8FF] to-[#F58220] shadow-soft" />}
+              <Icon className={`size-4 ${active ? "text-white" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
+              <span className="relative z-10">{item.label}</span>
             </Link>
           );
         })}
@@ -335,12 +359,13 @@ function SubscriptionGate({ token, user, productName, requiredPlan }: { token: s
 
   return (
     <div className="space-y-6">
-      <section className="surface overflow-hidden rounded-2xl">
+      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: "easeOut" }} className="surface overflow-hidden rounded-2xl">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_0.8fr] lg:p-8">
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-700">
               <LockKeyhole className="size-3.5" /> Subscription required
             </div>
+            <div className="mb-4 h-1 w-24 rounded-full bg-gradient-to-r from-[#1746A2] via-[#3E7DD8] to-[#F58220] shadow-soft" />
             <h2 className="text-2xl font-black tracking-tight md:text-3xl">{productName} is a paid GST Bharat module</h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
               2A/2B Reconcile remains available. Subscribe to unlock marketplace GST filing tools and Tally XML workflows.
@@ -360,17 +385,18 @@ function SubscriptionGate({ token, user, productName, requiredPlan }: { token: s
             </div>
           </div>
         </div>
-      </section>
+      </motion.section>
       <section className="grid gap-4 lg:grid-cols-3">
         {loading ? <div className="surface rounded-2xl p-5 text-sm font-bold text-slate-500">Loading pricing...</div> : plans.map((plan) => (
-          <div key={plan.id} className="surface rounded-2xl p-5">
+          <motion.div key={plan.id} whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 210, damping: 18 }} className="surface rounded-2xl p-5">
+            <div className="mb-4 h-1 w-16 rounded-full bg-gradient-to-r from-[#1746A2] via-[#3E7DD8] to-[#F58220]" />
             <h3 className="text-xl font-black">{plan.name}</h3>
             <div className="mt-4 grid gap-3 text-sm">
               <div className="surface-muted rounded-xl p-4"><b>Monthly</b><p className="mt-1 text-2xl font-black">₹{plan.monthly_amount.toLocaleString("en-IN")}</p></div>
               <div className="surface-muted rounded-xl p-4"><b>Yearly</b><p className="mt-1 text-2xl font-black">₹{plan.yearly_amount.toLocaleString("en-IN")}</p></div>
             </div>
             <div className="mt-4 space-y-2 text-sm text-slate-500">{plan.features.slice(0, 4).map((feature) => <p key={feature}>- {feature}</p>)}</div>
-          </div>
+          </motion.div>
         ))}
         {!loading && !plans.length ? <div className="surface rounded-2xl p-5 text-sm font-bold text-slate-500">Pricing will load after login.</div> : null}
       </section>
