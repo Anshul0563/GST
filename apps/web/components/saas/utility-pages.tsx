@@ -282,6 +282,8 @@ export function SettingsPage() {
 
 export function BillingPage() {
   const workspace = useWorkspace();
+  const searchParams = useSearchParams();
+  const selectedPlanId = searchParams.get("plan");
   const [plans, setPlans] = useState<BillingPlan[]>([]);
   const [status, setStatus] = useState<BillingStatus | null>(null);
   const [cycle, setCycle] = useState("monthly");
@@ -371,12 +373,16 @@ export function BillingPage() {
         <div className="grid gap-4 lg:grid-cols-3">
           {plans.map((plan) => {
             const amount = cycle === "yearly" ? plan.yearly_amount : plan.monthly_amount;
-            return <div key={plan.id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/60 dark:border-white/10 dark:bg-slate-900 dark:shadow-none">
-              <h3 className="text-xl font-black">{plan.name}</h3>
+            const selected = selectedPlanId === plan.id;
+            return <div key={plan.id} className={`rounded-3xl border bg-white p-5 shadow-xl shadow-slate-200/60 dark:bg-slate-900 dark:shadow-none ${selected ? "border-[#1746A2] ring-2 ring-[#1746A2]/20" : "border-slate-200 dark:border-white/10"}`}>
+              <div className="flex items-start justify-between gap-3">
+                <h3 className="text-xl font-black">{plan.name}</h3>
+                {selected ? <span className="rounded-full bg-[#1746A2]/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#1746A2]">Selected</span> : null}
+              </div>
               <p className="mt-3 text-3xl font-black">{formatCurrency(amount)}</p>
               <p className="text-sm text-slate-500">per {cycle === "yearly" ? "year" : "month"}</p>
               <div className="mt-5 space-y-2 text-sm text-slate-600 dark:text-slate-300">{plan.features.map((feature) => <p key={feature}>- {feature}</p>)}</div>
-              <button onClick={() => startCheckout(plan.id)} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><CreditCard className="size-4" /> Create order</button>
+              <button onClick={() => startCheckout(plan.id)} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><CreditCard className="size-4" /> {selected ? "Subscribe now" : "Create order"}</button>
             </div>;
           })}
           {!plans.length && <EmptyState title="Plans not loaded" body="Login and retry billing status." />}

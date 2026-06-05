@@ -5,6 +5,7 @@ import type { Route } from "next";
 import {
   ArrowRight,
   Building2,
+  CreditCard,
   FileJson,
   FileSpreadsheet,
   GitCompareArrows,
@@ -22,6 +23,8 @@ const tools = [
     title: "GST Online Seller",
     type: "Seller GST",
     href: "/modules/online-seller",
+    planId: "online_seller",
+    price: "₹79/mo",
     icon: UploadCloud,
     accent: "border-blue-200 bg-blue-50 text-blue-700",
     description:
@@ -31,6 +34,8 @@ const tools = [
     title: "2A/2B Reconcile",
     type: "ITC Control",
     href: "/modules/reconcile",
+    planId: null,
+    price: "Free",
     icon: GitCompareArrows,
     accent: "border-emerald-200 bg-emerald-50 text-emerald-700",
     description:
@@ -40,6 +45,8 @@ const tools = [
     title: "eCom to Tally",
     type: "Accounting",
     href: "/modules/tally",
+    planId: "ecom_tally",
+    price: "₹199/mo",
     icon: Building2,
     accent: "border-orange-200 bg-orange-50 text-orange-700",
     description:
@@ -49,6 +56,8 @@ const tools = [
   title: string;
   type: string;
   href: Route;
+  planId: string | null;
+  price: string;
   icon: typeof UploadCloud;
   accent: string;
   description: string;
@@ -57,6 +66,7 @@ const tools = [
 export function DashboardSaasPage() {
   const workspace = useWorkspace();
   const summary = workspace.summary;
+  const user = workspace.user;
 
   return (
     <AppShell
@@ -101,6 +111,12 @@ export function DashboardSaasPage() {
         <div className="mt-7 grid gap-5 xl:grid-cols-3">
           {tools.map((tool, index) => {
             const Icon = tool.icon;
+            const canOpen = !tool.planId || hasModuleAccess(user, tool.planId);
+            const ctaHref = !workspace.token
+              ? "/login"
+              : canOpen
+                ? tool.href
+                : (`/billing?plan=${tool.planId}` as Route);
             const stats =
               index === 0
                 ? [
@@ -174,7 +190,7 @@ export function DashboardSaasPage() {
                       <Icon className="size-7" />
                     </div>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-slate-500 dark:border-white/10 dark:bg-white/5">
-                      {tool.type}
+                      {tool.price}
                     </span>
                   </div>
                   <h3 className="mt-6 text-2xl font-black tracking-tight">
@@ -210,13 +226,19 @@ export function DashboardSaasPage() {
                   </div>
                   <div className="mt-5 flex items-center justify-between gap-3">
                     <StatusPill
-                      status={workspace.token ? "Active" : "Login required"}
+                      status={!workspace.token ? "Login required" : canOpen ? "Active" : "Subscription required"}
                     />
                     <Link
-                      href={tool.href}
-                      className="btn-primary"
+                      href={ctaHref}
+                      className={canOpen || !workspace.token ? "btn-primary" : "btn-secondary"}
                     >
-                      Open Module <ArrowRight className="size-4" />
+                      {!workspace.token ? (
+                        <>Login <ArrowRight className="size-4" /></>
+                      ) : canOpen ? (
+                        <>Open Module <ArrowRight className="size-4" /></>
+                      ) : (
+                        <>Pricing <CreditCard className="size-4" /></>
+                      )}
                     </Link>
                   </div>
                 </div>
@@ -231,6 +253,15 @@ export function DashboardSaasPage() {
 
 function warningsText(count: number) {
   return count ? String(count) : "0";
+}
+
+function hasModuleAccess(
+  user: { role?: string; plan?: string; subscription_status?: string } | null,
+  planId: string,
+) {
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "super_admin" || user.plan === "admin_free") return true;
+  return user.subscription_status === "active" && user.plan === planId;
 }
 
 export function OnlineSellerDashboardPage() {

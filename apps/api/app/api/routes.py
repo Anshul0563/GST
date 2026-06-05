@@ -183,6 +183,20 @@ def refresh_subscription(user: User, db: Session) -> tuple[str, str, datetime | 
     )
 
 
+def require_paid_access(
+    user: User,
+    db: Session,
+    required_plan: str | None = None,
+) -> None:
+    plan, subscription_status, _expires_at = refresh_subscription(user, db)
+    if plan == "admin_free" or getattr(user, "role", "") in {"admin", "super_admin"}:
+        return
+    if subscription_status != "active":
+        raise HTTPException(402, "Subscription required")
+    if required_plan and plan != required_plan:
+        raise HTTPException(403, "This subscription does not include this module")
+
+
 def settle_stale_import(batch: PlatformImportBatch, db: Session) -> None:
     if batch.status not in {"queued", "processing"}:
         return
@@ -876,9 +890,11 @@ async def upload_import(
     profile_id: int,
     files: list[UploadFile] = File(...),
     period: str | None = None,
+    required_plan: str | None = "online_seller",
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, required_plan)
     profile = db.get(GSTProfile, profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
@@ -1118,6 +1134,7 @@ def reprocess_import_batch(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db)
     batch = db.get(PlatformImportBatch, batch_id)
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
@@ -1243,6 +1260,7 @@ def import_errors(
 def delete_import_batch(
     batch_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    require_paid_access(user, db)
     batch = db.get(PlatformImportBatch, batch_id)
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
@@ -1407,6 +1425,7 @@ def update_transaction(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db)
     txn = db.get(NormalizedTransaction, transaction_id)
     if not txn or txn.user_id != user.id:
         raise HTTPException(404, "Transaction not found")
@@ -1422,6 +1441,7 @@ def delete_transaction(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db)
     txn = db.get(NormalizedTransaction, transaction_id)
     if not txn or txn.user_id != user.id:
         raise HTTPException(404, "Transaction not found")
@@ -1523,6 +1543,7 @@ def generate_gstr1(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "online_seller")
     profile = db.get(GSTProfile, payload.profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
@@ -1635,6 +1656,7 @@ def gstr1_export_download(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "online_seller")
     export = db.get(GSTR1JsonExport, export_id)
     if not export or export.user_id != user.id:
         raise HTTPException(404, "Export not found")
@@ -1659,6 +1681,7 @@ def preview_gstr1(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "online_seller")
     profile = db.get(GSTProfile, profile_id)
 
     if not profile or profile.user_id != user.id:
@@ -1709,6 +1732,7 @@ def download_json(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "online_seller")
     export = db.scalar(
         select(GSTR1JsonExport)
         .where(
@@ -1732,6 +1756,7 @@ def download_excel(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "online_seller")
     export = db.scalar(
         select(GSTR1JsonExport)
         .where(
@@ -1754,6 +1779,7 @@ def tally_company(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "ecom_tally")
     profile = db.get(GSTProfile, payload.profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
@@ -1791,6 +1817,7 @@ def tally_companies(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "ecom_tally")
     stmt = (
         select(TallyCompany)
         .where(TallyCompany.user_id == user.id)
@@ -1827,6 +1854,7 @@ async def tally_import(
         background_tasks=background_tasks,
         profile_id=profile_id,
         files=files,
+        required_plan="ecom_tally",
         user=user,
         db=db,
     )
@@ -1838,6 +1866,7 @@ def tally_mapping(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "ecom_tally")
     company = db.get(TallyCompany, company_id)
     if not company or company.user_id != user.id:
         raise HTTPException(404, "Company not found")
@@ -1859,6 +1888,7 @@ def save_tally_mapping(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "ecom_tally")
     company = db.get(TallyCompany, company_id)
     if not company or company.user_id != user.id:
         raise HTTPException(404, "Company not found")
@@ -1885,6 +1915,7 @@ def tally_xml(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "ecom_tally")
     company = db.get(TallyCompany, payload.company_id)
     if not company or company.user_id != user.id:
         raise HTTPException(404, "Company not found")
@@ -1958,6 +1989,7 @@ def tally_history(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "ecom_tally")
     stmt = (
         select(TallyExport)
         .where(TallyExport.user_id == user.id)
@@ -1988,6 +2020,7 @@ def tally_export_download(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    require_paid_access(user, db, "ecom_tally")
     export = db.get(TallyExport, export_id)
     if not export or export.user_id != user.id:
         raise HTTPException(404, "Export not found")
@@ -2008,6 +2041,14 @@ def tally_export_download(
 
 @router.get("/tally/download-xml/{export_id}")
 def tally_download(export_id: str, user: User = Depends(get_current_user)):
+    # Legacy path-based download. Keep protected even though modern downloads use export IDs.
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        require_paid_access(user, db, "ecom_tally")
+    finally:
+        db.close()
     path = get_settings().export_dir / str(user.id) / export_id
     if not path.exists():
         raise HTTPException(404, "Export not found")
