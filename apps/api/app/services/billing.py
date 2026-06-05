@@ -57,6 +57,8 @@ def plan_amount_paise(plan_id: str, billing_cycle: str) -> int:
     plan = PLANS.get(plan_id)
     if not plan:
         raise ValueError("Unknown billing plan")
+    if billing_cycle not in {"monthly", "yearly"}:
+        raise ValueError("Billing cycle must be monthly or yearly")
     return plan.yearly_paise if billing_cycle == "yearly" else plan.monthly_paise
 
 
@@ -97,4 +99,11 @@ def verify_razorpay_signature(settings: Settings, order_id: str, payment_id: str
         return False
     payload = f"{order_id}|{payment_id}".encode()
     expected = hmac.new(settings.razorpay_key_secret.encode(), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def verify_razorpay_webhook_signature(settings: Settings, body: bytes, signature: str | None) -> bool:
+    if not settings.razorpay_webhook_secret or not signature:
+        return False
+    expected = hmac.new(settings.razorpay_webhook_secret.encode(), body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)

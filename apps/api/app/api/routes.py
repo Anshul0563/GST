@@ -6,7 +6,7 @@ import json
 import shutil
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -55,6 +55,7 @@ from app.services.billing import (
     plan_amount_paise,
     public_plans,
     verify_razorpay_signature,
+    verify_razorpay_webhook_signature,
 )
 from app.services.excel_export import write_gstr1_excel
 from app.services.gst import (
@@ -195,6 +196,64 @@ def require_paid_access(
         raise HTTPException(402, "Subscription required")
     if required_plan and plan != required_plan:
         raise HTTPException(403, "This subscription does not include this module")
+
+
+def settle_paid_order(
+    order: PaymentOrder,
+    db: Session,
+    *,
+    payment_id: str | None,
+    action: str,
+    raw_event: dict | None = None,
+) -> User:
+    user = db.get(User, order.user_id)
+    if not user:
+        raise HTTPException(404, "Payment user not found")
+    if order.status == "paid":
+        if payment_id and not order.provider_payment_id:
+            order.provider_payment_id = payment_id
+        return user
+    order.status = "paid"
+    order.provider_payment_id = payment_id or order.provider_payment_id
+    order.paid_at = datetime.utcnow()
+    if raw_event:
+        order.raw_response_json = json.dumps(raw_event)
+    user.plan = order.plan_id
+    user.subscription_status = "active"
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action=action,
+            entity_type="payment_order",
+            entity_id=str(order.id),
+        )
+    )
+    return user
+
+
+def upload_size_bytes(upload: UploadFile) -> int:
+    try:
+        upload.file.seek(0, 2)
+        size = upload.file.tell()
+        upload.file.seek(0)
+        return int(size)
+    except (OSError, AttributeError, ValueError):
+        return 0
+
+
+def enforce_upload_limits(files: list[UploadFile], max_upload_mb: int) -> None:
+    max_bytes = max_upload_mb * 1024 * 1024
+    total = 0
+    for upload in files:
+        size = upload_size_bytes(upload)
+        total += size
+        if size > max_bytes:
+            raise HTTPException(
+                413,
+                f"{upload.filename or 'Upload'} exceeds the {max_upload_mb} MB file limit",
+            )
+    if total > max_bytes:
+        raise HTTPException(413, f"Combined upload exceeds the {max_upload_mb} MB limit")
 
 
 def settle_stale_import(batch: PlatformImportBatch, db: Session) -> None:
@@ -604,18 +663,11 @@ def verify_payment(
         payload.razorpay_signature,
     ):
         raise HTTPException(422, "Invalid payment signature")
-    order.status = "paid"
-    order.provider_payment_id = payload.razorpay_payment_id
-    order.paid_at = datetime.utcnow()
-    user.plan = order.plan_id
-    user.subscription_status = "active"
-    db.add(
-        AuditLog(
-            user_id=user.id,
-            action="billing.payment.verified",
-            entity_type="payment_order",
-            entity_id=str(order.id),
-        )
+    settle_paid_order(
+        order,
+        db,
+        payment_id=payload.razorpay_payment_id,
+        action="billing.payment.verified",
     )
     db.commit()
     return {
@@ -624,6 +676,69 @@ def verify_payment(
         "subscription_status": user.subscription_status,
         "subscription_expires_at": paid_until(order),
     }
+
+
+@router.post("/billing/razorpay/webhook")
+async def razorpay_webhook(
+    request: Request,
+    x_razorpay_signature: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    body = await request.body()
+    settings = get_settings()
+    if not verify_razorpay_webhook_signature(settings, body, x_razorpay_signature):
+        raise HTTPException(401, "Invalid webhook signature")
+    try:
+        event = json.loads(body.decode())
+    except json.JSONDecodeError as exc:
+        raise HTTPException(422, "Invalid webhook payload") from exc
+
+    event_name = str(event.get("event") or "")
+    payload = event.get("payload") if isinstance(event.get("payload"), dict) else {}
+    payment = (
+        payload.get("payment", {}).get("entity")
+        if isinstance(payload.get("payment"), dict)
+        else None
+    )
+    order_entity = (
+        payload.get("order", {}).get("entity")
+        if isinstance(payload.get("order"), dict)
+        else None
+    )
+    provider_order_id = None
+    payment_id = None
+    paid_amount = None
+
+    if isinstance(payment, dict):
+        provider_order_id = payment.get("order_id")
+        payment_id = payment.get("id")
+        paid_amount = payment.get("amount")
+    if not provider_order_id and isinstance(order_entity, dict):
+        provider_order_id = order_entity.get("id")
+        paid_amount = order_entity.get("amount_paid") or order_entity.get("amount")
+
+    if not provider_order_id:
+        return {"status": "ignored", "reason": "no_order_id"}
+    if event_name not in {"payment.captured", "order.paid"}:
+        return {"status": "ignored", "event": event_name}
+
+    order = db.scalar(
+        select(PaymentOrder).where(PaymentOrder.provider_order_id == str(provider_order_id))
+    )
+    if not order:
+        return {"status": "ignored", "reason": "unknown_order"}
+    if paid_amount is not None and int(paid_amount) < int(order.amount_paise):
+        raise HTTPException(422, "Webhook amount is lower than order amount")
+
+    settle_paid_order(
+        order,
+        db,
+        payment_id=str(payment_id) if payment_id else None,
+        action="billing.payment.webhook",
+        raw_event=event,
+    )
+    db.commit()
+    return {"status": "processed", "order_id": order.id}
 
 
 @router.post("/gst-profile", response_model=GSTProfileOut)
@@ -909,6 +1024,7 @@ async def upload_import(
         if suffix not in ALLOWED_EXTENSIONS:
             raise HTTPException(422, f"Unsupported file type: {upload.filename}")
     settings = get_settings()
+    enforce_upload_limits(files, settings.max_upload_mb)
     batch = PlatformImportBatch(
         user_id=user.id,
         profile_id=profile.id,

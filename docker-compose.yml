@@ -20,8 +20,10 @@ services:
       context: ./apps/api
     environment:
       DATABASE_URL: postgresql+psycopg://gst_bharat:gst_bharat@postgres:5432/gst_bharat
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-change-in-production}
       UPLOAD_DIR: /data/uploads
       EXPORT_DIR: /data/exports
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-60}
       REDIS_URL: redis://redis:6379/0
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
