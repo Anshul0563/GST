@@ -2040,15 +2040,13 @@ def tally_export_download(
 
 
 @router.get("/tally/download-xml/{export_id}")
-def tally_download(export_id: str, user: User = Depends(get_current_user)):
+def tally_download(
+    export_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     # Legacy path-based download. Keep protected even though modern downloads use export IDs.
-    from app.db.session import SessionLocal
-
-    db = SessionLocal()
-    try:
-        require_paid_access(user, db, "ecom_tally")
-    finally:
-        db.close()
+    require_paid_access(user, db, "ecom_tally")
     path = get_settings().export_dir / str(user.id) / export_id
     if not path.exists():
         raise HTTPException(404, "Export not found")
