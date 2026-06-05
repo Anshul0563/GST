@@ -176,17 +176,20 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><ShieldCheck className="size-4 text-emerald-600" /> Workspace</div>
             <span className="rounded-full bg-[#1746A2]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#1746A2]">Edit</span>
           </div>
+          <label htmlFor="workspace-select" className="sr-only">Select workspace profile</label>
           <select
+            id="workspace-select"
             aria-label="Select workspace profile"
-            value={profile?.id || ""}
-            onClick={(event) => event.stopPropagation()}
+            value={String(profile?.id || "")}
             onChange={(event) => {
               const next = profiles.find((item) => item.id === Number(event.target.value));
               if (next) onProfileChange?.(next);
             }}
             className="field mt-3 font-bold"
           >
-            {profiles.map((item) => <option key={item.id} value={item.id}>{item.trade_name || item.legal_name}</option>)}
+            {profiles.map((item) => (
+              <option key={item.id} value={String(item.id)}>{item.trade_name || item.legal_name}</option>
+            ))}
           </select>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
             <span className="rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200/80 dark:bg-slate-900 dark:ring-white/10">{profile?.gstin || "No GSTIN"}</span>
