@@ -23,6 +23,31 @@ async function loadMarketplaceCatalog() {
   }
 }
 
+const pricingPlans = [
+  {
+    name: "Starter",
+    price: "₹79/mo",
+    tagline: "Marketplace upload, transaction normalization, and GSTR-1 preview.",
+    bullets: ["3 marketplace platforms", "Basic GSTR-1 JSON + Excel", "Monthly billing"],
+    href: "/billing?plan=online_seller",
+  },
+  {
+    name: "Growth",
+    price: "₹199/mo",
+    tagline: "Full online seller workflow plus reconciliation and reporting.",
+    bullets: ["Unlimited marketplace imports", "GSTR-1 + Reconciliation", "Tally export ready"],
+    href: "/billing?plan=ecom_tally",
+    featured: true,
+  },
+  {
+    name: "Enterprise",
+    price: "Custom",
+    tagline: "Custom onboarding, dedicated support and billing integration.",
+    bullets: ["Priority support", "Custom import templates", "Dedicated onboarding"],
+    href: "/billing",
+  },
+];
+
 export default async function LandingPage() {
   const marketplaces = await loadMarketplaceCatalog();
   const activeParsers = marketplaces.filter((item) => item.status === "Active").length;
@@ -31,56 +56,132 @@ export default async function LandingPage() {
   const features = [
     { title: "Marketplace automation", body: `${activeParsers} active parsers and ${betaParsers} beta parsers loaded from backend.`, icon: UploadCloud },
     { title: "GSTR-1 filing studio", body: `${marketplaces.length} platform inputs can flow into the GSTR-1 preview/export engine.`, icon: FileJson },
-    { title: "Tally + reconciliation", body: `${categories} marketplace categories available for accounting and reconciliation workflows.`, icon: Repeat2 }
+    { title: "Tally + reconciliation", body: `${categories} marketplace categories available for accounting and reconciliation workflows.`, icon: Repeat2 },
   ];
   const workflow = [
     `${marketplaces.length} backend parsers available`,
     `${activeParsers} active upload parsers`,
     `${betaParsers} beta upload parsers`,
-    `${categories} marketplace categories`
+    `${categories} marketplace categories`,
   ];
+
   return (
-    <main className="min-h-screen bg-[#f6f8fb] text-slate-950">
-      <header className="mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
-        <LogoMark />
-        <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
-          <a href="#features">Features</a>
-          <a href="#security">Security</a>
-          <Link href="/login">Login</Link>
-          <Link href="/register" className="rounded-2xl bg-[#10244d] px-5 py-3 text-white">Start free</Link>
-        </nav>
-      </header>
-      <section className="relative mx-auto grid max-w-7xl gap-10 px-6 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:py-24">
-        <div>
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700"><ShieldCheck className="size-4" /> Built for Indian eCommerce GST teams</div>
-          <h1 className="text-5xl font-black tracking-tight md:text-7xl">GST filing OS for marketplace sellers.</h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">GST Bharat turns messy platform reports into normalized transactions, validation insights, GSTR-1 JSON/Excel, Tally XML and reconciliation workflows.</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/register" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-6 py-4 font-bold text-white shadow-2xl shadow-blue-950/20">Create workspace <ArrowRight className="size-4" /></Link>
-            <Link href="/modules/online-seller/marketplaces" className="rounded-2xl border border-slate-200 bg-white px-6 py-4 font-bold text-slate-700">Explore integrations</Link>
+    <main className="relative min-h-screen overflow-hidden bg-[#f6f8fb] text-slate-950">
+      <div className="absolute inset-x-0 top-0 h-80 bg-gradient-to-br from-[#eaf2ff] via-[#f6f8fb] to-transparent opacity-90" />
+      <div className="absolute right-0 top-24 hidden h-72 w-72 rounded-full bg-[#1746A2]/10 blur-3xl md:block" />
+      <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl shadow-sm">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <LogoMark />
+          <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
+            <a href="#features" className="transition hover:text-[#1746A2]">Features</a>
+            <a href="#pricing" className="transition hover:text-[#1746A2]">Pricing</a>
+            <a href="#security" className="transition hover:text-[#1746A2]">Security</a>
+          </nav>
+          <div className="hidden items-center gap-3 md:flex">
+            <Link href="/login" className="text-sm font-semibold text-slate-600 transition hover:text-[#1746A2]">Login</Link>
+            <Link href="/register" className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white shadow-sm shadow-slate-900/10 transition hover:bg-[#1746A2]">Start free</Link>
           </div>
         </div>
-        <div className="rounded-[2rem] border border-white bg-white p-4 shadow-2xl shadow-slate-300/60">
-          <div className="rounded-[1.5rem] bg-gradient-to-br from-[#10244d] via-[#1746A2] to-[#0F9F6E] p-6 text-white">
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-200">Backend-connected workflow</p>
-            <div className="mt-8 grid gap-4">
-              {workflow.map((item, index) => <div key={item} className="flex items-center gap-3 rounded-3xl bg-white/12 p-5 backdrop-blur"><span className="grid size-9 place-items-center rounded-2xl bg-white/20 text-sm font-black">{index + 1}</span><p className="font-black">{item}</p></div>)}
+      </header>
+
+      <section className="mx-auto grid max-w-7xl gap-10 px-6 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
+        <div className="relative z-10">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm shadow-emerald-100/60">
+            <ShieldCheck className="size-4" /> Built for Indian marketplace GST teams
+          </div>
+          <h1 className="text-5xl font-black tracking-tight text-slate-950 md:text-7xl">GST Bharat is the GST operating system for eCommerce sellers.</h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">Turn marketplace sales reports into normalized transactions, validation intelligence, GSTR-1 exports, Tally XML and reconciliation workflows — all from a single connected dashboard.</p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="/register" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-6 py-4 font-bold text-white shadow-2xl shadow-blue-950/20 transition hover:bg-[#1746A2]">Create workspace <ArrowRight className="size-4" /></Link>
+            <Link href="/billing" className="rounded-2xl border border-slate-200 bg-white px-6 py-4 font-bold text-slate-700 transition hover:border-[#1746A2] hover:text-[#1746A2]">View pricing</Link>
+          </div>
+          <div className="mt-10 grid gap-4 sm:grid-cols-2">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#1746A2]">Supported platforms</p>
+              <p className="mt-4 text-3xl font-black">{marketplaces.length}</p>
+              <p className="mt-2 text-sm text-slate-500">Marketplace parsers loaded from backend catalog.</p>
             </div>
-            <div className="mt-6 rounded-3xl bg-white p-5 text-slate-950">
-              <p className="font-black">Backend parser catalog</p>
-              {marketplaces.slice(0, 4).map((item) => <p key={item.key} className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-600"><CheckCircle2 className="size-4 text-emerald-600" />{item.name} / {item.status} / {item.parser}</p>)}
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#1746A2]">Live workflows</p>
+              <p className="mt-4 text-3xl font-black">{activeParsers + betaParsers}</p>
+              <p className="mt-2 text-sm text-slate-500">Active and beta parser templates available today.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative overflow-hidden rounded-[2rem] border border-white bg-white p-4 shadow-2xl shadow-slate-300/50">
+          <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#10244d] via-[#1746A2] to-transparent opacity-90" />
+          <div className="relative rounded-[1.5rem] bg-[#10244d] p-6 text-white shadow-xl">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-orange-200">Workflow snapshot</p>
+            <div className="mt-8 grid gap-4">
+              {workflow.map((item, index) => (
+                <div key={item} className="flex items-center gap-3 rounded-3xl bg-white/12 p-5 backdrop-blur transition hover:bg-white/20">
+                  <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white/20 text-sm font-black">{index + 1}</span>
+                  <p className="font-black">{item}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 rounded-3xl bg-white p-5 text-slate-950 shadow-soft">
+              <p className="font-black">Parser catalog highlights</p>
+              {marketplaces.slice(0, 4).map((item) => (
+                <p key={item.key} className="mt-3 flex items-center gap-2 text-sm font-semibold text-slate-600"><CheckCircle2 className="size-4 text-emerald-600" />{item.name} / {item.status} / {item.parser}</p>
+              ))}
               {!marketplaces.length ? <p className="mt-3 text-sm font-semibold text-slate-600">Backend catalog unavailable.</p> : null}
             </div>
           </div>
         </div>
       </section>
-      <section id="features" className="mx-auto grid max-w-7xl gap-5 px-6 pb-20 md:grid-cols-3">
-        {features.map((feature) => {
-          const Icon = feature.icon;
-          return <div key={feature.title} className="rounded-3xl border border-white bg-white p-6 shadow-xl shadow-slate-200/70"><Icon className="size-7 text-[#1746A2]" /><h2 className="mt-5 text-xl font-black">{feature.title}</h2><p className="mt-3 text-sm leading-6 text-slate-500">{feature.body}</p></div>;
-        })}
+
+      <section id="features" className="mx-auto max-w-7xl px-6 pb-20">
+        <div className="mb-10 flex flex-col gap-3 text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#1746A2]">Core capabilities</p>
+          <h2 className="text-4xl font-black tracking-tight text-slate-950">Designed to match your GST seller journey.</h2>
+          <p className="mx-auto max-w-2xl text-sm leading-7 text-slate-600">A unified platform for marketplaces, GSTR-1 filing, reconciliation and Tally export — built to look and feel like a modern SaaS workflow.</p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-3">
+          {features.map((feature) => {
+            const Icon = feature.icon;
+            return (
+              <div key={feature.title} className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-soft transition hover:-translate-y-1 hover:border-[#1746A2]/40 hover:shadow-xl">
+                <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#eef4ff] text-[#1746A2]"><Icon className="size-6" /></div>
+                <h3 className="mt-6 text-xl font-black text-slate-950">{feature.title}</h3>
+                <p className="mt-4 text-sm leading-7 text-slate-600">{feature.body}</p>
+              </div>
+            );
+          })}
+        </div>
       </section>
-      <section id="security" className="border-t border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-500"><ReceiptText className="mx-auto mb-3 size-6 text-saffron" />GST Bharat is original software. Backend calculations remain connected to the existing FastAPI engine.</section>
+
+      <section id="pricing" className="mx-auto max-w-7xl px-6 pb-24">
+        <div className="mb-12 flex flex-col gap-3 text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#1746A2]">Pricing</p>
+          <h2 className="text-4xl font-black tracking-tight text-slate-950">Plans for every GST seller.</h2>
+          <p className="mx-auto max-w-2xl text-sm leading-7 text-slate-600">Start with the essentials and scale into advanced reconciliation, filtering, and Tally export workflows with monthly billing.</p>
+        </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          {pricingPlans.map((plan) => (
+            <div key={plan.name} className={`rounded-[2rem] border p-8 shadow-soft transition hover:-translate-y-1 ${plan.featured ? "border-[#1746A2] bg-[#f5f8ff]" : "border-slate-200 bg-white"}`}>
+              <div className="inline-flex rounded-full bg-[#eef4ff] px-4 py-2 text-sm font-semibold text-[#1746A2]">{plan.name}</div>
+              <p className="mt-6 text-5xl font-black tracking-tight text-slate-950">{plan.price}</p>
+              <p className="mt-4 text-sm leading-7 text-slate-600">{plan.tagline}</p>
+              <ul className="mt-8 space-y-3 text-sm text-slate-600">
+                {plan.bullets.map((bullet) => <li key={bullet} className="flex items-center gap-3"><CheckCircle2 className="size-4 text-emerald-600" /><span>{bullet}</span></li>)}
+              </ul>
+              <Link href={plan.href} className={`mt-8 inline-flex w-full items-center justify-center rounded-2xl px-5 py-4 text-sm font-bold transition ${plan.featured ? "bg-[#1746A2] text-white" : "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50"}`}>
+                {plan.featured ? "Choose Growth" : "View plan"}
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="security" className="border-t border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500">
+        <div className="mx-auto max-w-3xl">
+          <ReceiptText className="mx-auto mb-4 size-6 text-saffron" />
+          <p className="text-xl font-black text-slate-950">Secure, transparent and connected to your backend engine.</p>
+          <p className="mt-4 leading-7">GST Bharat is original software that uses the existing FastAPI backend for real-time marketplace parser, transaction normalization and GST filing workflows.</p>
+        </div>
+      </section>
     </main>
   );
 }
