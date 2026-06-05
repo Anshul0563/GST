@@ -164,6 +164,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             <span className="rounded-full bg-[#1746A2]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#1746A2]">Edit</span>
           </div>
           <select
+            aria-label="Select workspace profile"
             value={profile?.id || ""}
             onClick={(event) => event.stopPropagation()}
             onChange={(event) => {
