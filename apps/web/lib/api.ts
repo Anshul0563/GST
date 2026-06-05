@@ -107,6 +107,16 @@ export type BatchStatus = {
   debug?: Record<string, unknown>;
 };
 
+export type MarketplaceCatalogItem = {
+  key: string;
+  name: string;
+  category: string;
+  status: string;
+  required_files: string[];
+  guide: string;
+  parser: string;
+};
+
 export type ImportErrors = {
   parser_errors: Array<Record<string, unknown>>;
   parser_debug?: Record<string, unknown>;
@@ -349,6 +359,10 @@ export function listImportBatches(token: string, profile?: Profile) {
 
 export function getImportStatus(token: string, batchId: number) {
   return request<BatchStatus>(`/imports/${batchId}/status`, {}, token);
+}
+
+export function getMarketplaces() {
+  return request<{ marketplaces: MarketplaceCatalogItem[] }>("/marketplaces");
 }
 
 export function getImportErrors(token: string, batchId: number) {

@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from collections import Counter
 from decimal import Decimal
 from pathlib import Path
 import json
@@ -31,7 +32,7 @@ from app.models.entities import (
     UploadedFile,
     User,
 )
-from app.parsers.factory import get_parser
+from app.parsers.factory import PARSERS, get_parser
 from app.schemas.dto import (
     BatchStatus,
     CreatePaymentOrderIn,
@@ -79,13 +80,66 @@ from app.services.tally import (
     write_voucher_excel,
 )
 from app.services.transaction_normalizer import finalize_transaction
-from app.services.validation import money, validate_gstin, validate_period
+from app.services.validation import money, validate_gstin, validate_period, validate_transaction
 from app.utils.security import create_access_token, hash_password, verify_password
 
 router = APIRouter()
 ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
 STALE_IMPORT_AFTER = timedelta(minutes=5)
 USABLE_IMPORT_STATUSES = {"completed", "completed_with_errors"}
+
+MARKETPLACE_CATALOG = {
+    "amazon": {
+        "name": "Amazon",
+        "category": "Ecommerce",
+        "required_files": ["MTR_B2C CSV", "MTR_B2B CSV optional"],
+        "guide": "Reports > Manage Taxes > GST Monthly Reports",
+    },
+    "flipkart": {
+        "name": "Flipkart",
+        "category": "Ecommerce",
+        "required_files": [
+            "Sales report Excel",
+            "Cash Back report if available",
+            "Next month report if needed",
+        ],
+        "guide": "Reports Center > Tax Reports > Sales report",
+    },
+    "meesho": {
+        "name": "Meesho",
+        "category": "Ecommerce",
+        "required_files": [
+            "tcs_sales.xlsx",
+            "tcs_sales_return.xlsx",
+            "Tax_invoice_details.xlsx",
+        ],
+        "guide": "Payments > Download GST Reports",
+    },
+    "myntra": {
+        "name": "Myntra",
+        "category": "Ecommerce",
+        "required_files": ["Sales report"],
+        "guide": "Upload Myntra GST report",
+    },
+    "jiomart": {
+        "name": "JioMart",
+        "category": "Ecommerce",
+        "required_files": ["Sales report"],
+        "guide": "JioMart seller tax report",
+    },
+    "snapdeal": {
+        "name": "Snapdeal",
+        "category": "Ecommerce",
+        "required_files": ["Sales report"],
+        "guide": "Snapdeal tax report",
+    },
+    "custom": {
+        "name": "Custom Excel",
+        "category": "Accounting",
+        "required_files": ["Mapped Excel/CSV"],
+        "guide": "Use GST Bharat common schema template",
+    },
+}
 
 
 def require_valid_period(period: str | None) -> str:
@@ -191,6 +245,99 @@ def validation_summary(transactions: list[dict], parser_errors: list[dict]) -> d
     return summary
 
 
+AGGREGATE_TRANSACTION_FIELDS = (
+    "qty",
+    "taxable_value",
+    "igst",
+    "cgst",
+    "sgst",
+    "cess",
+    "tcs",
+    "tds",
+    "gross_amount",
+    "discount_seller",
+    "discount_platform",
+    "settlement_amount",
+)
+
+
+def refresh_transaction_validation(txn: dict) -> dict:
+    errors = validate_transaction(txn)
+    zero_only = errors and all(
+        error in {"Zero amount row", "Zero rate and zero taxable row"}
+        for error in errors
+    )
+    txn["validation_status"] = "skipped" if zero_only else "invalid" if errors else "valid"
+    txn["validation_errors"] = "; ".join(errors) if errors else None
+    return txn
+
+
+def transaction_import_key(
+    profile_id: int,
+    txn: dict,
+) -> tuple[int, str | None, str | None, str | None, str | None, str | None]:
+    return (
+        profile_id,
+        txn.get("filing_period"),
+        txn.get("platform"),
+        txn.get("doc_type"),
+        txn.get("invoice_no"),
+        txn.get("order_item_id"),
+    )
+
+
+def merge_duplicate_transaction(base: dict, incoming: dict) -> dict:
+    for field in AGGREGATE_TRANSACTION_FIELDS:
+        base[field] = money(base.get(field)) + money(incoming.get(field))
+
+    source_files = [
+        source
+        for source in [base.get("source_file"), incoming.get("source_file")]
+        if source
+    ]
+    if source_files:
+        base["source_file"] = ", ".join(dict.fromkeys(map(str, source_files)))
+
+    base_raw = base.get("raw_row_json")
+    incoming_raw = incoming.get("raw_row_json")
+    raw_rows = []
+    for raw_value in (base_raw, incoming_raw):
+        if not raw_value:
+            continue
+        try:
+            parsed = json.loads(raw_value) if isinstance(raw_value, str) else raw_value
+        except (TypeError, json.JSONDecodeError):
+            parsed = raw_value
+        if isinstance(parsed, list):
+            raw_rows.extend(parsed)
+        else:
+            raw_rows.append(parsed)
+    if raw_rows:
+        base["raw_row_json"] = json.dumps(raw_rows, default=str)
+
+    return refresh_transaction_validation(base)
+
+
+@router.get("/marketplaces")
+def marketplaces():
+    items = []
+    for key in sorted(PARSERS):
+        metadata = MARKETPLACE_CATALOG.get(key, {})
+        parser_name = PARSERS[key].__name__
+        items.append(
+            {
+                "key": key,
+                "name": metadata.get("name", key.replace("-", " ").title()),
+                "category": metadata.get("category", "Accounting"),
+                "status": "Active" if parser_name != "CustomExcelParser" or key == "custom" else "Beta",
+                "required_files": metadata.get("required_files", ["Sales report"]),
+                "guide": metadata.get("guide", "Upload marketplace report"),
+                "parser": parser_name,
+            }
+        )
+    return {"marketplaces": items}
+
+
 def batch_status_response(batch: PlatformImportBatch) -> BatchStatus:
     parser_errors, debug = read_import_report(batch)
     return BatchStatus(
@@ -216,6 +363,31 @@ def stored_import_paths(batch: PlatformImportBatch, db: Session) -> list[str]:
     if missing:
         raise FileNotFoundError(f"Uploaded source file missing: {missing[0]}")
     return paths
+
+
+def period_from_document_date(value: object) -> str | None:
+    try:
+        parsed = datetime.fromisoformat(str(value)).date()
+    except (TypeError, ValueError):
+        return None
+    return f"{parsed.month:02d}{parsed.year}"
+
+
+def dominant_excluded_period(result) -> str | None:
+    rows = result.debug.get("period_excluded_rows", [])
+    periods = [
+        period
+        for period in (
+            period_from_document_date(row.get("document_date"))
+            for row in rows
+            if isinstance(row, dict)
+        )
+        if period
+    ]
+    if not periods:
+        return None
+    [(period, count)] = Counter(periods).most_common(1)
+    return period if count == len(periods) else None
 
 
 def clear_batch_transactions(batch: PlatformImportBatch, db: Session) -> None:
@@ -711,6 +883,9 @@ async def upload_import(
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
     import_period = require_valid_period(period or profile.return_period)
+    platform_key = platform.lower()
+    if platform_key not in PARSERS:
+        raise HTTPException(422, f"Unsupported platform: {platform}")
     if not files:
         raise HTTPException(422, "At least one file is required")
     for upload in files:
@@ -722,7 +897,7 @@ async def upload_import(
         user_id=user.id,
         profile_id=profile.id,
         period=import_period,
-        platform=platform.lower(),
+        platform=platform_key,
         status="queued",
     )
     db.add(batch)
@@ -797,12 +972,28 @@ def run_import_parser(
         batch.period or profile.return_period,
     )
     result = parser.parse([Path(path) for path in file_paths])
-    seen_keys: set[
-        tuple[int, str | None, str | None, str | None, str | None, str | None]
-    ] = set()
-    inserted_rows = 0
-    validation_error_rows = 0
-
+    detected_period = dominant_excluded_period(result)
+    if (
+        not result.transactions
+        and detected_period
+        and detected_period != (batch.period or profile.return_period)
+    ):
+        original_period = batch.period or profile.return_period
+        batch.period = detected_period
+        profile.return_period = detected_period
+        parser = get_parser(batch.platform)(profile.gstin, detected_period)
+        reparsed = parser.parse([Path(path) for path in file_paths])
+        reparsed.debug["auto_period_switch"] = {
+            "from": original_period,
+            "to": detected_period,
+            "reason": "All parsed document dates were outside the selected filing period.",
+        }
+        result = reparsed
+    aggregated_transactions: dict[
+        tuple[int, str | None, str | None, str | None, str | None, str | None],
+        dict,
+    ] = {}
+    duplicate_rows: list[dict] = []
     for txn in result.transactions:
         txn = dict(txn)
         txn["filing_period"] = (
@@ -811,14 +1002,28 @@ def run_import_parser(
             or batch.period
             or profile.return_period
         )
-        key = (
-            batch.profile_id,
-            txn.get("filing_period"),
-            txn.get("platform"),
-            txn.get("doc_type"),
-            txn.get("invoice_no"),
-            txn.get("order_item_id"),
-        )
+        key = transaction_import_key(batch.profile_id, txn)
+        if key in aggregated_transactions:
+            merge_duplicate_transaction(aggregated_transactions[key], txn)
+            duplicate_rows.append(
+                {
+                    "filing_period": key[1],
+                    "platform": key[2],
+                    "doc_type": key[3],
+                    "invoice_no": key[4],
+                    "order_item_id": key[5],
+                }
+            )
+        else:
+            aggregated_transactions[key] = txn
+
+    if duplicate_rows:
+        result.debug["aggregated_duplicate_rows"] = duplicate_rows
+
+    inserted_rows = 0
+    validation_error_rows = 0
+
+    for key, txn in aggregated_transactions.items():
         existing = db.scalar(
             select(NormalizedTransaction).where(
                 NormalizedTransaction.profile_id == key[0],
@@ -833,10 +1038,8 @@ def run_import_parser(
             db.delete(existing)
             db.flush()
             existing = None
-        duplicate = key in seen_keys or existing is not None
-        if duplicate:
+        if existing is not None:
             continue
-        seen_keys.add(key)
         db.add(
             NormalizedTransaction(
                 user_id=batch.user_id,
@@ -853,7 +1056,7 @@ def run_import_parser(
     batch.parsed_rows = inserted_rows
     batch.error_rows = len(result.errors) + validation_error_rows
     result.debug["validation_summary"] = validation_summary(
-        result.transactions, result.errors
+        list(aggregated_transactions.values()), result.errors
     )
     batch.error_report_json = json.dumps(
         {"parser_errors": result.errors, "debug": result.debug},
@@ -1619,7 +1822,14 @@ async def tally_import(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return await upload_import(platform, background_tasks, profile_id, files, user, db)
+    return await upload_import(
+        platform=platform,
+        background_tasks=background_tasks,
+        profile_id=profile_id,
+        files=files,
+        user=user,
+        db=db,
+    )
 
 
 @router.get("/tally/mapping/{company_id}")

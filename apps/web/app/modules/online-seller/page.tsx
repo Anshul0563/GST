@@ -1,5 +1,5 @@
-import { OnlineSellerDashboardPage } from "@/components/saas/dashboard-page";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <OnlineSellerDashboardPage />;
+  redirect("/modules/online-seller/profile?next=/modules/online-seller/marketplaces");
 }

@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, FileSpreadsheet, RotateCw, Trash2, UploadClo
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatusPill } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
-import { marketplaces } from "@/lib/marketplaces";
+import { marketplaceIconFor } from "@/lib/marketplaces";
 import { BatchStatus, ImportErrors, deleteImportBatch, getImportErrors, getImportStatus, reprocessImportBatch, uploadMarketplaceFiles } from "@/lib/api";
 
 const ACCEPTED_IMPORT_FILES = ".csv,.xls,.xlsx,.xlsm";
@@ -25,6 +25,7 @@ export function ImportsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [reprocessingId, setReprocessingId] = useState<number | null>(null);
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
+  const marketplaces = workspace.marketplaces;
   useEffect(() => {
     setFiles([]);
     setProgress("");
@@ -33,9 +34,24 @@ export function ImportsPage() {
     setDeletingId(null);
     setReprocessingId(null);
   }, [activeProfileKey]);
-  const selected = useMemo(() => marketplaces.find((item) => item.key === platformKey) || marketplaces[0], [platformKey]);
-  const canImport = selected.status !== "Coming Soon";
+  useEffect(() => {
+    if (!marketplaces.length) return;
+    if (!marketplaces.some((item) => item.key === platformKey)) {
+      setPlatformKey(marketplaces[0].key);
+    }
+  }, [marketplaces, platformKey]);
+  const selected = useMemo(() => marketplaces.find((item) => item.key === platformKey) || marketplaces[0] || null, [marketplaces, platformKey]);
+  const SelectedIcon = selected ? marketplaceIconFor(selected.key) : FileSpreadsheet;
+  const canImport = Boolean(selected && selected.status !== "Coming Soon");
   const canStartImport = canImport && Boolean(workspace.profile) && files.length > 0;
+  const importSteps = [
+    { label: workspace.profile ? `Profile ${workspace.profile.gstin}` : "GST profile missing", done: Boolean(workspace.profile) },
+    { label: selected ? `${selected.name} parser ${selected.status}` : "Parser catalog loading", done: Boolean(selected) },
+    { label: `${files.length} files selected`, done: files.length > 0 },
+    { label: activeBatch ? `Batch #${activeBatch.id} ${activeBatch.status}` : "No active batch", done: Boolean(activeBatch) },
+    { label: activeBatch ? `${activeBatch.parsed_rows} parsed rows` : "Parser not started", done: Boolean(activeBatch?.parsed_rows) },
+    { label: activeBatch ? `${activeBatch.error_rows} parser errors` : "Error report pending", done: Boolean(activeBatch && activeBatch.status !== "queued" && activeBatch.status !== "processing") },
+  ];
 
   function addFiles(index: number, selectedFiles: File[]) {
     if (!selectedFiles.length) return;
@@ -52,10 +68,10 @@ export function ImportsPage() {
 
   async function startImport() {
     if (!canImport) {
-      setProgress(`${selected.name} parser is not enabled yet.`);
+      setProgress(selected ? `${selected.name} parser is not enabled yet.` : "Marketplace catalog is still loading.");
       return;
     }
-    if (!workspace.token || !workspace.profile || !files.length) {
+    if (!selected || !workspace.token || !workspace.profile || !files.length) {
       setProgress("Choose files before starting import.");
       return;
     }
@@ -138,20 +154,20 @@ export function ImportsPage() {
       <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
         <Panel title="Import steps" subtitle="A production upload flow with profile, period and parser feedback.">
           <div className="space-y-3">
-            {["Select GST profile + filing period", "Choose marketplace platform", "Review required files", "Drag/drop upload", "Parse progress", "Success/error report", "View imported transactions"].map((step, index) => <div key={step} className={`flex items-center gap-3 rounded-2xl p-3 text-sm font-semibold ${index < 3 ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-600 dark:bg-white/5"}`}><span className="grid size-7 place-items-center rounded-full bg-white text-xs shadow-sm">{index + 1}</span>{step}</div>)}
+            {importSteps.map((step, index) => <div key={step.label} className={`flex items-center gap-3 rounded-2xl p-3 text-sm font-semibold ${step.done ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-600 dark:bg-white/5"}`}><span className="grid size-7 place-items-center rounded-full bg-white text-xs shadow-sm">{index + 1}</span>{step.label}</div>)}
           </div>
         </Panel>
-        <Panel title="Upload workspace" subtitle="Active and beta parsers connect to backend import APIs. Coming-soon platforms are locked until parser support is added.">
+        <Panel title="Upload workspace" subtitle="Parser catalog, required files and platform status are loaded from the backend.">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-bold">GST profile<select className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option>{workspace.profile?.gstin || "No GSTIN"}</option></select></label>
             <label className="text-sm font-bold">Filing period<input value={workspace.profile?.return_period || ""} readOnly className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>
-            <label className="text-sm font-bold md:col-span-2">Platform<select value={platformKey} onChange={(event) => { setPlatformKey(event.target.value); setFiles([]); setProgress(""); }} className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">{marketplaces.map((item) => <option key={item.key} value={item.key}>{item.name} - {item.status}</option>)}</select></label>
+            <label className="text-sm font-bold md:col-span-2">Platform<select value={selected?.key || ""} disabled={!marketplaces.length} onChange={(event) => { setPlatformKey(event.target.value); setFiles([]); setProgress(""); }} className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">{marketplaces.map((item) => <option key={item.key} value={item.key}>{item.name} - {item.status}</option>)}</select></label>
           </div>
           <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/5">
-            <div className="flex items-center justify-between"><div><h3 className="font-black">{selected.name}</h3><p className="text-sm text-slate-500">{selected.guide}</p></div><StatusPill status={selected.status} /></div>
-            {!canImport && <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-800">{selected.name} upload is coming soon. Choose Amazon, Flipkart, Meesho, Custom Excel, or a beta parser.</div>}
+            {selected ? <div className="flex items-center justify-between gap-4"><div className="flex items-start gap-3"><div className="grid size-11 place-items-center rounded-xl bg-white text-[#1746A2] shadow-sm dark:bg-slate-900"><SelectedIcon className="size-5" /></div><div><h3 className="font-black">{selected.name}</h3><p className="text-sm text-slate-500">{selected.guide}</p><p className="mt-1 text-xs font-bold text-slate-400">Parser: {selected.parser}</p></div></div><StatusPill status={selected.status} /></div> : <EmptyState title="Marketplace catalog not loaded" body="Backend marketplace endpoint did not return parser data yet." />}
+            {selected && !canImport && <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-800">{selected.name} parser is not enabled by the backend yet.</div>}
             <div className="mt-4 grid gap-3">
-              {selected.requiredFiles.map((file, index) => <label key={file} className={`flex min-h-16 items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm dark:border-white/10 dark:bg-slate-900 ${canImport ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}><FileSpreadsheet className="size-5 text-emerald-600" /><span className="w-44 font-bold">{file}</span><input type="file" multiple disabled={!canImport} className="flex-1 text-xs" onChange={(event) => {
+              {(selected?.required_files || []).map((file, index) => <label key={file} className={`flex min-h-16 items-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm dark:border-white/10 dark:bg-slate-900 ${canImport ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}><FileSpreadsheet className="size-5 text-emerald-600" /><span className="w-44 font-bold">{file}</span><input type="file" multiple disabled={!canImport} className="flex-1 text-xs" onChange={(event) => {
                 const selectedFiles = Array.from(event.target.files || []);
                 addFiles(index, selectedFiles);
                 event.currentTarget.value = "";

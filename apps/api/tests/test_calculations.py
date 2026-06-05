@@ -674,6 +674,57 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(result.transactions[0]["doc_type"], "credit_note")
         self.assertEqual(result.transactions[0]["validation_status"], "valid")
 
+    def test_meesho_parser_reconciles_sub_paise_source_totals(self):
+        with TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            sales = base / "tcs_sales.xlsx"
+            pd.DataFrame([
+                {
+                    "sub order num": "SO-ROUND-1",
+                    "order date": "2026-04-10",
+                    "invoice no.": "6p5kc27R1",
+                    "hsn code": "711790",
+                    "quantity": 1,
+                    "gst rate": 3,
+                    "total taxable sale value": "100.005",
+                    "tax amount": "3.005",
+                    "total invoice value": "103.01",
+                    "end customer state new": "TELANGANA",
+                    "eco tcs gstin": "07AARCM9332R1CQ",
+                },
+                {
+                    "sub order num": "SO-ROUND-2",
+                    "order date": "2026-04-10",
+                    "invoice no.": "6p5kc27R2",
+                    "hsn code": "711790",
+                    "quantity": 1,
+                    "gst rate": 3,
+                    "total taxable sale value": "100.005",
+                    "tax amount": "3.005",
+                    "total invoice value": "103.01",
+                    "end customer state new": "TELANGANA",
+                    "eco tcs gstin": "07AARCM9332R1CQ",
+                },
+            ]).to_excel(sales, index=False)
+
+            result = MeeshoParser("07TCRPS8655B1ZK", "042026").parse([sales])
+
+        taxable = sum((txn["taxable_value"] for txn in result.transactions), Decimal("0.00"))
+        total_tax = sum(
+            (
+                txn["igst"] + txn["cgst"] + txn["sgst"] + txn["cess"]
+                for txn in result.transactions
+            ),
+            Decimal("0.00"),
+        )
+        self.assertEqual(result.errors, [])
+        self.assertEqual(taxable, Decimal("200.01"))
+        self.assertEqual(total_tax, Decimal("6.01"))
+        self.assertEqual(
+            result.debug["source_total_reconciliation"]["deltas_applied"]["taxable_value"],
+            "-0.01",
+        )
+
     def test_gstr1_json_contract_matches_offline_tool_structure(self):
         rows = [
             finalize_transaction({

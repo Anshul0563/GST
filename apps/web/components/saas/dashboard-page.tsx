@@ -26,12 +26,6 @@ const tools = [
     accent: "border-blue-200 bg-blue-50 text-blue-700",
     description:
       "Marketplace sales imports, data cleanup, GSTR-1 preview, JSON/Excel export and filing reports.",
-    points: [
-      "GST Profile",
-      "Marketplace Upload",
-      "Manage Data",
-      "GSTR-1 Preview",
-    ],
   },
   {
     title: "2A/2B Reconcile",
@@ -41,12 +35,6 @@ const tools = [
     accent: "border-emerald-200 bg-emerald-50 text-emerald-700",
     description:
       "Upload portal 2A/2B and purchase books, reconcile invoices, inspect mismatches and download Excel.",
-    points: [
-      "Upload 2A/2B",
-      "Purchase Register",
-      "Match Results",
-      "ITC Risk Report",
-    ],
   },
   {
     title: "eCom to Tally",
@@ -56,12 +44,6 @@ const tools = [
     accent: "border-orange-200 bg-orange-50 text-orange-700",
     description:
       "Turn eCommerce transactions into mapped Tally vouchers and XML downloads.",
-    points: [
-      "Tally Company",
-      "Marketplace Import",
-      "Ledger Mapping",
-      "XML Export",
-    ],
   },
 ] satisfies Array<{
   title: string;
@@ -70,7 +52,6 @@ const tools = [
   icon: typeof UploadCloud;
   accent: string;
   description: string;
-  points: string[];
 }>;
 
 export function DashboardSaasPage() {
@@ -113,8 +94,8 @@ export function DashboardSaasPage() {
               workflow, menu and dashboard.
             </p>
           </div>
-          <span className="w-fit rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-700">
-            Suite Active
+          <span className={`w-fit rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wide ${workspace.token ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+            {workspace.token ? `${workspace.profiles.length} profiles loaded` : "Login required"}
           </span>
         </div>
         <div className="mt-7 grid gap-5 xl:grid-cols-3">
@@ -161,6 +142,27 @@ export function DashboardSaasPage() {
                         ),
                       },
                     ];
+            const signals =
+              index === 0
+                ? [
+                    `${workspace.marketplaces.length} backend parsers`,
+                    `${workspace.batches.length} import batches`,
+                    `${warningsText(workspace.transactions.filter((row) => ["error", "invalid", "warning"].includes(row.validation_status)).length)} validation rows`,
+                    `${workspace.preview?.b2cs?.length ?? 0} B2CS groups`,
+                  ]
+                : index === 1
+                  ? [
+                      workspace.profile?.gstin ? `GSTIN ${workspace.profile.gstin}` : "No GST profile selected",
+                      workspace.profile?.return_period ? `Period ${workspace.profile.return_period}` : "No return period",
+                      `${workspace.transactions.length} book rows available`,
+                      `${workspace.summary?.pending_errors || 0} blockers in active data`,
+                    ]
+                  : [
+                      `${workspace.companies.length} Tally companies`,
+                      `${workspace.transactions.filter((row) => row.validation_status === "valid").length} valid rows`,
+                      `${workspace.batches.filter((batch) => batch.status === "completed").length} completed imports`,
+                      workspace.profile?.financial_year ? `FY ${workspace.profile.financial_year}` : "Financial year not set",
+                    ];
             return (
               <article
                 key={tool.title}
@@ -199,7 +201,7 @@ export function DashboardSaasPage() {
                     ))}
                   </div>
                   <div className="mt-5 grid gap-2 text-sm text-slate-600 dark:text-slate-300">
-                    {tool.points.map((point) => (
+                    {signals.map((point) => (
                       <p key={point} className="flex items-center gap-2">
                         <ShieldCheck className="size-4 text-emerald-600" />{" "}
                         {point}
@@ -227,6 +229,10 @@ export function DashboardSaasPage() {
   );
 }
 
+function warningsText(count: number) {
+  return count ? String(count) : "0";
+}
+
 export function OnlineSellerDashboardPage() {
   const workspace = useWorkspace();
   const summary = workspace.summary;
@@ -239,31 +245,31 @@ export function OnlineSellerDashboardPage() {
     title: string;
     href: Route;
     icon: typeof UploadCloud;
-    body: string;
+    body: () => string;
   }> = [
     {
       title: "GST Profile",
       href: "/modules/online-seller/profile",
       icon: ReceiptText,
-      body: "GSTIN, period and filing frequency.",
+      body: () => workspace.profile ? `${workspace.profile.gstin} / ${workspace.profile.return_period}` : "No backend GST profile selected.",
     },
     {
       title: "Marketplace Upload",
       href: "/modules/online-seller/marketplaces",
       icon: UploadCloud,
-      body: "Upload platform reports into backend parsers.",
+      body: () => `${workspace.marketplaces.length} parsers / ${workspace.batches.length} batches`,
     },
     {
       title: "Manage Data",
       href: "/modules/online-seller/manage-data",
       icon: FileSpreadsheet,
-      body: "Review, correct and export normalized rows.",
+      body: () => `${workspace.transactions.length} normalized rows loaded`,
     },
     {
       title: "GSTR-1 Preview",
       href: "/modules/online-seller/gstr1",
       icon: FileJson,
-      body: "Preview, JSON export and Excel export.",
+      body: () => `${workspace.preview?.b2cs?.length ?? 0} B2CS groups / ${summary?.json_generation_status || "not_generated"}`,
     },
   ];
   return (
@@ -333,7 +339,7 @@ export function OnlineSellerDashboardPage() {
                 </div>
                 <h3 className="mt-5 text-lg font-black">{item.title}</h3>
                 <p className="mt-2 text-sm leading-6 text-slate-500">
-                  {item.body}
+                  {item.body()}
                 </p>
               </Link>
             );

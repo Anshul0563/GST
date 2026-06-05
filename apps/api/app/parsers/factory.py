@@ -16,5 +16,12 @@ PARSERS = {
 
 
 def get_parser(platform: str):
-    return PARSERS.get(platform.lower(), CustomExcelParser)
-
+    normalized = platform.lower()
+    parser = PARSERS.get(normalized, CustomExcelParser)
+    if parser is CustomExcelParser and normalized != "custom":
+        return type(
+            f"{normalized.title().replace('-', '')}Parser",
+            (CustomExcelParser,),
+            {"platform": normalized},
+        )
+    return parser

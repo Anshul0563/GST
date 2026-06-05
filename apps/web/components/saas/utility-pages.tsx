@@ -1,6 +1,9 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import type { Route } from "next";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, CheckCircle2, CreditCard, Settings, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
@@ -8,27 +11,107 @@ import { useWorkspace } from "@/components/saas/workspace";
 import { BillingPlan, BillingStatus, createBillingOrder, createProfile, getBillingPlans, getBillingStatus, updateProfile, verifyBillingPayment } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
-function currentProfileDefaults() {
+const GST_STATE_NAMES: Record<string, string> = {
+  "01": "Jammu & Kashmir",
+  "02": "Himachal Pradesh",
+  "03": "Punjab",
+  "04": "Chandigarh",
+  "05": "Uttarakhand",
+  "06": "Haryana",
+  "07": "Delhi",
+  "08": "Rajasthan",
+  "09": "Uttar Pradesh",
+  "10": "Bihar",
+  "11": "Sikkim",
+  "12": "Arunachal Pradesh",
+  "13": "Nagaland",
+  "14": "Manipur",
+  "15": "Mizoram",
+  "16": "Tripura",
+  "17": "Meghalaya",
+  "18": "Assam",
+  "19": "West Bengal",
+  "20": "Jharkhand",
+  "21": "Odisha",
+  "22": "Chhattisgarh",
+  "23": "Madhya Pradesh",
+  "24": "Gujarat",
+  "26": "Dadra and Nagar Haveli and Daman and Diu",
+  "27": "Maharashtra",
+  "29": "Karnataka",
+  "30": "Goa",
+  "31": "Lakshadweep",
+  "32": "Kerala",
+  "33": "Tamil Nadu",
+  "34": "Puducherry",
+  "35": "Andaman and Nicobar Islands",
+  "36": "Telangana",
+  "37": "Andhra Pradesh",
+  "38": "Ladakh",
+  "97": "Other Territory",
+};
+
+function periodParts(period: string) {
+  const month = Number(period.slice(0, 2));
+  const year = Number(period.slice(2, 6));
+  return { month, year };
+}
+
+function financialYearForPeriod(period: string): string {
+  const { month, year } = periodParts(period);
+  if (!month || !year) {
+    const now = new Date();
+    const fallbackStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    return `${fallbackStart}-${String(fallbackStart + 1).slice(-2)}`;
+  }
+  const start = month >= 4 ? year : year - 1;
+  return `${start}-${String(start + 1).slice(-2)}`;
+}
+
+function suggestedReturnPeriod() {
   const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const year = now.getFullYear();
-  const financialStart = now.getMonth() >= 3 ? year : year - 1;
+  const target = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const month = String(target.getMonth() + 1).padStart(2, "0");
+  return `${month}${target.getFullYear()}`;
+}
+
+function smartFilingFrequency(period: string) {
+  const { month } = periodParts(period);
+  return [3, 6, 9, 12].includes(month) ? "Quarterly" : "Monthly";
+}
+
+function gstinStateName(gstin: string) {
+  const code = gstin.trim().slice(0, 2);
+  return GST_STATE_NAMES[code] ? `${code} - ${GST_STATE_NAMES[code]}` : "";
+}
+
+function currentProfileDefaults() {
+  const returnPeriod = suggestedReturnPeriod();
   return {
     gstin: "",
     legal_name: "",
     trade_name: "",
-    filing_frequency: "Monthly",
-    financial_year: `${financialStart}-${String(financialStart + 1).slice(-2)}`,
-    return_period: `${month}${year}`
+    filing_frequency: smartFilingFrequency(returnPeriod),
+    financial_year: financialYearForPeriod(returnPeriod),
+    return_period: returnPeriod
   };
 }
 
 export function ProfilePage() {
   const workspace = useWorkspace();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [form, setForm] = useState(currentProfileDefaults);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const dynamicDefaults = currentProfileDefaults();
+  const nextRoute = (searchParams.get("next") || "/modules/online-seller/marketplaces") as Route;
+  const detectedState = gstinStateName(form.gstin);
+  const moduleUsage = [
+    { label: "GST Online Seller", value: `${workspace.transactions.length} rows` },
+    { label: "2A/2B Reconcile", value: `${workspace.profile?.return_period || dynamicDefaults.return_period} period` },
+    { label: "eCom to Tally", value: `${workspace.companies.length} companies` },
+  ];
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!workspace.token) return;
@@ -44,6 +127,20 @@ export function ProfilePage() {
       setEditingId(savedProfile.id);
     }
     setMessage(editingId ? "GST profile updated." : "GST profile added.");
+    router.push(nextRoute);
+  }
+  function applySmartSetup() {
+    const returnPeriod = form.return_period || dynamicDefaults.return_period;
+    setForm({
+      ...form,
+      return_period: returnPeriod,
+      financial_year: financialYearForPeriod(returnPeriod),
+      filing_frequency: smartFilingFrequency(returnPeriod),
+      gstin: form.gstin.toUpperCase(),
+      legal_name: form.legal_name.trim(),
+      trade_name: form.trade_name.trim(),
+    });
+    setMessage(detectedState ? `AI setup applied. GSTIN state detected: ${detectedState}.` : "AI setup applied. Return period and financial year are synced.");
   }
   return <AppShell title="GST Profile & Filing Period" subtitle="Select the GSTIN, return period and Monthly/Quarterly filing mode before using any GST Bharat tool." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }}>
     <div className="space-y-6">
@@ -57,14 +154,30 @@ export function ProfilePage() {
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Panel title="Workspace setup" subtitle="Save this once, then continue with upload, reconcile or Tally export.">
           <form onSubmit={submit} className="space-y-4">
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <b>AI assisted setup</b>
+                  <p className="mt-1 leading-6">
+                    Suggested return period {dynamicDefaults.return_period}, FY {dynamicDefaults.financial_year}
+                    {detectedState ? `, GSTIN state ${detectedState}` : ""}.
+                  </p>
+                </div>
+                <button type="button" onClick={applySmartSetup} className="btn-secondary bg-white dark:bg-slate-900">Apply AI setup</button>
+              </div>
+            </div>
             <label className="grid gap-2 text-sm font-bold">GST number
               <input value={form.gstin} onChange={(event) => setForm({ ...form, gstin: event.target.value.toUpperCase() })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" placeholder="15 digit GSTIN" required maxLength={15} />
+              {detectedState ? <span className="text-xs font-semibold text-emerald-600">AI detected seller state: {detectedState}</span> : null}
             </label>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="grid gap-2 text-sm font-bold">Return period
                 <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">
                   <CalendarDays className="size-4 text-[#1746A2]" />
-                  <input value={form.return_period} onChange={(event) => setForm({ ...form, return_period: event.target.value })} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" placeholder="MMYYYY e.g. 052026" required />
+                  <input value={form.return_period} onChange={(event) => {
+                    const returnPeriod = event.target.value;
+                    setForm({ ...form, return_period: returnPeriod, financial_year: financialYearForPeriod(returnPeriod), filing_frequency: smartFilingFrequency(returnPeriod) });
+                  }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" placeholder="MMYYYY e.g. 052026" required />
                 </div>
               </label>
               <label className="grid gap-2 text-sm font-bold">Financial year
@@ -88,7 +201,8 @@ export function ProfilePage() {
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <button disabled={!workspace.token} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{editingId ? "Update workspace" : "Create workspace"}</button>
+              <button disabled={!workspace.token} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{editingId ? "Update & continue to upload" : "Create & continue to upload"}</button>
+              {workspace.profile ? <Link href={nextRoute} className="btn-secondary">Continue to marketplace upload</Link> : null}
               <button type="button" onClick={() => { setEditingId(null); setForm(currentProfileDefaults()); }} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 dark:border-white/10 dark:text-slate-300">New GSTIN</button>
             </div>
             {message && <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</div>}
@@ -120,7 +234,7 @@ export function ProfilePage() {
       </div>
       <Panel title="Works across all modules" subtitle="The same active GST profile controls Online Seller, 2A/2B Reconcile and eCom to Tally.">
         <div className="grid gap-3 text-sm md:grid-cols-3">
-          {["GST Online Seller", "2A/2B Reconcile", "eCom to Tally"].map((item) => <div key={item} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5"><ShieldCheck className="size-4 text-emerald-600" /> {item}</div>)}
+          {moduleUsage.map((item) => <div key={item.label} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5"><span className="flex items-center gap-3"><ShieldCheck className="size-4 text-emerald-600" /> {item.label}</span><span className="text-xs text-slate-500">{item.value}</span></div>)}
         </div>
       </Panel>
     </div>
@@ -133,7 +247,12 @@ export function SettingsPage() {
   const [saved, setSaved] = useState("");
   useEffect(() => {
     const raw = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_workspace_settings") : null;
-    if (raw) setSettings((current) => ({ ...current, ...JSON.parse(raw) }));
+    if (!raw) return;
+    try {
+      setSettings((current) => ({ ...current, ...JSON.parse(raw) }));
+    } catch {
+      window.localStorage.removeItem("gst_bharat_workspace_settings");
+    }
   }, []);
   function saveSettings() {
     window.localStorage.setItem("gst_bharat_workspace_settings", JSON.stringify(settings));

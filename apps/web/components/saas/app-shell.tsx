@@ -18,7 +18,7 @@ const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array
     title: "GST Online Seller",
     icon: ReceiptText,
     items: [
-      { href: "/modules/online-seller", label: "Mini Dashboard", icon: Home },
+      { href: "/modules/online-seller/profile", label: "GST Profile", icon: ShieldCheck },
       { href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", icon: UploadCloud },
       { href: "/modules/online-seller/manage-data", label: "Manage Data", icon: ReceiptText },
       { href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", icon: FileJson }

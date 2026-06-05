@@ -6,11 +6,13 @@ import {
   BatchStatus,
   DashboardSummary,
   Gstr1Payload,
+  MarketplaceCatalogItem,
   Profile,
   TallyCompany,
   Transaction,
   getCurrentUser,
   getGstrPreview,
+  getMarketplaces,
   getSummary,
   getTransactions,
   listImportBatches,
@@ -28,6 +30,7 @@ export type Workspace = {
   batches: BatchStatus[];
   preview: Gstr1Payload | null;
   companies: TallyCompany[];
+  marketplaces: MarketplaceCatalogItem[];
   loading: boolean;
   error: string;
   setProfile: (profile: Profile) => void;
@@ -45,6 +48,7 @@ export function useWorkspace(): Workspace {
   const [batches, setBatches] = useState<BatchStatus[]>([]);
   const [preview, setPreview] = useState<Gstr1Payload | null>(null);
   const [companies, setCompanies] = useState<TallyCompany[]>([]);
+  const [marketplaces, setMarketplaces] = useState<MarketplaceCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const refreshSeq = useRef(0);
@@ -133,17 +137,21 @@ export function useWorkspace(): Workspace {
   useEffect(() => {
     const storedToken = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") : null;
     if (!storedToken) {
+      getMarketplaces()
+        .then((result) => setMarketplaces(result.marketplaces))
+        .catch(() => setMarketplaces([]));
       setLoading(false);
       return;
     }
-    const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken)])
-      .then(([user, profiles]) => ({ token: storedToken, user, profiles, profile: profiles[0] ?? null }));
+    const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken), getMarketplaces()])
+      .then(([user, profiles, marketplaceResult]) => ({ token: storedToken, user, profiles, profile: profiles[0] ?? null, marketplaces: marketplaceResult.marketplaces }));
     initializer
-      .then(async ({ token, user, profiles, profile }) => {
+      .then(async ({ token, user, profiles, profile, marketplaces }) => {
         setToken(token);
         setUser(user);
         setProfiles(profiles);
         setActiveProfile(profile);
+        setMarketplaces(marketplaces);
         if (profile) {
           await refreshWorkspace(token, profile, { user, profiles });
         } else {
@@ -166,11 +174,12 @@ export function useWorkspace(): Workspace {
     batches,
     preview,
     companies,
+    marketplaces,
     loading,
     error,
     setProfile: selectProfile,
     refresh
-  }), [token, user, profile, profiles, summary, transactions, batches, preview, companies, loading, error, selectProfile, refresh]);
+  }), [token, user, profile, profiles, summary, transactions, batches, preview, companies, marketplaces, loading, error, selectProfile, refresh]);
 }
 
 export function money(value: number | string | null | undefined) {

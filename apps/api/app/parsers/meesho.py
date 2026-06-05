@@ -1,4 +1,5 @@
 from pathlib import Path
+from decimal import Decimal, InvalidOperation
 
 from app.parsers.base import (
     MarketplaceParser,
@@ -10,6 +11,7 @@ from app.parsers.base import (
     should_skip_transaction,
     text,
 )
+from app.services.validation import round_money, validate_transaction
 from app.services.pos_resolver import (
     new_pos_debug,
     observe_pos_debug,
@@ -47,6 +49,126 @@ def is_empty(value: object) -> bool:
     return text(value) is None
 
 
+SOURCE_TOTAL_FIELDS = {
+    "taxable_value": [
+        "total taxable sale value",
+        "taxable value",
+        "taxable amount",
+    ],
+    "total_tax": [
+        "tax amount",
+        "total tax amount",
+        "gst amount",
+    ],
+    "gross_amount": [
+        "total invoice value",
+        "invoice amount",
+        "gross amount",
+    ],
+}
+
+
+def precise_amount(value: object) -> Decimal:
+    if value in (None, ""):
+        return Decimal("0")
+    cleaned = str(value).replace(",", "").replace("₹", "").replace("%", "").strip()
+    if cleaned.lower() in {"", "-", "nan", "none", "null"}:
+        return Decimal("0")
+    negative = cleaned.startswith("(") and cleaned.endswith(")")
+    cleaned = cleaned.strip("()")
+    try:
+        amount = Decimal(cleaned)
+    except InvalidOperation:
+        return Decimal("0")
+    return -amount if negative else amount
+
+
+def signed_source_amount(row: dict, field: str, is_return: bool) -> Decimal:
+    amount = precise_amount(first_value(row, SOURCE_TOTAL_FIELDS[field]))
+    return -abs(amount) if is_return else amount
+
+
+def refresh_validation(txn: dict) -> None:
+    errors = validate_transaction(txn)
+    zero_only = errors and all(
+        error in {"Zero amount row", "Zero rate and zero taxable row"}
+        for error in errors
+    )
+    txn["validation_status"] = "skipped" if zero_only else "invalid" if errors else "valid"
+    txn["validation_errors"] = "; ".join(errors) if errors else None
+
+
+def add_total_tax_delta(txn: dict, delta: Decimal) -> None:
+    if delta == Decimal("0.00"):
+        return
+    if money(txn.get("igst")) != Decimal("0.00"):
+        txn["igst"] = money(txn.get("igst")) + delta
+        return
+    half = round_money(delta / Decimal("2"))
+    txn["cgst"] = money(txn.get("cgst")) + half
+    txn["sgst"] = money(txn.get("sgst")) + (delta - half)
+
+
+def reconcile_source_totals(result: ParseResult, source_totals: dict[str, Decimal]) -> None:
+    if not result.transactions:
+        return
+    actual_taxable = sum(
+        (money(txn.get("taxable_value")) for txn in result.transactions),
+        Decimal("0.00"),
+    )
+    actual_tax = sum(
+        (
+            money(txn.get("igst"))
+            + money(txn.get("cgst"))
+            + money(txn.get("sgst"))
+            + money(txn.get("cess"))
+            for txn in result.transactions
+        ),
+        Decimal("0.00"),
+    )
+    actual_gross = sum(
+        (money(txn.get("gross_amount")) for txn in result.transactions),
+        Decimal("0.00"),
+    )
+    expected = {key: round_money(value) for key, value in source_totals.items()}
+    deltas = {
+        "taxable_value": expected["taxable_value"] - actual_taxable,
+        "total_tax": expected["total_tax"] - actual_tax,
+        "gross_amount": expected["gross_amount"] - actual_gross,
+    }
+    if not any(deltas.values()):
+        return
+
+    adjustable = next(
+        (
+            txn
+            for txn in reversed(result.transactions)
+            if money(txn.get("taxable_value")) != Decimal("0.00")
+            or money(txn.get("igst")) + money(txn.get("cgst")) + money(txn.get("sgst"))
+            != Decimal("0.00")
+        ),
+        result.transactions[-1],
+    )
+    if abs(deltas["taxable_value"]) <= Decimal("1.00"):
+        adjustable["taxable_value"] = money(adjustable.get("taxable_value")) + deltas["taxable_value"]
+    if abs(deltas["total_tax"]) <= Decimal("1.00"):
+        add_total_tax_delta(adjustable, deltas["total_tax"])
+    if abs(deltas["gross_amount"]) <= Decimal("1.00"):
+        adjustable["gross_amount"] = money(adjustable.get("gross_amount")) + deltas["gross_amount"]
+    refresh_validation(adjustable)
+    result.debug["source_total_reconciliation"] = {
+        "expected": {key: str(value) for key, value in expected.items()},
+        "actual_before": {
+            "taxable_value": str(actual_taxable),
+            "total_tax": str(actual_tax),
+            "gross_amount": str(actual_gross),
+        },
+        "deltas_applied": {key: str(value) for key, value in deltas.items()},
+        "adjusted_invoice_no": adjustable.get("invoice_no"),
+        "adjusted_order_item_id": adjustable.get("order_item_id"),
+    }
+
+
 class MeeshoParser(MarketplaceParser):
     platform = "meesho"
 
@@ -56,6 +178,11 @@ class MeeshoParser(MarketplaceParser):
 
         loaded_frames: list[tuple[Path, str, object]] = []
         metadata_by_suborder: dict[str, dict[str, dict[str, object]]] = {}
+        source_totals = {
+            "taxable_value": Decimal("0"),
+            "total_tax": Decimal("0"),
+            "gross_amount": Decimal("0"),
+        }
 
         for path in files:
             try:
@@ -252,6 +379,8 @@ class MeeshoParser(MarketplaceParser):
                     row,
                     f"{path.name}:{sheet_name}",
                 )
+                if not is_return:
+                    txn["_preserve_source_sign"] = True
 
                 if not txn.get("invoice_no"):
                     result.errors.append(
@@ -285,7 +414,24 @@ class MeeshoParser(MarketplaceParser):
                 if finalized is None:
                     continue
 
+                source_totals["taxable_value"] += signed_source_amount(
+                    row,
+                    "taxable_value",
+                    is_return,
+                )
+                source_totals["total_tax"] += signed_source_amount(
+                    row,
+                    "total_tax",
+                    is_return,
+                )
+                source_totals["gross_amount"] += signed_source_amount(
+                    row,
+                    "gross_amount",
+                    is_return,
+                )
                 result.transactions.append(finalized)
+
+        reconcile_source_totals(result, source_totals)
 
         result.debug["meesho_metadata_rows"] = len(metadata_by_suborder)
 
