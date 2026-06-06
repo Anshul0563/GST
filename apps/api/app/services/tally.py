@@ -37,22 +37,39 @@ def stock_item_xml(name: str, uqc: str) -> str:
 
 def voucher_type(doc_type: str) -> str:
     normalized = str(doc_type or "").lower()
-    if "credit" in normalized or "return" in normalized:
+    if normalized in {"crn", "credit", "credit_note"} or "credit" in normalized or "return" in normalized:
         return "Credit Note"
-    if "debit" in normalized:
+    if normalized in {"dbn", "debit", "debit_note"} or "debit" in normalized:
         return "Debit Note"
     return "Sales"
+
+
+def voucher_key(row: dict) -> tuple[str, str, str, str]:
+    return (
+        str(row.get("platform") or "").strip().lower(),
+        str(row.get("gstin") or "").strip().upper(),
+        str(row.get("etin") or row.get("buyer_state_code") or "").strip().upper(),
+        str(row.get("invoice_no") or row.get("order_id") or "NA").strip(),
+    )
+
+
+def display_voucher_no(row: dict, fallback_index: int) -> str:
+    raw = str(row.get("invoice_no") or row.get("order_id") or "").strip()
+    if raw:
+        return raw
+    return f"GB-{fallback_index:05d}"
 
 
 def build_vouchers(rows: list[dict], mapping: dict[str, str] | None = None) -> list[dict]:
     ledgers = {**DEFAULT_LEDGERS, **(mapping or {})}
     vouchers: list[dict] = []
-    seen: set[str] = set()
-    for row in rows:
-        voucher_no = str(row.get("invoice_no") or row.get("order_id") or "NA")
-        if voucher_no in seen:
+    seen: set[tuple[str, str, str, str]] = set()
+    for index, row in enumerate(rows, start=1):
+        key = voucher_key(row)
+        if key in seen:
             continue
-        seen.add(voucher_no)
+        seen.add(key)
+        voucher_no = display_voucher_no(row, index)
         tax = money(row.get("igst")) + money(row.get("cgst")) + money(row.get("sgst"))
         taxable = money(row.get("taxable_value"))
         amount = money(row.get("gross_amount")) or taxable + tax
@@ -79,6 +96,13 @@ def build_vouchers(rows: list[dict], mapping: dict[str, str] | None = None) -> l
     return vouchers
 
 
+def signed_amount(value: object, voucher_type_name: str, debit_side: bool = False) -> Decimal:
+    amount = abs(money(value))
+    if voucher_type_name == "Credit Note":
+        return amount if debit_side else -amount
+    return -amount if debit_side else amount
+
+
 def build_tally_xml(company_name: str, rows: list[dict], mapping: dict[str, str] | None = None, auto_create_ledgers: bool = True) -> str:
     ledgers = {**DEFAULT_LEDGERS, **(mapping or {})}
     vouchers = build_vouchers(rows, mapping)
@@ -100,21 +124,25 @@ def build_tally_xml(company_name: str, rows: list[dict], mapping: dict[str, str]
         for item in sorted({str(voucher["stock_item"]) for voucher in vouchers}):
             entries.append(stock_item_xml(item, ledgers["uqc"]))
     for voucher in vouchers:
-        amount = money(voucher.get("amount"))
+        vch_type = escape(str(voucher["voucher_type"]))
+        amount = signed_amount(voucher.get("amount"), str(voucher["voucher_type"]), debit_side=True)
+        taxable_amount = signed_amount(voucher.get("taxable_value"), str(voucher["voucher_type"]))
+        igst_amount = signed_amount(voucher.get("igst"), str(voucher["voucher_type"]))
+        cgst_amount = signed_amount(voucher.get("cgst"), str(voucher["voucher_type"]))
+        sgst_amount = signed_amount(voucher.get("sgst"), str(voucher["voucher_type"]))
         voucher_no = escape(str(voucher["voucher_no"]))
         date = str(voucher.get("date") or "").replace("-", "")
-        vch_type = escape(str(voucher["voucher_type"]))
         entries.append(f"""
 <VOUCHER VCHTYPE="{vch_type}" ACTION="Create">
   <DATE>{escape(date)}</DATE>
   <VOUCHERNUMBER>{voucher_no}</VOUCHERNUMBER>
   <PARTYLEDGERNAME>{escape(voucher["party_ledger"])}</PARTYLEDGERNAME>
-  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(voucher["party_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-{amount}</AMOUNT></ALLLEDGERENTRIES.LIST>
-  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(ledgers["sales_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>{money(voucher.get("taxable_value"))}</AMOUNT></ALLLEDGERENTRIES.LIST>
-  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(ledgers["igst_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>{money(voucher.get("igst"))}</AMOUNT></ALLLEDGERENTRIES.LIST>
-  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(ledgers["cgst_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>{money(voucher.get("cgst"))}</AMOUNT></ALLLEDGERENTRIES.LIST>
-  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(ledgers["sgst_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>{money(voucher.get("sgst"))}</AMOUNT></ALLLEDGERENTRIES.LIST>
-  <INVENTORYENTRIES.LIST><STOCKITEMNAME>{escape(str(voucher["stock_item"]))}</STOCKITEMNAME><ACTUALQTY>{money(voucher.get("qty"))} {escape(ledgers["uqc"])}</ACTUALQTY><BILLEDQTY>{money(voucher.get("qty"))} {escape(ledgers["uqc"])}</BILLEDQTY><AMOUNT>{money(voucher.get("taxable_value"))}</AMOUNT></INVENTORYENTRIES.LIST>
+  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(voucher["party_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>{"No" if str(voucher["voucher_type"]) == "Credit Note" else "Yes"}</ISDEEMEDPOSITIVE><AMOUNT>{amount}</AMOUNT></ALLLEDGERENTRIES.LIST>
+  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(ledgers["sales_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>{"Yes" if str(voucher["voucher_type"]) == "Credit Note" else "No"}</ISDEEMEDPOSITIVE><AMOUNT>{taxable_amount}</AMOUNT></ALLLEDGERENTRIES.LIST>
+  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(ledgers["igst_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>{"Yes" if str(voucher["voucher_type"]) == "Credit Note" else "No"}</ISDEEMEDPOSITIVE><AMOUNT>{igst_amount}</AMOUNT></ALLLEDGERENTRIES.LIST>
+  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(ledgers["cgst_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>{"Yes" if str(voucher["voucher_type"]) == "Credit Note" else "No"}</ISDEEMEDPOSITIVE><AMOUNT>{cgst_amount}</AMOUNT></ALLLEDGERENTRIES.LIST>
+  <ALLLEDGERENTRIES.LIST><LEDGERNAME>{escape(ledgers["sgst_ledger"])}</LEDGERNAME><ISDEEMEDPOSITIVE>{"Yes" if str(voucher["voucher_type"]) == "Credit Note" else "No"}</ISDEEMEDPOSITIVE><AMOUNT>{sgst_amount}</AMOUNT></ALLLEDGERENTRIES.LIST>
+  <INVENTORYENTRIES.LIST><STOCKITEMNAME>{escape(str(voucher["stock_item"]))}</STOCKITEMNAME><ACTUALQTY>{money(voucher.get("qty"))} {escape(ledgers["uqc"])}</ACTUALQTY><BILLEDQTY>{money(voucher.get("qty"))} {escape(ledgers["uqc"])}</BILLEDQTY><AMOUNT>{taxable_amount}</AMOUNT></INVENTORYENTRIES.LIST>
 </VOUCHER>""")
     return f"""<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>{escape(company_name)}</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC><REQUESTDATA>{''.join(entries)}</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"""
 
@@ -123,7 +151,7 @@ def validate_tally_xml(xml: str, vouchers: list[dict]) -> dict:
     return {
         "valid": xml.startswith("<ENVELOPE>") and xml.endswith("</ENVELOPE>") and "<VOUCHER" in xml,
         "voucher_count": len(vouchers),
-        "duplicate_vouchers_removed": len(vouchers) != len({voucher["voucher_no"] for voucher in vouchers}),
+        "duplicate_vouchers_removed": len(vouchers) != len({(voucher["voucher_no"], voucher["voucher_type"], voucher["source"].get("platform"), voucher["source"].get("gstin"), voucher["source"].get("etin")) for voucher in vouchers}),
     }
 
 

@@ -2177,10 +2177,16 @@ def tally_xml(
     company = db.get(TallyCompany, payload.company_id)
     if not company or company.user_id != user.id:
         raise HTTPException(404, "Company not found")
+    if company.profile_id != payload.profile_id:
+        raise HTTPException(422, "Selected company does not belong to this GST profile")
     rows = transaction_dicts(
         user.id, payload.profile_id, payload.period, db, valid_only=True
     )
+    if not rows:
+        raise HTTPException(422, "No valid transactions found for this GST profile and period")
     vouchers = build_vouchers(rows, payload.ledger_mapping)
+    if not vouchers:
+        raise HTTPException(422, "No Tally vouchers could be built from the selected transactions")
     xml = build_tally_xml(
         company.company_name, rows, payload.ledger_mapping, payload.auto_create_ledgers
     )
@@ -2337,6 +2343,10 @@ async def reconcile_upload(
     profile = db.get(GSTProfile, profile_id)
     if not profile or profile.user_id != user.id:
         raise HTTPException(404, "Profile not found")
+    if tax_tolerance < 0:
+        raise HTTPException(422, "Tax tolerance cannot be negative")
+    if date_tolerance_days < 0 or date_tolerance_days > 365:
+        raise HTTPException(422, "Date tolerance must be between 0 and 365 days")
     batch = ReconciliationBatch(
         user_id=user.id, profile_id=profile.id, status="processing"
     )
