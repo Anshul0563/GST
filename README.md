@@ -1,28 +1,67 @@
 # GST Bharat
 
-GST Bharat is a SaaS-style eCommerce GST automation platform for Indian sellers. It normalizes marketplace reports, validates GST data, and produces consolidated GSTR-1 JSON, Excel, Tally XML, and 2A/2B reconciliation reports.
+GST Bharat is an eCommerce GST automation platform built for Indian sellers. It normalizes marketplace sales data, applies GST validation, and exports compliant reports in:
 
-## Stack
+- GSTR-1 JSON
+- Excel and export-ready spreadsheets
+- Tally XML vouchers
+- 2A/2B reconciliation reports
 
-- Frontend: Next.js, React, Tailwind CSS, TanStack Table, React Hook Form
-- Backend: FastAPI, SQLAlchemy, pandas, openpyxl
-- Storage: SQLite for local development, PostgreSQL-ready through `DATABASE_URL`
-- Jobs: local background task processing with a path to Celery/RQ later
+This repository contains a FastAPI backend and a Next.js frontend for a SaaS-style seller experience.
 
-## Quick Start
+## Features
 
-Copy the sample environment and start the API:
+- Import marketplace sales from Amazon, Flipkart, Meesho, Myntra, JioMart, Snapdeal, and custom CSV/Excel files
+- Normalize transactions with GST tax calculations and GSTIN validation
+- Generate consolidated GSTR-1 JSON and Excel reports
+- Export Tally-compatible XML vouchers
+- Reconcile purchase claims against 2A/2B GST data
+- User authentication, billing, and profile management
+
+## Tech Stack
+
+- Backend: Python, FastAPI, SQLAlchemy, Pydantic, pandas
+- Frontend: Next.js, React, Tailwind CSS, React Hook Form, TanStack Table
+- Data export: openpyxl, xlsxwriter
+- Database: SQLite for local development, PostgreSQL-ready via `DATABASE_URL`
+
+## Repository Layout
+
+- `apps/api/` – backend service
+- `apps/web/` – frontend application
+- `storage/uploads/` – uploaded marketplace files
+- `storage/exports/` – generated report files
+- `render.yaml` – Render deployment blueprint
+- `DEPLOYMENT.md` – deployment instructions
+
+## Local Setup
+
+### Backend
 
 ```bash
-cp .env.example apps/api/.env
 cd apps/api
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+Create or update `apps/api/.env` with development values:
+
+```bash
+DATABASE_URL=sqlite:///./gst_bharat.db
+SECRET_KEY=replace-with-a-long-random-secret
+UPLOAD_DIR=../../storage/uploads
+EXPORT_DIR=../../storage/exports
+CORS_ORIGINS=http://localhost:3000
+```
+
+Run the API:
+
+```bash
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Start the web app in another terminal:
+### Frontend
 
 ```bash
 cd apps/web
@@ -30,43 +69,47 @@ npm install
 npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
-Open `http://127.0.0.1:3000`.
+Open the app at `http://127.0.0.1:3000`.
 
-## Environment
+## Environment Variables
 
-Local development defaults to SQLite at `apps/api/gst_bharat.db`. For production, set a strong `SECRET_KEY` and use PostgreSQL:
+Recommended local values:
 
-```bash
-DATABASE_URL=postgresql+psycopg://user:password@localhost:5432/gst_bharat
-SECRET_KEY=replace-with-a-long-random-secret
-UPLOAD_DIR=../../storage/uploads
-EXPORT_DIR=../../storage/exports
-```
+- `DATABASE_URL` – database connection string
+- `SECRET_KEY` – application secret
+- `UPLOAD_DIR` – path for uploaded files
+- `EXPORT_DIR` – path for generated exports
+- `CORS_ORIGINS` – allowed frontend origins
 
-Generated SQLite databases, uploads, exports, and build caches are ignored by git. Keep only source code, tests, and stable public assets committed.
+For production, use PostgreSQL and strong secrets.
 
-## Modules
+## Testing & Validation
 
-- Auth, subscription access, and GST profiles
-- Platform imports for Amazon, Flipkart, Meesho, Myntra, JioMart, Snapdeal, and custom CSV/Excel
-- Normalized transaction database with GST validation
-- GSTR-1 portal-style JSON and Excel export
-- eCom to Tally XML and voucher export
-- 2A/2B reconciliation reports
-
-## Verification
-
-Backend:
+### Backend tests
 
 ```bash
 cd apps/api
 .venv/bin/python -m pytest -q
 ```
 
-Frontend:
+### Frontend checks
 
 ```bash
 cd apps/web
 npm run lint
 npm run build
 ```
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Render and Vercel deployment instructions.
+
+## Notes
+
+- Keep `storage/uploads` and `storage/exports` on a persistent volume in production.
+- Do not commit database files or generated exports.
+- Set `CORS_ORIGINS` to exact frontend domains only.
+
+## Contact
+
+If you need help with setup, testing, or deployment, open an issue or ask the maintainer for the current environment details.
