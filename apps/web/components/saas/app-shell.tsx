@@ -8,13 +8,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud, X } from "lucide-react";
 import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
 
-const nav: Array<{ href: Route; label: string; icon: typeof Home }> = [
+const nav: Array<{ href: string; label: string; icon: typeof Home }> = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
+  { href: "/modules/ai-auditor", label: "AI Auditor", icon: ShieldCheck },
   { href: "/settings", label: "Settings", icon: Settings },
   { href: "/billing", label: "Billing", icon: CreditCard }
 ];
 
-const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array<{ href: Route; label: string; icon: typeof Home }> }> = {
+const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array<{ href: string; label: string; icon: typeof Home }> }> = {
   onlineSeller: {
     title: "GST Online Seller",
     icon: ReceiptText,
@@ -45,6 +46,13 @@ const moduleNav: Record<string, { title: string; icon: typeof Home; items: Array
       { href: "/modules/tally/mapping", label: "Ledger Mapping", icon: ReceiptText },
       { href: "/modules/tally/export", label: "Voucher Preview & XML", icon: FileSpreadsheet },
       { href: "/modules/tally/history", label: "Export History", icon: ReceiptText }
+    ]
+  },
+  aiAuditor: {
+    title: "AI Auditor",
+    icon: ShieldCheck,
+    items: [
+      { href: "/modules/ai-auditor", label: "Audit Dashboard", icon: ShieldCheck }
     ]
   }
 };
@@ -99,7 +107,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">("light");
-  const activeModule = pathname.startsWith("/modules/online-seller") ? "onlineSeller" : pathname.startsWith("/modules/reconcile") ? "reconcile" : pathname.startsWith("/modules/tally") ? "tally" : "";
+  const activeModule = pathname.startsWith("/modules/online-seller") ? "onlineSeller" : pathname.startsWith("/modules/reconcile") ? "reconcile" : pathname.startsWith("/modules/tally") ? "tally" : pathname.startsWith("/modules/ai-auditor") ? "aiAuditor" : "";
   const activeModuleConfig = activeModule ? moduleNav[activeModule] : null;
   const currentItem = pathname === "/modules/online-seller/profile"
     ? { href: "/modules/online-seller/profile" as Route, label: "GST Profile", icon: ShieldCheck }
@@ -202,7 +210,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             const Icon = item.icon;
             const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
             return (
-              <Link key={item.href} href={item.href} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3.5 py-2.5 text-sm font-bold transition duration-300 ${active ? "bg-[#12284f] text-white shadow-soft" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
+              <Link key={item.href} href={item.href as Route} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3.5 py-2.5 text-sm font-bold transition duration-300 ${active ? "bg-[#12284f] text-white shadow-soft" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
                 {active && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[#6EA8FF] to-[#F58220] shadow-soft" />}
                 <Icon className={`size-4 ${active ? "text-white" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
                 <span className="relative z-10">{item.label}</span>
@@ -219,7 +227,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             {activeModuleConfig.items.map((item) => {
               const Icon = item.icon;
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-              return <Link key={`${item.href}-${item.label}`} href={item.href} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-semibold transition duration-300 ${active ? "bg-white text-[#12284f] shadow-soft ring-1 ring-slate-200/70 dark:bg-slate-900 dark:text-white dark:ring-white/10" : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900"}`}>
+              return <Link key={`${item.href}-${item.label}`} href={item.href as Route} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-semibold transition duration-300 ${active ? "bg-white text-[#12284f] shadow-soft ring-1 ring-slate-200/70 dark:bg-slate-900 dark:text-white dark:ring-white/10" : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900"}`}>
                 {active && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[#6EA8FF] to-[#F58220]" />}
                 <Icon className={`size-4 ${active ? "text-orange-500" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
                 <span className="relative z-10">{item.label}</span>
@@ -268,7 +276,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
         <main className="px-5 py-6 lg:px-8">
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             <Link href="/dashboard" className="text-[#1746A2]">Dashboard</Link>
-            {activeModuleConfig && <><span>/</span><Link href={activeModuleConfig.items[0].href} className="text-[#1746A2]">{activeModuleConfig.title}</Link></>}
+            {activeModuleConfig && <><span>/</span><Link href={activeModuleConfig.items[0].href as Route} className="text-[#1746A2]">{activeModuleConfig.title}</Link></>}
             {activeModuleConfig && currentItem && currentItem.href !== activeModuleConfig.items[0].href && <><span>/</span><span>{currentItem.label}</span></>}
           </div>
           <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white/65 p-5 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.03] md:flex-row md:items-end md:justify-between">
@@ -304,7 +312,7 @@ function MobileNavContent({
           const Icon = item.icon;
           const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
           return (
-            <Link onClick={onNavigate} key={item.href} href={item.href} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3.5 py-2.5 text-sm font-bold transition duration-300 ${active ? "bg-[#12284f] text-white shadow-soft" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
+            <Link onClick={onNavigate} key={item.href} href={item.href as Route} className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3.5 py-2.5 text-sm font-bold transition duration-300 ${active ? "bg-[#12284f] text-white shadow-soft" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10"}`}>
               {active && <span className="absolute left-0 top-2 bottom-2 w-1 rounded-full bg-gradient-to-b from-[#6EA8FF] to-[#F58220] shadow-soft" />}
               <Icon className={`size-4 ${active ? "text-white" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
               <span className="relative z-10">{item.label}</span>
@@ -323,7 +331,7 @@ function MobileNavContent({
               const Icon = item.icon;
               const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
-                <Link onClick={onNavigate} key={`${item.href}-${item.label}`} href={item.href} className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-white text-[#12284f] shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900 dark:text-white dark:ring-white/10" : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900"}`}>
+                <Link onClick={onNavigate} key={`${item.href}-${item.label}`} href={item.href as Route} className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${active ? "bg-white text-[#12284f] shadow-sm ring-1 ring-slate-200/70 dark:bg-slate-900 dark:text-white dark:ring-white/10" : "text-slate-600 hover:bg-white dark:text-slate-300 dark:hover:bg-slate-900"}`}>
                   <Icon className={`size-4 ${active ? "text-orange-500" : "text-slate-400 group-hover:text-[#1746A2]"}`} />
                   {item.label}
                 </Link>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Route } from "next";
 import { ArrowRight, CheckCircle2, FileJson, ReceiptText, Repeat2, ShieldCheck, UploadCloud } from "lucide-react";
 import { LogoMark } from "@/components/saas/app-shell";
 
@@ -167,7 +168,7 @@ export default async function LandingPage() {
               <ul className="mt-8 space-y-3 text-sm text-slate-600">
                 {plan.bullets.map((bullet) => <li key={bullet} className="flex items-center gap-3"><CheckCircle2 className="size-4 text-emerald-600" /><span>{bullet}</span></li>)}
               </ul>
-              <Link href={plan.href} className={`mt-8 inline-flex w-full items-center justify-center rounded-2xl px-5 py-4 text-sm font-bold transition ${plan.featured ? "bg-[#1746A2] text-white" : "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50"}`}>
+              <Link href={plan.href as Route} className={`mt-8 inline-flex w-full items-center justify-center rounded-2xl px-5 py-4 text-sm font-bold transition ${plan.featured ? "bg-[#1746A2] text-white" : "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50"}`}>
                 {plan.featured ? "Choose Growth" : "View plan"}
               </Link>
             </div>
