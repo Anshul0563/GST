@@ -45,6 +45,7 @@ from app.schemas.dto import (
     GSTProfileOut,
     GenerateGSTR1In,
     LoginIn,
+    IssueLogOut,
     MarketplaceDetectIn,
     MarketplaceDetectResponse,
     RegisterIn,
@@ -144,6 +145,12 @@ MARKETPLACE_CATALOG = {
         "category": "Ecommerce",
         "required_files": ["Sales report"],
         "guide": "Snapdeal tax report",
+    },
+    "blinkit": {
+        "name": "Blinkit",
+        "category": "Quick Commerce",
+        "required_files": ["Sales report"],
+        "guide": "Upload Blinkit seller tax report in the common GST Bharat schema",
     },
     "custom": {
         "name": "Custom Excel",

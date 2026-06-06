@@ -8,6 +8,7 @@ from app.db.bootstrap import run_lightweight_migrations, seed_super_admin
 from app.db.session import Base, SessionLocal, engine
 from app.models import entities
 
+settings = get_settings()
 Base.metadata.create_all(bind=engine)
 run_lightweight_migrations(engine)
 seed_super_admin()
@@ -15,12 +16,7 @@ seed_super_admin()
 app = FastAPI(title="GST Bharat API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

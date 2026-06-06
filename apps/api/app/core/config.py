@@ -15,11 +15,23 @@ class Settings(BaseSettings):
     upload_dir: Path = Path("../../storage/uploads")
     export_dir: Path = Path("../../storage/exports")
     max_upload_mb: int = 60
+    cors_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:3001,http://127.0.0.1:3001"
+    )
     admin_email: str | None = None
     admin_password: str | None = None
     razorpay_key_id: str | None = None
     razorpay_key_secret: str | None = None
     razorpay_webhook_secret: str | None = None
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        return [
+            origin.strip().rstrip("/")
+            for origin in self.cors_origins.split(",")
+            if origin.strip()
+        ]
 
 
 @lru_cache

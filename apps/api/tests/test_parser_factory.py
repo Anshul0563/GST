@@ -35,6 +35,28 @@ def test_custom_schema_platform_parser_preserves_requested_platform_and_etin(tmp
     assert result.transactions[0]["etin"] == "29AADCM5146R1C1"
 
 
+def test_blinkit_generic_parser_preserves_platform_and_supplier_etin(tmp_path: Path):
+    csv_path = tmp_path / "blinkit.csv"
+    csv_path.write_text(
+        "\n".join(
+            [
+                "invoice_no,invoice_date,buyer_state_code,hsn,taxable_value,gst_rate,igst,ecommerce gstin",
+                "BLK-1,2026-05-12,29,2106,250.00,18,45.00,29ABCDE1234F1Z5",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    parser = get_parser("blinkit")("29ABCDE1234F1Z5", "052026")
+    result = parser.parse([csv_path])
+
+    assert not result.errors
+    assert len(result.transactions) == 1
+    assert result.transactions[0]["platform"] == "blinkit"
+    assert result.transactions[0]["etin"] == "29ABCDE1234F1Z5"
+    assert result.transactions[0]["validation_status"] == "valid"
+
+
 def test_dominant_excluded_period_detects_single_period_from_parser_debug():
     result = ParseResult(
         debug={

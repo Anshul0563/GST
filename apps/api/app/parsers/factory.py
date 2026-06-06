@@ -11,6 +11,7 @@ PARSERS = {
     "myntra": CustomExcelParser,
     "jiomart": CustomExcelParser,
     "snapdeal": CustomExcelParser,
+    "blinkit": CustomExcelParser,
     "custom": CustomExcelParser,
 }
 

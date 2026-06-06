@@ -18,6 +18,7 @@ ETINS = {
     "myntra": "29AADCM5146R1C1",
     "jiomart": "27AABCI6363G1C7",
     "snapdeal": "07AAICA4872D1C8",
+    "blinkit": None,
     "custom": None,
 }
 

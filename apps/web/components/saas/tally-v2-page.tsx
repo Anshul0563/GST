@@ -27,6 +27,16 @@ const defaultMapping = {
 };
 const tallyWorkflows: Array<[string, Route]> = [["Company setup", "/modules/tally/company"], ["Import marketplace data", "/modules/tally/import"], ["Ledger mapping", "/modules/tally/mapping"], ["Generate export", "/modules/tally/export"], ["Export history", "/modules/tally/history"]];
 const ledgerFields = Object.keys(defaultMapping) as Array<keyof typeof defaultMapping>;
+const tallyImportPlatforms = [
+  ["meesho", "Meesho"],
+  ["amazon", "Amazon"],
+  ["flipkart", "Flipkart"],
+  ["snapdeal", "Snapdeal"],
+  ["blinkit", "Blinkit"],
+  ["myntra", "Myntra"],
+  ["jiomart", "JioMart"],
+  ["custom", "Custom Excel"],
+] as const;
 
 export function TallyDashboardPage() {
   const workspace = useWorkspace();
@@ -160,8 +170,8 @@ export function TallyImportPage() {
     <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
       <Panel title="Marketplace import for Tally" subtitle="Uses backend /tally/import, which reuses the same Meesho/Amazon/Flipkart/Custom parsers.">
         <div className="grid gap-4 md:grid-cols-2">
-          <select value={platform} onChange={(event) => setPlatform(event.target.value)} className="rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option value="meesho">Meesho</option><option value="amazon">Amazon</option><option value="flipkart">Flipkart</option><option value="custom">Custom Excel</option></select>
-          <input type="file" multiple onChange={(event) => setFiles(event.target.files)} className="rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" />
+          <select value={platform} onChange={(event) => setPlatform(event.target.value)} aria-label="Select marketplace platform" className="rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900">{tallyImportPlatforms.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          <input type="file" multiple onChange={(event) => setFiles(event.target.files)} className="rounded-2xl border p-4 dark:border-white/10 dark:bg-slate-900" title="Upload marketplace files" placeholder="Choose files" />
         </div>
         <div className="mt-5 grid gap-3 rounded-3xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-3">
           <div><b>GSTIN</b><p>{workspace.profile?.gstin || "--"}</p></div>
@@ -210,7 +220,7 @@ export function TallyMappingPage() {
   }
   return <AppShell requiresSubscription requiredPlan="ecom_tally" token={workspace.token} user={workspace.user} productName="eCom to Tally" title="Ledger Mapping" subtitle="Save reusable Tally ledger templates per company." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <Panel title="Mapping template" subtitle="Stored in backend tally_ledger_mappings.">
-      <select value={companyId} onChange={(event) => load(event.target.value)} className="mb-5 w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option value="">Choose company</option>{workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.company_name}</option>)}</select>
+      <select value={companyId} onChange={(event) => load(event.target.value)} aria-label="Choose company" className="mb-5 w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option value="">Choose company</option>{workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.company_name}</option>)}</select>
       {loading ? <EmptyState title="Loading mapping" body="Fetching saved ledger template from backend." /> : <div className="grid gap-3 md:grid-cols-2">{ledgerFields.map((key) => <label key={key} className="grid gap-2 text-sm font-bold"><span>{key.replaceAll("_", " ")}</span><input value={mapping[key]} onChange={(event) => setMapping({ ...mapping, [key]: event.target.value })} className="rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>)}</div>}
       <button onClick={save} disabled={!companyId} className="mt-3 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">Save mapping</button>
       {message && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</div>}
@@ -254,7 +264,13 @@ export function TallyExportPage() {
   return <AppShell requiresSubscription requiredPlan="ecom_tally" token={workspace.token} user={workspace.user} productName="eCom to Tally" title="Generate Tally XML" subtitle="Preview mapping, generate XML and download voucher Excel." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
       <Panel title="Export settings" subtitle="Select company and generate from normalized rows.">
-        <select value={companyId} onChange={async (event) => { const value = event.target.value; setCompanyId(value); if (workspace.token && value) { const saved = await getTallyMapping(workspace.token, Number(value)); setMapping({ ...defaultMapping, ...saved.mapping }); } }} className="w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option value="">Choose company</option>{workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.company_name}</option>)}</select>
+        <label className="block text-sm font-bold">
+          Company
+          <select value={companyId} onChange={async (event) => { const value = event.target.value; setCompanyId(value); if (workspace.token && value) { const saved = await getTallyMapping(workspace.token, Number(value)); setMapping({ ...defaultMapping, ...saved.mapping }); } }} className="mt-2 w-full rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900">
+            <option value="">Choose company</option>
+            {workspace.companies.map((company) => <option key={company.id} value={company.id}>{company.company_name}</option>)}
+          </select>
+        </label>
         <div className="mt-5 grid gap-3 text-sm md:grid-cols-2">
           <ReadinessItem icon={<ReceiptText className="size-4" />} label="Invoices" value={String(invoiceCount)} />
           <ReadinessItem icon={<ReceiptText className="size-4" />} label="Credit notes" value={String(creditCount)} />
