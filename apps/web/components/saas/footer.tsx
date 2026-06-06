@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import type { Route } from "next";
 import { FileJson, ReceiptText, Repeat2, ShieldCheck } from "lucide-react";
