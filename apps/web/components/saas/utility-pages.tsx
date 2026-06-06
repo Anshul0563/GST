@@ -351,7 +351,7 @@ export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
     loadBilling().catch((exc) => setMessage(exc instanceof Error ? exc.message : "Could not load billing"));
   }, [workspace.token, loadBilling]);
 
-  return <AppShell title="Billing" subtitle="Subscription, free-access admin status and Razorpay checkout." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+  return <AppShell title="Billing" subtitle="Manage your GST Bharat subscription and unlock paid product modules." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Billing is connected to authenticated backend APIs." /> : null}
       <Panel title="Account access" subtitle="Live billing status from backend.">
@@ -364,7 +364,7 @@ export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
         {status?.free_access && <div className="mt-5 rounded-3xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{status.free_access_reason || "This account has unrestricted free access."}</div>}
         {message && <div className="mt-5 rounded-3xl bg-blue-50 p-4 text-sm font-bold text-blue-700">{message}</div>}
       </Panel>
-      <Panel title="Plans" subtitle="Orders are created through backend /billing/create-order. Razorpay key/secret come from .env.">
+      <Panel title="Choose a plan" subtitle="Pick monthly or yearly billing, then subscribe to the product module you want to unlock.">
         <div className="mb-5 inline-flex rounded-2xl bg-slate-100 p-1 text-sm font-bold dark:bg-white/10">
           {["monthly", "yearly"].map((item) => <button key={item} onClick={() => setCycle(item)} className={`rounded-xl px-4 py-2 capitalize ${cycle === item ? "bg-[#10244d] text-white" : "text-slate-600 dark:text-slate-300"}`}>{item}</button>)}
         </div>

@@ -27,26 +27,26 @@ async function loadMarketplaceCatalog() {
 
 const pricingPlans = [
   {
-    name: "Starter",
-    price: "₹79/mo",
-    tagline: "Marketplace upload, transaction normalization, and GSTR-1 preview.",
-    bullets: ["3 marketplace platforms", "Basic GSTR-1 JSON + Excel", "Monthly billing"],
-    href: "/billing?plan=online_seller",
+    name: "2A/2B Reconcile",
+    price: "Free",
+    tagline: "Match GST portal 2A/2B with purchase books and download reconciliation reports.",
+    bullets: ["Upload portal and purchase files", "Mismatch categories and tax differences", "Excel reconciliation reports"],
+    href: "/modules/reconcile",
   },
   {
-    name: "Growth",
-    price: "₹199/mo",
-    tagline: "Full online seller workflow plus reconciliation and reporting.",
-    bullets: ["Unlimited marketplace imports", "GSTR-1 + Reconciliation", "Tally export ready"],
-    href: "/billing?plan=ecom_tally",
+    name: "GST Online Seller",
+    price: "₹79/mo",
+    tagline: "Import marketplace sales, clean transactions and generate GSTR-1 exports.",
+    bullets: ["Marketplace import workflow", "Normalized sales data management", "GSTR-1 JSON and Excel reports"],
+    href: "/billing?plan=online_seller",
     featured: true,
   },
   {
-    name: "Enterprise",
-    price: "Custom",
-    tagline: "Custom onboarding, dedicated support and billing integration.",
-    bullets: ["Priority support", "Custom import templates", "Dedicated onboarding"],
-    href: "/billing",
+    name: "eCom to Tally",
+    price: "₹199/mo",
+    tagline: "Convert eCommerce transactions into mapped Tally vouchers and XML exports.",
+    bullets: ["Tally company setup", "Ledger mapping templates", "Tally XML and voucher Excel export"],
+    href: "/billing?plan=ecom_tally",
   },
 ];
 
@@ -157,8 +157,8 @@ export default async function LandingPage() {
       <section id="pricing" className="mx-auto max-w-7xl px-6 pb-24">
         <div className="mb-12 flex flex-col gap-3 text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#1746A2]">Pricing</p>
-          <h2 className="text-4xl font-black tracking-tight text-slate-950">Plans for every GST seller.</h2>
-          <p className="mx-auto max-w-2xl text-sm leading-7 text-slate-600">Start with the essentials and scale into advanced reconciliation, filtering, and Tally export workflows with monthly billing.</p>
+          <h2 className="text-4xl font-black tracking-tight text-slate-950">Simple plans for GST and accounting workflows.</h2>
+          <p className="mx-auto max-w-2xl text-sm leading-7 text-slate-600">Start with free reconciliation, then add marketplace GST filing or Tally export when your workflow needs it.</p>
         </div>
         <div className="grid gap-6 lg:grid-cols-3">
           {pricingPlans.map((plan) => (
@@ -170,7 +170,7 @@ export default async function LandingPage() {
                 {plan.bullets.map((bullet) => <li key={bullet} className="flex items-center gap-3"><CheckCircle2 className="size-4 text-emerald-600" /><span>{bullet}</span></li>)}
               </ul>
               <Link href={plan.href as Route} className={`mt-8 inline-flex w-full items-center justify-center rounded-2xl px-5 py-4 text-sm font-bold transition ${plan.featured ? "bg-[#1746A2] text-white" : "border border-slate-200 bg-white text-slate-900 hover:bg-slate-50"}`}>
-                {plan.featured ? "Choose Growth" : "View plan"}
+                {plan.featured ? "Choose GST Online Seller" : plan.price === "Free" ? "Open free tool" : "View plan"}
               </Link>
             </div>
           ))}
