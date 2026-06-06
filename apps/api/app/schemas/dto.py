@@ -45,6 +45,63 @@ class DashboardSummary(BaseModel):
     uploaded_files: int
     pending_errors: int
     json_generation_status: str
+    auditor_health_score: int | None = None
+    auditor_risk_score: int | None = None
+    readiness_status: str | None = None
+    auditor_warnings: list[str] | None = None
+    auditor_issue_counts: dict[str, int] | None = None
+
+
+class AuditIssue(BaseModel):
+    transaction_id: int | None = None
+    platform: str | None = None
+    invoice_no: str | None = None
+    invoice_date: date | None = None
+    issue_type: str
+    description: str
+    field: str | None = None
+    severity: str
+
+
+class AuditSummary(BaseModel):
+    profile_id: int | None = None
+    period: str | None = None
+    auditor_health_score: int
+    auditor_risk_score: int
+    readiness_status: str
+    issue_counts: dict[str, int]
+    warnings: list[str]
+    details: list[AuditIssue]
+
+
+class IssueLogOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    transaction_id: int | None = None
+    profile_id: int
+    issue_type: str
+    field: str | None = None
+    before_value: str | None = None
+    after_value: str | None = None
+    reason: str
+    created_at: datetime
+
+
+class MarketplaceDetectIn(BaseModel):
+    file_contents: str
+
+
+class AuditFixResponse(BaseModel):
+    fixed_count: int
+    logs: list[IssueLogOut]
+    remaining_issues: int
+
+
+class MarketplaceDetectResponse(BaseModel):
+    marketplace: str
+    confidence: int
+    reason: str
 
 
 class GSTProfileIn(BaseModel):

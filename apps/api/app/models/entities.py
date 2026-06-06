@@ -263,6 +263,21 @@ class AuditLog(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class IssueLog(Base):
+    __tablename__ = "audit_issue_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    profile_id: Mapped[int] = mapped_column(ForeignKey("gst_profiles.id"), index=True)
+    transaction_id: Mapped[int | None] = mapped_column(ForeignKey("normalized_transactions.id"), index=True, nullable=True)
+    issue_type: Mapped[str] = mapped_column(String(80), index=True)
+    field: Mapped[str | None] = mapped_column(String(80))
+    before_value: Mapped[str | None] = mapped_column(Text)
+    after_value: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class PaymentOrder(Base):
     __tablename__ = "payment_orders"
 

@@ -31,9 +31,13 @@ from app.models.entities import (
     TallyVoucher,
     UploadedFile,
     User,
+    IssueLog,
 )
 from app.parsers.factory import PARSERS, get_parser
 from app.schemas.dto import (
+    AuditFixResponse,
+    AuditIssue,
+    AuditSummary,
     BatchStatus,
     CreatePaymentOrderIn,
     DashboardSummary,
@@ -41,6 +45,8 @@ from app.schemas.dto import (
     GSTProfileOut,
     GenerateGSTR1In,
     LoginIn,
+    MarketplaceDetectIn,
+    MarketplaceDetectResponse,
     RegisterIn,
     ReconcileSettingsIn,
     TallyCompanyIn,
@@ -49,6 +55,11 @@ from app.schemas.dto import (
     TransactionOut,
     TransactionUpdate,
     VerifyPaymentIn,
+)
+from app.services.ai_auditor import (
+    build_audit_summary,
+    detect_marketplace,
+    fix_detected_issues,
 )
 from app.services.billing import (
     create_razorpay_order,
@@ -1503,6 +1514,15 @@ def dashboard_summary(
     if period:
         export_stmt = export_stmt.where(GSTR1JsonExport.period == period)
     latest_export = db.scalar(export_stmt.order_by(GSTR1JsonExport.id.desc()))
+    audit_summary = None
+    if rows:
+        profile = None
+        if profile_id:
+            profile = db.get(GSTProfile, profile_id)
+        else:
+            profile = db.get(GSTProfile, rows[0].profile_id)
+        if profile:
+            audit_summary = build_audit_summary(rows, profile)
     return DashboardSummary(
         total_sales=money(total_sales),
         total_taxable_value=money(total_taxable),
@@ -1531,6 +1551,121 @@ def dashboard_summary(
         json_generation_status=(
             latest_export.status if latest_export else "not_generated"
         ),
+        auditor_health_score=audit_summary["auditor_health_score"] if audit_summary else None,
+        auditor_risk_score=audit_summary["auditor_risk_score"] if audit_summary else None,
+        readiness_status=audit_summary["readiness_status"] if audit_summary else None,
+        auditor_warnings=audit_summary["warnings"] if audit_summary else None,
+        auditor_issue_counts=audit_summary["issue_counts"] if audit_summary else None,
+    )
+
+
+@router.get("/auditor/summary", response_model=AuditSummary)
+def auditor_summary(
+    profile_id: int | None = None,
+    period: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    stmt = select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id)
+    if profile_id:
+        stmt = stmt.where(NormalizedTransaction.profile_id == profile_id)
+    rows = usable_transaction_rows(db.scalars(stmt).all(), db)
+    if period:
+        rows = [row for row in rows if transaction_matches_period(row, period)]
+    if not rows:
+        raise HTTPException(404, "No transactions found for audit summary")
+    profile = db.get(GSTProfile, profile_id) if profile_id else db.get(GSTProfile, rows[0].profile_id)
+    if not profile:
+        raise HTTPException(404, "GST profile not found for audit summary")
+    summary = build_audit_summary(rows, profile)
+    return AuditSummary(
+        profile_id=profile.id,
+        period=period,
+        auditor_health_score=summary["auditor_health_score"],
+        auditor_risk_score=summary["auditor_risk_score"],
+        readiness_status=summary["readiness_status"],
+        issue_counts=summary["issue_counts"],
+        warnings=summary["warnings"],
+        details=summary["details"],
+    )
+
+
+@router.get("/auditor/issues", response_model=list[AuditIssue])
+def auditor_issues(
+    profile_id: int | None = None,
+    period: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    stmt = select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id)
+    if profile_id:
+        stmt = stmt.where(NormalizedTransaction.profile_id == profile_id)
+    rows = usable_transaction_rows(db.scalars(stmt).all(), db)
+    if period:
+        rows = [row for row in rows if transaction_matches_period(row, period)]
+    if not rows:
+        return []
+    profile = db.get(GSTProfile, profile_id) if profile_id else db.get(GSTProfile, rows[0].profile_id)
+    if not profile:
+        return []
+    summary = build_audit_summary(rows, profile)
+    return [AuditIssue(**issue) for issue in summary["details"]]
+
+
+@router.post("/auditor/fix", response_model=AuditFixResponse)
+def auditor_fix(
+    profile_id: int | None = None,
+    period: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    require_paid_access(user, db, required_plan="online_seller")
+    stmt = select(NormalizedTransaction).where(NormalizedTransaction.user_id == user.id)
+    if profile_id:
+        stmt = stmt.where(NormalizedTransaction.profile_id == profile_id)
+    rows = usable_transaction_rows(db.scalars(stmt).all(), db)
+    if period:
+        rows = [row for row in rows if transaction_matches_period(row, period)]
+    if not rows:
+        raise HTTPException(404, "No transactions found to fix")
+    profile = db.get(GSTProfile, profile_id) if profile_id else db.get(GSTProfile, rows[0].profile_id)
+    if not profile:
+        raise HTTPException(404, "GST profile not found for fixes")
+    logs = fix_detected_issues(rows, profile, user.id, db)
+    for log in logs:
+        db.add(log)
+    db.commit()
+    remaining = len(build_audit_summary(rows, profile)["details"])
+    return AuditFixResponse(
+        fixed_count=len(logs),
+        logs=logs,
+        remaining_issues=remaining,
+    )
+
+
+@router.get("/auditor/logs", response_model=list[IssueLogOut])
+def auditor_logs(
+    profile_id: int | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    stmt = select(IssueLog).where(IssueLog.user_id == user.id)
+    if profile_id:
+        stmt = stmt.where(IssueLog.profile_id == profile_id)
+    logs = db.scalars(stmt.order_by(IssueLog.created_at.desc())).all()
+    return logs
+
+
+@router.post("/marketplaces/detect", response_model=MarketplaceDetectResponse)
+def detect_marketplace_route(
+    payload: MarketplaceDetectIn,
+):
+    marketplace, confidence = detect_marketplace(payload.file_contents)
+    reason = "Detected marketplace by known file patterns"
+    return MarketplaceDetectResponse(
+        marketplace=marketplace,
+        confidence=confidence,
+        reason=reason,
     )
 
 

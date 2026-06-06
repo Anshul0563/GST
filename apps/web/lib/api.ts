@@ -68,6 +68,39 @@ export type DashboardSummary = {
   uploaded_files: number;
   pending_errors: number;
   json_generation_status: string;
+  auditor_health_score?: number;
+  auditor_risk_score?: number;
+  readiness_status?: string;
+  auditor_warnings?: string[];
+  auditor_issue_counts?: Record<string, number>;
+};
+
+export type AuditIssue = {
+  transaction_id?: number;
+  platform?: string;
+  invoice_no?: string | null;
+  invoice_date?: string | null;
+  issue_type: string;
+  description: string;
+  field?: string | null;
+  severity: string;
+};
+
+export type AuditSummaryData = {
+  profile_id?: number;
+  period?: string | null;
+  auditor_health_score: number;
+  auditor_risk_score: number;
+  readiness_status: string;
+  issue_counts: Record<string, number>;
+  warnings: string[];
+  details: AuditIssue[];
+};
+
+export type AuditFixResponse = {
+  fixed_count: number;
+  logs: Array<{ id: number; transaction_id?: number | null; profile_id: number; issue_type: string; field?: string | null; before_value?: string | null; after_value?: string | null; reason: string; created_at: string }>;
+  remaining_issues: number;
 };
 
 export type Gstr1Payload = {
@@ -305,6 +338,30 @@ export function getSummary(token: string, profile: Profile) {
   return request<DashboardSummary>(
     `/dashboard/summary${queryString({ profile_id: profile.id, period: profile.return_period })}`,
     {},
+    token
+  );
+}
+
+export function getAuditSummary(token: string, profile: Profile) {
+  return request<AuditSummaryData>(
+    `/auditor/summary${queryString({ profile_id: profile.id, period: profile.return_period })}`,
+    {},
+    token
+  );
+}
+
+export function getAuditIssues(token: string, profile: Profile) {
+  return request<AuditIssue[]>(
+    `/auditor/issues${queryString({ profile_id: profile.id, period: profile.return_period })}`,
+    {},
+    token
+  );
+}
+
+export function fixAuditIssues(token: string, profile: Profile) {
+  return request<AuditFixResponse>(
+    `/auditor/fix${queryString({ profile_id: profile.id, period: profile.return_period })}`,
+    { method: "POST" },
     token
   );
 }
