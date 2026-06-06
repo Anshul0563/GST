@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight, CheckCircle2, FileJson, ReceiptText, Repeat2, ShieldCheck, UploadCloud } from "lucide-react";
 import { LogoMark } from "@/components/saas/app-shell";
+import { AppFooter } from "@/components/saas/footer";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
 
@@ -183,6 +184,7 @@ export default async function LandingPage() {
           <p className="mt-4 leading-7">GST Bharat is original software that uses the existing FastAPI backend for real-time marketplace parser, transaction normalization and GST filing workflows.</p>
         </div>
       </section>
+      <AppFooter variant="public" />
     </main>
   );
 }
