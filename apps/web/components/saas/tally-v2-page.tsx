@@ -157,7 +157,7 @@ export function TallyImportPage() {
     setStatus("");
     try {
       const batch = await uploadTallyImport(workspace.token, workspace.profile.id, platform, files);
-      setStatus(`Batch #${batch.id} ${batch.status}. ${batch.parsed_rows} rows parsed and ${batch.error_rows} errors found.`);
+      setStatus(`Batch #${batch.id} queued. Parser will process the selected files in the background; refresh the workspace or open recent batches to review parsed rows and errors.`);
       await workspace.refresh();
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Tally import failed");
@@ -194,29 +194,41 @@ export function TallyMappingPage() {
   const [companyId, setCompanyId] = useState("");
   const [mapping, setMapping] = useState(defaultMapping);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
   useEffect(() => {
     setCompanyId("");
     setMapping(defaultMapping);
     setMessage("");
+    setError("");
     setLoading(false);
   }, [activeProfileKey]);
   async function load(company: string) {
     setCompanyId(company);
+    setError("");
+    setMessage("");
     if (!workspace.token || !company) return;
     setLoading(true);
     try {
       const result = await getTallyMapping(workspace.token, Number(company));
       setMapping({ ...defaultMapping, ...result.mapping });
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Could not load saved mapping.");
     } finally {
       setLoading(false);
     }
   }
   async function save() {
     if (!workspace.token || !companyId) return;
-    await saveTallyMapping(workspace.token, Number(companyId), mapping);
-    setMessage("Mapping template saved.");
+    setError("");
+    setMessage("");
+    try {
+      await saveTallyMapping(workspace.token, Number(companyId), mapping);
+      setMessage("Mapping template saved.");
+    } catch (exc) {
+      setError(exc instanceof Error ? exc.message : "Could not save mapping template.");
+    }
   }
   return <AppShell requiresSubscription requiredPlan="ecom_tally" token={workspace.token} user={workspace.user} productName="eCom to Tally" title="Ledger Mapping" subtitle="Save reusable Tally ledger templates per company." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <Panel title="Mapping template" subtitle="Stored in backend tally_ledger_mappings.">
@@ -224,6 +236,7 @@ export function TallyMappingPage() {
       {loading ? <EmptyState title="Loading mapping" body="Fetching saved ledger template from backend." /> : <div className="grid gap-3 md:grid-cols-2">{ledgerFields.map((key) => <label key={key} className="grid gap-2 text-sm font-bold"><span>{key.replaceAll("_", " ")}</span><input value={mapping[key]} onChange={(event) => setMapping({ ...mapping, [key]: event.target.value })} className="rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>)}</div>}
       <button onClick={save} disabled={!companyId} className="mt-3 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">Save mapping</button>
       {message && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</div>}
+      {error && <div className="mt-4 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
     </Panel>
   </AppShell>;
 }
@@ -257,9 +270,10 @@ export function TallyExportPage() {
       setBusy(false);
     }
   }
-  const invoiceCount = workspace.transactions.filter((row) => row.doc_type === "INV").length;
-  const creditCount = workspace.transactions.filter((row) => row.doc_type === "CRN").length;
-  const debitCount = workspace.transactions.filter((row) => row.doc_type === "DBN").length;
+  const validTransactions = workspace.transactions.filter((row) => row.validation_status === "valid");
+  const invoiceCount = validTransactions.filter((row) => row.doc_type === "INV").length;
+  const creditCount = validTransactions.filter((row) => row.doc_type === "CRN").length;
+  const debitCount = validTransactions.filter((row) => row.doc_type === "DBN").length;
   const missingMappings = ledgerFields.filter((key) => !mapping[key]?.trim());
   return <AppShell requiresSubscription requiredPlan="ecom_tally" token={workspace.token} user={workspace.user} productName="eCom to Tally" title="Generate Tally XML" subtitle="Preview mapping, generate XML and download voucher Excel." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
@@ -277,10 +291,11 @@ export function TallyExportPage() {
           <ReadinessItem icon={<ReceiptText className="size-4" />} label="Debit notes" value={String(debitCount)} />
           <ReadinessItem icon={<CheckCircle2 className="size-4" />} label="Missing mappings" value={String(missingMappings.length)} />
         </div>
-        <button onClick={generate} disabled={busy || !workspace.profile || !companyId || !workspace.transactions.length || Boolean(missingMappings.length)} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"><FileArchive className="size-4" /> {busy ? "Generating..." : "Generate XML"}</button>
+        <button onClick={generate} disabled={busy || !workspace.profile || !companyId || !validTransactions.length || Boolean(missingMappings.length)} className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"><FileArchive className="size-4" /> {busy ? "Generating..." : "Generate XML"}</button>
         {result && <div className="mt-5 rounded-3xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">Generated {result.voucher_count} vouchers. Validation: {String(result.validation.valid)}</div>}
         {error && <div className="mt-5 rounded-3xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
         {!workspace.transactions.length ? <div className="mt-5 rounded-3xl bg-amber-50 p-4 text-sm font-bold text-amber-800">No normalized transactions found for this GST profile and period.</div> : null}
+        {workspace.transactions.length > 0 && !validTransactions.length ? <div className="mt-5 rounded-3xl bg-amber-50 p-4 text-sm font-bold text-amber-800">Transactions exist, but none are valid for Tally export. Fix validation errors before generating XML.</div> : null}
       </Panel>
       <Panel title="Mapping editor" subtitle="Customize ledgers before generation."><div className="grid gap-3 md:grid-cols-2">{ledgerFields.map((key) => <label key={key} className="grid gap-2 text-sm font-bold"><span>{key.replaceAll("_", " ")}</span><input value={mapping[key]} onChange={(event) => setMapping({ ...mapping, [key]: event.target.value })} className="rounded-2xl border px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>)}</div></Panel>
     </div>

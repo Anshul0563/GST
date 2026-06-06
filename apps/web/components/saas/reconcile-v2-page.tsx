@@ -10,7 +10,7 @@ import { money, useWorkspace } from "@/components/saas/workspace";
 import { ReconcileHistoryItem, ReconcileReport, getReconcileDownloadUrl, getReconcileHistory, getReconcileResults, uploadReconcileFilesV2 } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
-const categories = ["matched", "partially_matched", "tax_mismatch", "invoice_mismatch", "missing_in_portal", "missing_in_books", "duplicate_invoice", "invalid_gstin"];
+const categories = ["matched", "partially_matched", "invoice_mismatch", "tax_mismatch", "gstin_mismatch", "missing_in_books", "missing_in_portal", "duplicate_invoice", "invalid_gstin"];
 
 export function ReconcileDashboardPage() {
   const workspace = useWorkspace();
@@ -87,6 +87,15 @@ export function ReconcileUploadPage() {
   }, [activeProfileKey]);
   async function submit() {
     if (!workspace.token || !workspace.profile || !portal || !books) return;
+    const tolerance = Number(taxTolerance);
+    if (!Number.isFinite(tolerance) || tolerance < 0) {
+      setError("Enter a valid tax tolerance of 0 or more.");
+      return;
+    }
+    if (!Number.isFinite(dateTolerance) || dateTolerance < 0 || dateTolerance > 365) {
+      setError("Date tolerance must be between 0 and 365 days.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -101,7 +110,8 @@ export function ReconcileUploadPage() {
   }
   const summary = result?.summary || {};
   const summaryNumber = (key: string) => Number(summary[key] || 0);
-  const unmatched = summaryNumber("missing_in_books") + summaryNumber("invalid_gstin");
+  const unmatched = summaryNumber("missing_in_books") + summaryNumber("missing_in_portal") + summaryNumber("invalid_gstin") + summaryNumber("gstin_mismatch");
+  const canSubmit = Boolean(workspace.token && workspace.profile && portal && books && !busy);
   return <AppShell title="Upload & Reconcile" subtitle="Upload GST portal 2A/2B and purchase register files, tune tolerances, then generate match results." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<a href="data:text/csv;charset=utf-8,Supplier GSTIN,Invoice Number,Invoice Date,Taxable Value,IGST,CGST,SGST%0A" download="gst-bharat-2a-2b-sample.csv" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Sample CSV</a>}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Login to upload 2A/2B and purchase register files." /> : !workspace.profile ? <EmptyState title="GST profile required" body="Create or select GST profile before uploading reconciliation files." /> : null}
@@ -123,11 +133,11 @@ export function ReconcileUploadPage() {
             <label className="grid gap-2 text-sm font-bold">Tax difference ignore
               <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 dark:border-white/10 dark:bg-slate-900">
                 <span className="text-slate-400">INR</span>
-                <input value={taxTolerance} onChange={(event) => setTaxTolerance(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" />
+                <input type="number" min={0} step="0.01" value={taxTolerance} onChange={(event) => setTaxTolerance(event.target.value)} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" />
               </div>
             </label>
             <label className="grid gap-2 text-sm font-bold">Date tolerance days
-              <input type="number" min={0} value={dateTolerance} onChange={(event) => setDateTolerance(Number(event.target.value))} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" />
+              <input type="number" min={0} max={365} value={dateTolerance} onChange={(event) => setDateTolerance(Number(event.target.value))} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" />
             </label>
             <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300">
               <div className="mb-2 flex items-center gap-2 font-black text-slate-900 dark:text-white"><SlidersHorizontal className="size-4 text-[#1746A2]" /> Enabled checks</div>
@@ -143,7 +153,7 @@ export function ReconcileUploadPage() {
             <Readiness label="2A/2B upload" ready={Boolean(portal)} />
             <Readiness label="Purchase register" ready={Boolean(books)} />
           </div>
-          <button onClick={submit} disabled={busy || !workspace.profile || !portal || !books} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-6 py-4 text-sm font-bold text-white shadow-xl shadow-blue-950/20 disabled:cursor-not-allowed disabled:opacity-45">
+          <button onClick={submit} disabled={!canSubmit} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-6 py-4 text-sm font-bold text-white shadow-xl shadow-blue-950/20 disabled:cursor-not-allowed disabled:opacity-45">
             <UploadCloud className="size-4" /> {busy ? "Reconciling..." : "Reconcile now"}
           </button>
         </div>
@@ -151,10 +161,10 @@ export function ReconcileUploadPage() {
       </Panel>
       {result && <Panel title={`Match results batch #${result.id}`} subtitle="Open explorer for row-level mismatch reasons or download Excel report.">
         <div className="grid gap-4 md:grid-cols-4 xl:grid-cols-6">
-          <StatCard label="Portal rows" value={String(summaryNumber("portal_rows"))} />
+          <StatCard label="Portal rows" value={String(summaryNumber("total_portal_invoices"))} />
+          <StatCard label="Book rows" value={String(summaryNumber("total_book_invoices"))} />
           <StatCard label="Matched" value={String(summaryNumber("matched"))} tone="green" />
           <StatCard label="Tax mismatch" value={String(summaryNumber("tax_mismatch"))} tone="saffron" />
-          <StatCard label="Invoice mismatch" value={String(summaryNumber("invoice_mismatch"))} tone="saffron" />
           <StatCard label="Unmatched" value={String(unmatched)} tone={unmatched ? "red" : "green"} />
           <StatCard label="ITC risk" value={formatCurrency(summaryNumber("itc_risk_amount"))} tone={summaryNumber("itc_risk_amount") ? "red" : "green"} />
         </div>

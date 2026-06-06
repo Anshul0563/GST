@@ -35,6 +35,24 @@ class ReconciliationAndTallyTests(unittest.TestCase):
         self.assertIn('VCHTYPE="Credit Note"', xml)
         self.assertEqual(validation["voucher_count"], 2)
 
+    def test_tally_vouchers_keep_same_invoice_across_platforms(self):
+        rows = [
+            {"id": 1, "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "29AAAAA0000A1Z5", "invoice_no": "INV-1", "invoice_date": "2026-04-01", "doc_type": "INV", "taxable_value": 1000, "igst": 180, "cgst": 0, "sgst": 0, "qty": 1, "product_name": "Item A"},
+            {"id": 2, "platform": "flipkart", "gstin": "07ABCDE1234F1Z5", "etin": "29BBBBB0000B1Z5", "invoice_no": "INV-1", "invoice_date": "2026-04-01", "doc_type": "INV", "taxable_value": 500, "igst": 90, "cgst": 0, "sgst": 0, "qty": 1, "product_name": "Item B"},
+        ]
+        vouchers = build_vouchers(rows)
+        self.assertEqual(len(vouchers), 2)
+        self.assertEqual(sum(voucher["taxable_value"] for voucher in vouchers), Decimal("1500"))
+
+    def test_tally_credit_note_uses_reversal_signs(self):
+        rows = [
+            {"id": 1, "invoice_no": "CN-1", "invoice_date": "2026-04-02", "doc_type": "CRN", "taxable_value": -100, "igst": -18, "cgst": 0, "sgst": 0, "qty": -1, "product_name": "Item A"},
+        ]
+        xml = build_tally_xml("GST Bharat Demo", rows)
+        self.assertIn('VCHTYPE="Credit Note"', xml)
+        self.assertIn("<AMOUNT>118.00</AMOUNT>", xml)
+        self.assertIn("<AMOUNT>-100.00</AMOUNT>", xml)
+
 
 if __name__ == "__main__":
     unittest.main()
