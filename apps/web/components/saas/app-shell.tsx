@@ -290,7 +290,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
           </div>
           {locked ? <SubscriptionGate token={token || ""} user={user ?? null} productName={productName || activeModuleConfig?.title || title} requiredPlan={requiredPlan} /> : children}
         </main>
-        <AppFooter />
+        <AppFooter token={token} user={user ?? null} />
       </div>
     </motion.div>
   );

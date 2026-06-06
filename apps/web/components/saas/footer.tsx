@@ -1,12 +1,20 @@
+"use client";
+
 import Link from "next/link";
 import type { Route } from "next";
 import { FileJson, ReceiptText, Repeat2, ShieldCheck } from "lucide-react";
 
-const productLinks: Array<{ href: Route; label: string }> = [
-  { href: "/modules/online-seller/marketplaces", label: "Marketplace Upload" },
-  { href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview" },
+type FooterUser = {
+  role?: string;
+  plan?: string;
+  subscription_status?: string;
+} | null;
+
+const productLinks: Array<{ href: Route; label: string; requiredPlan?: string }> = [
+  { href: "/modules/online-seller/marketplaces", label: "Marketplace Upload", requiredPlan: "online_seller" },
+  { href: "/modules/online-seller/gstr1", label: "GSTR-1 Preview", requiredPlan: "online_seller" },
   { href: "/modules/reconcile", label: "2A/2B Reconcile" },
-  { href: "/modules/tally", label: "Tally Export" },
+  { href: "/modules/tally", label: "Tally Export", requiredPlan: "ecom_tally" },
 ];
 
 const publicLinks: Array<{ href: string; label: string }> = [
@@ -15,7 +23,26 @@ const publicLinks: Array<{ href: string; label: string }> = [
   { href: "/#security", label: "Security" },
 ];
 
-export function AppFooter({ variant = "app" }: { variant?: "app" | "public" }) {
+const workspaceLinks: Array<{ href: Route; label: string }> = [
+  { href: "/settings", label: "Settings" },
+  { href: "/billing", label: "Billing" },
+  { href: "/modules/online-seller/profile", label: "GST Profile" },
+];
+
+function hasPlanAccess(user: FooterUser, requiredPlan?: string) {
+  if (!requiredPlan) return true;
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "super_admin" || user.plan === "admin_free") return true;
+  return user.subscription_status === "active" && user.plan === requiredPlan;
+}
+
+function guardedHref({ href, requiredPlan, token, user, isPublic }: { href: Route; requiredPlan?: string; token?: string; user?: FooterUser; isPublic: boolean }) {
+  if (isPublic || !token) return "/login" as Route;
+  if (!hasPlanAccess(user ?? null, requiredPlan)) return `/billing?plan=${requiredPlan}` as Route;
+  return href;
+}
+
+export function AppFooter({ variant = "app", token, user }: { variant?: "app" | "public"; token?: string; user?: FooterUser }) {
   const year = new Date().getFullYear();
   const isPublic = variant === "public";
 
@@ -42,7 +69,12 @@ export function AppFooter({ variant = "app" }: { variant?: "app" | "public" }) {
             </p>
             <nav className="grid gap-2">
               {productLinks.map((item) => (
-                <Link key={item.href} href={item.href} className="font-semibold text-slate-600 transition hover:text-[#1746A2] dark:text-slate-300">
+                <Link
+                  key={item.href}
+                  href={guardedHref({ href: item.href, requiredPlan: item.requiredPlan, token, user, isPublic })}
+                  className="font-semibold text-slate-600 transition hover:text-[#1746A2] dark:text-slate-300"
+                  title={!token || isPublic ? "Login required" : item.requiredPlan && !hasPlanAccess(user ?? null, item.requiredPlan) ? "Subscription required" : undefined}
+                >
                   {item.label}
                 </Link>
               ))}
@@ -54,8 +86,8 @@ export function AppFooter({ variant = "app" }: { variant?: "app" | "public" }) {
               {isPublic ? "Company" : "Workspace"}
             </p>
             <nav className="grid gap-2">
-              {(isPublic ? publicLinks : [{ href: "/settings", label: "Settings" }, { href: "/billing", label: "Billing" }, { href: "/modules/online-seller/profile", label: "GST Profile" }]).map((item) => (
-                <Link key={item.href} href={item.href as Route} className="font-semibold text-slate-600 transition hover:text-[#1746A2] dark:text-slate-300">
+              {(isPublic ? publicLinks : workspaceLinks).map((item) => (
+                <Link key={item.href} href={(isPublic ? item.href : token ? item.href : "/login") as Route} className="font-semibold text-slate-600 transition hover:text-[#1746A2] dark:text-slate-300">
                   {item.label}
                 </Link>
               ))}
