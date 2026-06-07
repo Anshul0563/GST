@@ -41,9 +41,19 @@ def log_startup() -> None:
     )
 
 
+@app.get("/")
+def root():
+    return {
+        "service": "GST Bharat API",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "GST Bharat API"}
+    return {"status": "healthy"}
 
 
 @app.get("/health/readiness")
