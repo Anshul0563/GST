@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud, X } from "lucide-react";
 import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
+import { clearAuthToken } from "@/lib/auth";
 import { AppFooter } from "@/components/saas/footer";
 
 const nav: Array<{ href: string; label: string; icon: typeof Home }> = [
@@ -119,7 +120,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const locked = Boolean(token && user && requiresSubscription && !hasPaidAccess(user, requiredPlan));
   function logout() {
     if (typeof window !== "undefined") {
-      window.localStorage.removeItem("gst_bharat_token");
+      clearAuthToken();
     }
     setProfileMenuOpen(false);
     router.push("/login");

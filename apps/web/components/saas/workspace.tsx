@@ -19,6 +19,7 @@ import {
   listProfiles,
   listTallyCompanies
 } from "@/lib/api";
+import { clearAuthToken, getStoredAuthToken } from "@/lib/auth";
 
 export type Workspace = {
   token: string;
@@ -129,13 +130,13 @@ export function useWorkspace(): Workspace {
   }, [clearPeriodScopedState, needs]);
 
   const refresh = useCallback(async (profileOverride?: Profile) => {
-    const activeToken = token || (typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") || "" : "");
+    const activeToken = token || getStoredAuthToken();
     const activeProfile = profileOverride || profile;
     await refreshWorkspace(activeToken, activeProfile);
   }, [profile, refreshWorkspace, token]);
 
   useEffect(() => {
-    const storedToken = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_token") : null;
+    const storedToken = getStoredAuthToken();
     if (!storedToken) {
       getMarketplaces()
         .then((result) => setMarketplaces(result.marketplaces))
@@ -159,6 +160,7 @@ export function useWorkspace(): Workspace {
         }
       })
       .catch((exc) => {
+        clearAuthToken();
         setError(exc instanceof Error ? exc.message : "Could not initialize workspace");
         setLoading(false);
       });

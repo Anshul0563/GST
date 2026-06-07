@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { AuthRedirect } from "@/components/saas/auth-redirect";
 import { registerUser } from "@/lib/api";
+import { persistAuthToken } from "@/lib/auth";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -25,7 +27,7 @@ export default function RegisterPage() {
     try {
       setError("");
       const token = await registerUser({ email: nextEmail, password, full_name: fullName.trim() });
-      window.localStorage.setItem("gst_bharat_token", token.access_token);
+      persistAuthToken(token.access_token);
       router.push("/dashboard");
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : "Registration failed");
@@ -33,6 +35,7 @@ export default function RegisterPage() {
   }
   return (
     <main className="grid min-h-screen bg-white lg:grid-cols-[42%_58%]">
+      <AuthRedirect />
       <section className="relative hidden min-h-screen items-center justify-center overflow-hidden bg-[#071a35] px-12 text-white lg:flex">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(245,130,32,0.22),transparent_28%),radial-gradient(circle_at_70%_80%,rgba(15,159,110,0.18),transparent_24%)]" />
         <div className="relative max-w-md text-center"><div className="text-5xl font-black">GST<span className="text-saffron">Bharat</span></div><p className="mt-8 text-2xl font-black leading-10">Create your seller GST workspace.</p><p className="mt-5 text-sm leading-7 text-white/70">One place for marketplace imports, filing files, Tally XML and reconciliation workflows.</p></div>

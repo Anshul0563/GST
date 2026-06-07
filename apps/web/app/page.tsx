@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight, CheckCircle2, FileJson, ReceiptText, Repeat2, ShieldCheck, UploadCloud } from "lucide-react";
+import { AuthRedirect } from "@/components/saas/auth-redirect";
 import { AppFooter } from "@/components/saas/footer";
 import { API_BASE } from "@/lib/api";
 import { absoluteUrl, siteDescription, siteName } from "@/lib/seo";
@@ -150,6 +151,7 @@ export default async function LandingPage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f6f8fb] text-slate-950">
+      <AuthRedirect />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -166,7 +168,6 @@ export default async function LandingPage() {
           </nav>
           <div className="hidden items-center gap-3 md:flex">
             <Link href="/login" className="text-sm font-semibold text-slate-600 transition hover:text-[#1746A2]">Login</Link>
-            <Link href="/register" className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white shadow-sm shadow-slate-900/10 transition hover:bg-[#1746A2]">Start free</Link>
           </div>
         </div>
       </header>
