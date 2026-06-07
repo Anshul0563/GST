@@ -8,6 +8,7 @@ import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Me
 import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
 import { AppFooter } from "@/components/saas/footer";
+import { ErrorState, InlineLoader, SkeletonGrid } from "@/components/saas/ui";
 
 const nav: Array<{ href: string; label: string; icon: typeof Home }> = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -89,7 +90,7 @@ function hasPaidAccess(user: AppShellUser, requiredPlan?: string) {
   return user.plan === requiredPlan;
 }
 
-export function AppShell({ title, subtitle, profile, profiles, onProfileChange, actions, token, user, requiresSubscription = false, requiredPlan, productName, children }: {
+export function AppShell({ title, subtitle, profile, profiles, onProfileChange, actions, token, user, requiresSubscription = false, requiredPlan, productName, loading = false, error = "", onRetry, children }: {
   title: string;
   subtitle?: string;
   profile: Profile | null;
@@ -101,6 +102,9 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   requiresSubscription?: boolean;
   requiredPlan?: string;
   productName?: string;
+  loading?: boolean;
+  error?: string;
+  onRetry?: () => void;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -274,10 +278,25 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             </div>
             {!locked && actions}
           </div>
-          {locked ? <SubscriptionGate token={token || ""} user={user ?? null} productName={productName || activeModuleConfig?.title || title} requiredPlan={requiredPlan} /> : children}
+          {locked ? (
+            <SubscriptionGate token={token || ""} user={user ?? null} productName={productName || activeModuleConfig?.title || title} requiredPlan={requiredPlan} />
+          ) : error ? (
+            <ErrorState body={error} onRetry={onRetry} />
+          ) : loading ? (
+            <WorkspaceLoading />
+          ) : children}
         </main>
         <AppFooter token={token} user={user ?? null} />
       </div>
+    </div>
+  );
+}
+
+function WorkspaceLoading() {
+  return (
+    <div className="space-y-6">
+      <SkeletonGrid />
+      <InlineLoader title="Loading workspace data" body="Connecting to backend APIs and preparing your latest GST workspace." />
     </div>
   );
 }

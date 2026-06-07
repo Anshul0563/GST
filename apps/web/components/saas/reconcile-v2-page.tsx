@@ -47,7 +47,7 @@ export function ReconcileDashboardPage() {
   const chart = history.slice(0, 8).reverse().map((item) => ({ name: `#${item.id}`, matched: item.matched_rows, mismatch: item.mismatch_rows }));
   const totalRuns = history.length;
   const totalMismatches = history.reduce((sum, item) => sum + item.mismatch_rows, 0);
-  return <AppShell title="2A/2B Reconcile" subtitle="Professional ITC reconciliation across GST portal 2A/2B and purchase books." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/modules/reconcile/upload" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> New reconcile</Link>}>
+  return <AppShell title="2A/2B Reconcile" subtitle="Professional ITC reconciliation across GST portal 2A/2B and purchase books." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<Link href="/modules/reconcile/upload" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><UploadCloud className="size-4" /> New reconcile</Link>}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Reconciliation history is loaded from authenticated backend APIs." /> : null}
       <div className="grid gap-4 md:grid-cols-5">
@@ -128,7 +128,7 @@ export function ReconcileUploadPage() {
   const summaryNumber = (key: string) => Number(summary[key] || 0);
   const unmatched = summaryNumber("missing_in_books") + summaryNumber("missing_in_portal") + summaryNumber("invalid_gstin") + summaryNumber("gstin_mismatch");
   const canSubmit = Boolean(workspace.token && workspace.profile && portal && books && !busy);
-  return <AppShell title="Upload & Reconcile" subtitle="Upload GST portal 2A/2B and purchase register files, tune tolerances, then generate match results." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<a href="data:text/csv;charset=utf-8,Supplier GSTIN,Invoice Number,Invoice Date,Taxable Value,IGST,CGST,SGST%0A" download="gst-bharat-2a-2b-sample.csv" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Sample CSV</a>}>
+  return <AppShell title="Upload & Reconcile" subtitle="Upload GST portal 2A/2B and purchase register files, tune tolerances, then generate match results." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<a href="data:text/csv;charset=utf-8,Supplier GSTIN,Invoice Number,Invoice Date,Taxable Value,IGST,CGST,SGST%0A" download="gst-bharat-2a-2b-sample.csv" className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Sample CSV</a>}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Login to upload 2A/2B and purchase register files." /> : !workspace.profile ? <EmptyState title="GST profile required" body="Create or select GST profile before uploading reconciliation files." /> : null}
       <div className="grid gap-4 md:grid-cols-4">
@@ -205,7 +205,7 @@ export function ReconcileResultsPage({ id }: { id: number }) {
   const summary = report?.summary || {};
   const summaryNumber = (key: string) => Number(summary[key] || 0);
   const riskData = categories.map((item) => ({ name: item.replaceAll("_", " "), value: summaryNumber(item) }));
-  return <AppShell title={`Reconcile Result #${id}`} subtitle="Mismatch explorer with exact reason, tax difference and download actions." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<a href={getReconcileDownloadUrl(id)} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Excel report</a>}>
+  return <AppShell title={`Reconcile Result #${id}`} subtitle="Mismatch explorer with exact reason, tax difference and download actions." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<a href={getReconcileDownloadUrl(id)} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> Excel report</a>}>
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Matched" value={String(summaryNumber("matched"))} tone="green" />
@@ -237,7 +237,7 @@ export function ReconcileHistoryPage() {
     setHistory([]);
     getReconcileHistory(workspace.token, activeProfileId).then(setHistory).catch(() => setHistory([]));
   }, [workspace.token, activeProfileId, activeProfilePeriod]);
-  return <AppShell title="Reconciliation History" subtitle="Download center for previous 2A/2B matching runs." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+  return <AppShell title="Reconciliation History" subtitle="Download center for previous 2A/2B matching runs." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <Panel title="History" subtitle="All batches are loaded from backend."><HistoryList history={history} /></Panel>
   </AppShell>;
 }

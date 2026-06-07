@@ -142,7 +142,7 @@ export function ProfilePage() {
     });
     setMessage(detectedState ? `AI setup applied. GSTIN state detected: ${detectedState}.` : "AI setup applied. Return period and financial year are synced.");
   }
-  return <AppShell title="GST Profile & Filing Period" subtitle="Select the GSTIN, return period and Monthly/Quarterly filing mode before using any GST Bharat tool." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }}>
+  return <AppShell title="GST Profile & Filing Period" subtitle="Select the GSTIN, return period and Monthly/Quarterly filing mode before using any GST Bharat tool." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Login to create or update GST profile details." /> : null}
       <div className="grid gap-4 md:grid-cols-4">
@@ -258,7 +258,7 @@ export function SettingsPage() {
     window.localStorage.setItem("gst_bharat_workspace_settings", JSON.stringify(settings));
     setSaved("Workspace preferences saved in this browser.");
   }
-  return <AppShell title="Settings" subtitle="Workspace preferences, account context and export defaults." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+  return <AppShell title="Settings" subtitle="Workspace preferences, account context and export defaults." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <Panel title="Account context" subtitle="Loaded from authenticated backend session and active GST profile.">
         <div className="grid gap-3 text-sm md:grid-cols-2">
@@ -351,7 +351,7 @@ export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
     loadBilling().catch((exc) => setMessage(exc instanceof Error ? exc.message : "Could not load billing"));
   }, [workspace.token, loadBilling]);
 
-  return <AppShell title="Billing" subtitle="Manage your GST Bharat subscription and unlock paid product modules." profile={workspace.profile} profiles={workspace.profiles} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
+  return <AppShell title="Billing" subtitle="Manage your GST Bharat subscription and unlock paid product modules." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
     <div className="space-y-6">
       {!workspace.token ? <EmptyState title="Login required" body="Billing is connected to authenticated backend APIs." /> : null}
       <Panel title="Account access" subtitle="Live billing status from backend.">

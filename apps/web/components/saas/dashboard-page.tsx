@@ -74,6 +74,9 @@ export function DashboardSaasPage() {
       subtitle="A focused product-suite cockpit. Open one GST Bharat tool at a time and keep workflows separated."
       profile={workspace.profile}
       profiles={workspace.profiles}
+      loading={workspace.loading}
+      error={workspace.error}
+      onRetry={() => workspace.refresh()}
       onProfileChange={(profile) => {
         workspace.setProfile(profile);
         workspace.refresh(profile);
@@ -314,6 +317,9 @@ export function OnlineSellerDashboardPage() {
       subtitle="Seller GST workflow for marketplace uploads, normalized data, GSTR-1 files and reports."
       profile={workspace.profile}
       profiles={workspace.profiles}
+      loading={workspace.loading}
+      error={workspace.error}
+      onRetry={() => workspace.refresh()}
       onProfileChange={(profile) => {
         workspace.setProfile(profile);
         workspace.refresh(profile);

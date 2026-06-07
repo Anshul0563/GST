@@ -78,6 +78,9 @@ export function AiAuditorPage() {
         subtitle="Inspect marketplace sales and prepare GST filings with smart audit insights."
         profile={workspace.profile}
         profiles={workspace.profiles}
+        loading={workspace.loading}
+        error={workspace.error}
+        onRetry={() => workspace.refresh()}
         onProfileChange={(selected) => {
           workspace.setProfile(selected);
           workspace.refresh(selected);
@@ -106,6 +109,9 @@ export function AiAuditorPage() {
       subtitle="Inspect marketplace sales and prepare GST filings with smart audit insights."
       profile={workspace.profile}
       profiles={workspace.profiles}
+      loading={workspace.loading}
+      error={workspace.error}
+      onRetry={() => workspace.refresh()}
       onProfileChange={(selected) => {
         workspace.setProfile(selected);
         workspace.refresh(selected);

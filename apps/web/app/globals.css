@@ -83,3 +83,13 @@ a {
 .platform-card-shadow {
   box-shadow: 2px 3px 0 rgba(15, 23, 42, 0.35), 0 8px 18px rgba(15, 23, 42, 0.06);
 }
+
+@keyframes loader-bar {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(220%);
+  }
+}
