@@ -4,6 +4,7 @@ import { ArrowRight, CheckCircle2, FileJson, ReceiptText, Repeat2, ShieldCheck, 
 import { LogoMark } from "@/components/saas/app-shell";
 import { AppFooter } from "@/components/saas/footer";
 import { API_BASE } from "@/lib/api";
+import { absoluteUrl, siteDescription, siteName } from "@/lib/seo";
 
 type MarketplaceCatalogItem = {
   key: string;
@@ -66,9 +67,78 @@ export default async function LandingPage() {
     `${betaParsers} beta upload parsers`,
     `${categories} marketplace categories`,
   ];
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": absoluteUrl("/#organization"),
+        name: siteName,
+        url: absoluteUrl("/"),
+        logo: absoluteUrl("/logo.png"),
+      },
+      {
+        "@type": "WebSite",
+        "@id": absoluteUrl("/#website"),
+        name: siteName,
+        url: absoluteUrl("/"),
+        publisher: { "@id": absoluteUrl("/#organization") },
+        inLanguage: "en-IN",
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": absoluteUrl("/#software"),
+        name: siteName,
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        url: absoluteUrl("/"),
+        description: siteDescription,
+        offers: pricingPlans.map((plan) => ({
+          "@type": "Offer",
+          name: plan.name,
+          price: plan.price === "Free" ? "0" : plan.price.replace(/[^\d]/g, ""),
+          priceCurrency: "INR",
+          url: absoluteUrl(plan.href),
+        })),
+        featureList: [
+          "Marketplace GST report imports",
+          "GSTR-1 JSON and Excel generation",
+          "Tally XML voucher export",
+          "2A/2B reconciliation reports",
+          "GST validation and audit checks",
+        ],
+      },
+      {
+        "@type": "FAQPage",
+        "@id": absoluteUrl("/#faq"),
+        mainEntity: [
+          {
+            "@type": "Question",
+            name: "What does GST Bharat do?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "GST Bharat converts marketplace sales reports into normalized GST transactions, GSTR-1 files, Tally XML exports, and reconciliation reports.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Which marketplaces are supported?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "GST Bharat supports Amazon, Flipkart, Meesho, Myntra, JioMart, Snapdeal, and custom CSV or Excel marketplace data workflows.",
+            },
+          },
+        ],
+      },
+    ],
+  };
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#f6f8fb] text-slate-950">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <div className="absolute inset-x-0 top-0 h-80 bg-gradient-to-br from-[#eaf2ff] via-[#f6f8fb] to-transparent opacity-90" />
       <div className="absolute right-0 top-24 hidden h-72 w-72 rounded-full bg-[#1746A2]/10 blur-3xl md:block" />
       <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl shadow-sm">

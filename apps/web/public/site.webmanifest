@@ -1,1 +1,29 @@
-{"name":"GST Bharat","short_name":"GST Bharat","icons":[{"src":"/favicon.ico","sizes":"48x48","type":"image/x-icon"},{"src":"/favicon.png","sizes":"any","type":"image/png"},{"src":"/apple-touch-icon.png","sizes":"180x180","type":"image/png"}],"theme_color":"#10244d","background_color":"#ffffff","display":"standalone"}
+{
+  "name": "GST Bharat",
+  "short_name": "GST Bharat",
+  "description": "eCommerce GST automation for Indian sellers.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#10244d",
+  "background_color": "#ffffff",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}
