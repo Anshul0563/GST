@@ -76,7 +76,7 @@ Use exact origins only. Do not include trailing slashes.
 - If Razorpay is enabled, configure its webhook URL as:
 
 ```bash
-https://your-render-api.onrender.com/billing/webhook
+https://your-render-api.onrender.com/billing/razorpay/webhook
 ```
 
 ## 5. Local Checks Before Deploy

@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE ||
+  (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "");
 
 function queryString(params: Record<string, string | number | boolean | undefined | null>) {
   const search = new URLSearchParams();
@@ -267,6 +269,9 @@ export type PaymentOrder = {
 };
 
 export async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
+  if (!API_BASE) {
+    throw new Error("NEXT_PUBLIC_API_BASE is not configured");
+  }
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {

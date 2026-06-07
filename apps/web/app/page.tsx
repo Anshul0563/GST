@@ -3,8 +3,7 @@ import type { Route } from "next";
 import { ArrowRight, CheckCircle2, FileJson, ReceiptText, Repeat2, ShieldCheck, UploadCloud } from "lucide-react";
 import { LogoMark } from "@/components/saas/app-shell";
 import { AppFooter } from "@/components/saas/footer";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
+import { API_BASE } from "@/lib/api";
 
 type MarketplaceCatalogItem = {
   key: string;
@@ -15,6 +14,7 @@ type MarketplaceCatalogItem = {
 };
 
 async function loadMarketplaceCatalog() {
+  if (!API_BASE) return [];
   try {
     const response = await fetch(`${API_BASE}/marketplaces`, { cache: "no-store" });
     if (!response.ok) return [];

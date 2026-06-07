@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -9,6 +11,11 @@ from app.db.session import Base, SessionLocal, engine
 from app.models import entities
 
 settings = get_settings()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("gst_bharat.api")
 Base.metadata.create_all(bind=engine)
 run_lightweight_migrations(engine)
 seed_super_admin()
@@ -22,6 +29,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(router)
+
+
+@app.on_event("startup")
+def log_startup() -> None:
+    logger.info(
+        "GST Bharat API started with %s CORS origin(s), upload_dir=%s, export_dir=%s",
+        len(settings.allowed_origins),
+        settings.upload_dir,
+        settings.export_dir,
+    )
 
 
 @app.get("/health")
