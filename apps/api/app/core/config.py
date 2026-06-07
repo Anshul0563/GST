@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     app_name: str = "GST Bharat API"
     secret_key: str = "dev-secret-change-in-production"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24
+    access_token_expire_minutes: int = 60 * 24 * 7
     database_url: str = "sqlite:///./gst_bharat.db"
     upload_dir: Path = Path("../../storage/uploads")
     export_dir: Path = Path("../../storage/exports")
