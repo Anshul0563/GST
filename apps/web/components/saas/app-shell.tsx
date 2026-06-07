@@ -4,7 +4,6 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
 import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud, X } from "lucide-react";
 import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
 import { AppFooter } from "@/components/saas/footer";
@@ -139,29 +138,16 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
     window.localStorage.setItem("gst_bharat_theme", nextTheme);
   }
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, ease: "easeOut" }}
-      className="min-h-screen bg-[#f3f6fa] text-slate-950 dark:bg-[#07111f] dark:text-white"
-    >
-      <AnimatePresence>
-        {mobileNavOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-sm lg:hidden"
-            onClick={() => setMobileNavOpen(false)}
+    <div className="min-h-screen bg-[#f3f6fa] text-slate-950 dark:bg-[#07111f] dark:text-white">
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        >
+          <aside
+            className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-r border-slate-200 bg-white p-5 shadow-2xl transition-transform dark:border-white/10 dark:bg-slate-950"
+            onClick={(event) => event.stopPropagation()}
           >
-            <motion.aside
-              initial={{ x: -32, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: -32, opacity: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className="h-full w-[min(20rem,calc(100vw-2rem))] overflow-y-auto border-r border-slate-200 bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-slate-950"
-              onClick={(event) => event.stopPropagation()}
-            >
             <div className="flex items-center justify-between gap-3">
               <LogoMark />
               <button onClick={() => setMobileNavOpen(false)} aria-label="Close navigation" className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900">
@@ -174,10 +160,9 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
               activeModuleIcon={ActiveModuleIcon}
               onNavigate={() => setMobileNavOpen(false)}
             />
-            </motion.aside>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </aside>
+        </div>
+      )}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-slate-200/80 bg-white/95 p-5 shadow-[8px_0_30px_rgba(15,23,42,0.04)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90 dark:shadow-none lg:block">
         <LogoMark />
         <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#1746A2]/40 hover:bg-white hover:shadow-lg hover:shadow-slate-200/60 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/[0.07] dark:hover:shadow-none">
@@ -292,7 +277,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
         </main>
         <AppFooter token={token} user={user ?? null} />
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -364,7 +349,7 @@ function SubscriptionGate({ token, user, productName, requiredPlan }: { token: s
 
   return (
     <div className="space-y-6">
-      <motion.section initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, ease: "easeOut" }} className="surface overflow-hidden rounded-2xl">
+      <section className="surface overflow-hidden rounded-2xl">
         <div className="grid gap-6 p-6 lg:grid-cols-[1fr_0.8fr] lg:p-8">
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-700">
@@ -390,10 +375,10 @@ function SubscriptionGate({ token, user, productName, requiredPlan }: { token: s
             </div>
           </div>
         </div>
-      </motion.section>
+      </section>
       <section className="grid gap-4 lg:grid-cols-3">
         {loading ? <div className="surface rounded-2xl p-5 text-sm font-bold text-slate-500">Loading pricing...</div> : plans.map((plan) => (
-          <motion.div key={plan.id} whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 210, damping: 18 }} className="surface rounded-2xl p-5">
+          <div key={plan.id} className="surface rounded-2xl p-5 transition hover:-translate-y-1">
             <div className="mb-4 h-1 w-16 rounded-full bg-gradient-to-r from-[#1746A2] via-[#3E7DD8] to-[#F58220]" />
             <h3 className="text-xl font-black">{plan.name}</h3>
             <div className="mt-4 grid gap-3 text-sm">
@@ -401,7 +386,7 @@ function SubscriptionGate({ token, user, productName, requiredPlan }: { token: s
               <div className="surface-muted rounded-xl p-4"><b>Yearly</b><p className="mt-1 text-2xl font-black">₹{plan.yearly_amount.toLocaleString("en-IN")}</p></div>
             </div>
             <div className="mt-4 space-y-2 text-sm text-slate-500">{plan.features.slice(0, 4).map((feature) => <p key={feature}>- {feature}</p>)}</div>
-          </motion.div>
+          </div>
         ))}
         {!loading && !plans.length ? <div className="surface rounded-2xl p-5 text-sm font-bold text-slate-500">Pricing will load after login.</div> : null}
       </section>

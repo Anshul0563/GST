@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowRight, CheckCircle2, FileJson, ReceiptText, Repeat2, ShieldCheck, UploadCloud } from "lucide-react";
-import { LogoMark } from "@/components/saas/app-shell";
 import { AppFooter } from "@/components/saas/footer";
 import { API_BASE } from "@/lib/api";
 import { absoluteUrl, siteDescription, siteName } from "@/lib/seo";
+
+export const revalidate = 3600;
 
 type MarketplaceCatalogItem = {
   key: string;
@@ -17,7 +18,9 @@ type MarketplaceCatalogItem = {
 async function loadMarketplaceCatalog() {
   if (!API_BASE) return [];
   try {
-    const response = await fetch(`${API_BASE}/marketplaces`, { cache: "no-store" });
+    const response = await fetch(`${API_BASE}/marketplaces`, {
+      next: { revalidate: 3600 },
+    });
     if (!response.ok) return [];
     const result = await response.json() as { marketplaces?: MarketplaceCatalogItem[] };
     return result.marketplaces || [];
@@ -50,6 +53,18 @@ const pricingPlans = [
     href: "/billing?plan=ecom_tally",
   },
 ];
+
+function PublicLogoMark() {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="grid size-10 place-items-center rounded-xl bg-[#12284f] font-black text-white shadow-sm ring-1 ring-white/15">GB</div>
+      <div>
+        <p className="text-lg font-black tracking-tight text-slate-950">GST Bharat</p>
+        <p className="-mt-0.5 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">eCom GST OS</p>
+      </div>
+    </div>
+  );
+}
 
 export default async function LandingPage() {
   const marketplaces = await loadMarketplaceCatalog();
@@ -143,7 +158,7 @@ export default async function LandingPage() {
       <div className="absolute right-0 top-24 hidden h-72 w-72 rounded-full bg-[#1746A2]/10 blur-3xl md:block" />
       <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/90 backdrop-blur-xl shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <LogoMark />
+          <PublicLogoMark />
           <nav className="hidden items-center gap-8 text-sm font-semibold text-slate-600 md:flex">
             <a href="#features" className="transition hover:text-[#1746A2]">Features</a>
             <a href="#pricing" className="transition hover:text-[#1746A2]">Pricing</a>

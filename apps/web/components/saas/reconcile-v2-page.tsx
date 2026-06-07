@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Download, FileSpreadsheet, ReceiptText, SlidersHorizontal, UploadCloud } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard, StatusPill } from "@/components/saas/ui";
@@ -11,6 +11,22 @@ import { ReconcileHistoryItem, ReconcileReport, getReconcileDownloadUrl, getReco
 import { formatCurrency } from "@/lib/utils";
 
 const categories = ["matched", "partially_matched", "invoice_mismatch", "tax_mismatch", "gstin_mismatch", "missing_in_books", "missing_in_portal", "duplicate_invoice", "invalid_gstin"];
+
+const ReconcileTrendChart = dynamic(
+  () => import("@/components/saas/reconcile-charts").then((module) => module.ReconcileTrendChart),
+  {
+    ssr: false,
+    loading: () => <ChartFallback heightClass="h-80" />,
+  },
+);
+
+const ReconcileRiskChart = dynamic(
+  () => import("@/components/saas/reconcile-charts").then((module) => module.ReconcileRiskChart),
+  {
+    ssr: false,
+    loading: () => <ChartFallback heightClass="h-56" />,
+  },
+);
 
 export function ReconcileDashboardPage() {
   const workspace = useWorkspace();
@@ -51,7 +67,7 @@ export function ReconcileDashboardPage() {
       </Panel>
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Panel title="Reconcile trend" subtitle="Matched vs mismatch rows by batch.">
-          {chart.length ? <div className="h-80"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" /><YAxis /><Tooltip /><Bar dataKey="matched" fill="#0F9F6E" radius={[10, 10, 0, 0]} /><Bar dataKey="mismatch" fill="#F58220" radius={[10, 10, 0, 0]} /></BarChart></ResponsiveContainer></div> : <EmptyState title="No reconciliation yet" body="Upload portal and books files to create your first result." />}
+          {chart.length ? <ReconcileTrendChart data={chart} /> : <EmptyState title="No reconciliation yet" body="Upload portal and books files to create your first result." />}
         </Panel>
         <Panel title="Recent batches" subtitle="Open result explorer or download Excel report.">
           {loadingHistory ? <EmptyState title="Loading history" body="Fetching reconciliation batches from backend." /> : <HistoryList history={history} />}
@@ -199,7 +215,7 @@ export function ReconcileResultsPage({ id }: { id: number }) {
       </div>
       <Panel title="Mismatch buckets" subtitle="Filter explorer by status.">
         <div className="mb-5 flex flex-wrap gap-2">{["", ...categories].map((item) => <button key={item || "all"} onClick={() => setCategory(item)} className={`rounded-2xl px-4 py-2 text-sm font-bold ${category === item ? "bg-[#10244d] text-white" : "bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-300"}`}>{item || "all"}</button>)}</div>
-        <div className="h-56"><ResponsiveContainer width="100%" height="100%"><AreaChart data={riskData}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" hide /><YAxis allowDecimals={false} /><Tooltip /><Area type="monotone" dataKey="value" stroke="#1746A2" fill="#1746A240" /></AreaChart></ResponsiveContainer></div>
+        <ReconcileRiskChart data={riskData} />
       </Panel>
       <Panel title="Query explorer" subtitle={`${rows.length} rows visible`}>
         {rows.length ? <div className="max-h-[620px] overflow-auto rounded-3xl border dark:border-white/10"><table className="min-w-[1120px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500 dark:bg-slate-900"><tr>{["Supplier GSTIN", "Invoice", "Date", "Taxable", "GST", "Diff", "Score", "Status", "Reason"].map((head) => <th key={head} className="px-4 py-3">{head}</th>)}</tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-t dark:border-white/10"><td className="px-4 py-3">{row.supplier_gstin}</td><td>{row.invoice_no}</td><td>{row.invoice_date}</td><td>{formatCurrency(money(row.taxable_value))}</td><td>{formatCurrency(money(row.total_tax))}</td><td>{formatCurrency(money(row.tax_difference))}</td><td>{row.match_score}</td><td><StatusPill status={row.category} /></td><td>{row.mismatch_reason}</td></tr>)}</tbody></table></div> : <EmptyState title="No rows" body="No reconciliation rows for this filter." />}
@@ -247,4 +263,8 @@ function Readiness({ label, ready, value }: { label: string; ready: boolean; val
     <span className="text-xs uppercase tracking-wide">{label}</span>
     <p className="mt-1 break-words text-sm">{value || (ready ? "Ready" : "Pending")}</p>
   </div>;
+}
+
+function ChartFallback({ heightClass }: { heightClass: string }) {
+  return <div className={`${heightClass} animate-pulse rounded-2xl bg-slate-100 dark:bg-white/10`} />;
 }
