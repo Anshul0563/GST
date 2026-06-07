@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 
 export function StatCard({ label, value, detail, tone = "blue" }: { label: string; value: string; detail?: string; tone?: "blue" | "green" | "saffron" | "red" }) {
@@ -11,14 +10,14 @@ export function StatCard({ label, value, detail, tone = "blue" }: { label: strin
     red: "bg-rose-600"
   };
   return (
-    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="surface rounded-2xl p-5">
+    <div className="surface rounded-2xl p-5 transition hover:-translate-y-0.5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
         <span className={`h-2.5 w-2.5 rounded-full ${tones[tone]}`} />
       </div>
       <p className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">{value}</p>
       {detail && <p className="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">{detail}</p>}
-    </motion.div>
+    </div>
   );
 }
 
