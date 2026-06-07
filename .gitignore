@@ -1,9 +1,14 @@
 # Python
 .venv/
+venv/
+env/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 *.db
 .pytest_cache/
+.mypy_cache/
 
 # Node
 node_modules/
@@ -18,10 +23,19 @@ storage/exports/**
 !storage/uploads/.gitkeep
 !storage/exports/.gitkeep
 
+# Logs
+*.log
+
 # OS
 .DS_Store
 Thumbs.db
 
+# IDE
+.vscode/
+.idea/
+
 # Env
 .env
 .env.local
+.env.production
+.env.development
