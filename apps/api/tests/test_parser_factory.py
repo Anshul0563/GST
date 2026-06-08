@@ -7,11 +7,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.api.routes import dominant_excluded_period
+from app.api.routes import clear_uploaded_files_for_profile_period
 from app.api.routes import run_import_parser
 from app.parsers.base import ParseResult
 from app.parsers.factory import get_parser
 from app.db.session import Base
-from app.models.entities import GSTProfile, NormalizedTransaction, PlatformImportBatch, User
+from app.models.entities import GSTProfile, NormalizedTransaction, PlatformImportBatch, UploadedFile, User
 
 
 def test_custom_schema_platform_parser_preserves_requested_platform_and_etin(tmp_path: Path):
@@ -327,5 +328,90 @@ def test_run_import_parser_replaces_old_platform_period_rows_on_reupload(tmp_pat
         assert second_batch.parsed_rows == 1
         assert second_batch.error_rows == 0
         assert '"replaced_platform_period_rows": 1' in (second_batch.error_report_json or "")
+    finally:
+        db.close()
+
+
+def test_gstr1_generation_cleanup_removes_uploaded_file_records_and_files(tmp_path: Path):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    try:
+        user = User(
+            email="cleanup@example.com",
+            password_hash="x",
+            role="user",
+            plan="admin_free",
+            subscription_status="active",
+        )
+        db.add(user)
+        db.flush()
+        profile = GSTProfile(
+            user_id=user.id,
+            gstin="07TCRPS8655B1ZK",
+            legal_name="Nayamo",
+            trade_name="Nayamo",
+            state_code="07",
+            filing_frequency="Monthly",
+            financial_year="2026-27",
+            return_period="052026",
+        )
+        db.add(profile)
+        db.flush()
+        batch = PlatformImportBatch(
+            user_id=user.id,
+            profile_id=profile.id,
+            period="052026",
+            platform="meesho",
+            status="completed",
+        )
+        other_period_batch = PlatformImportBatch(
+            user_id=user.id,
+            profile_id=profile.id,
+            period="042026",
+            platform="meesho",
+            status="completed",
+        )
+        db.add_all([batch, other_period_batch])
+        db.flush()
+        stored = tmp_path / "stored.xlsx"
+        stored.write_text("uploaded", encoding="utf-8")
+        other_stored = tmp_path / "other.xlsx"
+        other_stored.write_text("keep", encoding="utf-8")
+        db.add(
+            UploadedFile(
+                batch_id=batch.id,
+                user_id=user.id,
+                original_name="stored.xlsx",
+                stored_path=str(stored),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                size_bytes=stored.stat().st_size,
+            )
+        )
+        db.add(
+            UploadedFile(
+                batch_id=other_period_batch.id,
+                user_id=user.id,
+                original_name="other.xlsx",
+                stored_path=str(other_stored),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                size_bytes=other_stored.stat().st_size,
+            )
+        )
+        db.flush()
+
+        removed = clear_uploaded_files_for_profile_period(user.id, profile.id, "052026", db)
+        remaining = db.scalars(select(UploadedFile)).all()
+
+        assert removed == 1
+        assert not stored.exists()
+        assert other_stored.exists()
+        assert len(remaining) == 1
+        assert remaining[0].batch_id == other_period_batch.id
     finally:
         db.close()
