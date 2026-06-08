@@ -1,6 +1,8 @@
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ||
   (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "");
+const API_TIMEOUT_MS = 30000;
+const DOWNLOAD_TIMEOUT_MS = 120000;
 
 function queryString(params: Record<string, string | number | boolean | undefined | null>) {
   const search = new URLSearchParams();
@@ -272,14 +274,18 @@ export async function request<T>(path: string, options: RequestInit = {}, token?
   if (!API_BASE) {
     throw new Error("NEXT_PUBLIC_API_BASE is not configured");
   }
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers
-    }
-  });
+  const response = await fetchWithTimeout(
+    `${API_BASE}${path}`,
+    {
+      ...options,
+      headers: {
+        ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers
+      }
+    },
+    API_TIMEOUT_MS
+  );
   if (!response.ok) {
     const body = await response.text();
     throw new Error(readApiError(body));
@@ -288,6 +294,25 @@ export async function request<T>(path: string, options: RequestInit = {}, token?
   const text = await response.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  const abortFromCaller = () => controller.abort();
+  init.signal?.addEventListener("abort", abortFromCaller, { once: true });
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (exc) {
+    if (exc instanceof DOMException && exc.name === "AbortError") {
+      throw new Error("Backend response timed out. Please retry.");
+    }
+    throw exc;
+  } finally {
+    globalThis.clearTimeout(timeoutId);
+    init.signal?.removeEventListener("abort", abortFromCaller);
+  }
 }
 
 function readApiError(body: string) {
@@ -467,9 +492,13 @@ export function downloadUrl(path: string) {
 }
 
 export async function downloadAuthenticatedFile(token: string, path: string, fallbackName: string) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
+  const response = await fetchWithTimeout(
+    `${API_BASE}${path}`,
+    {
+      headers: { Authorization: `Bearer ${token}` }
+    },
+    DOWNLOAD_TIMEOUT_MS
+  );
   if (!response.ok) {
     const body = await response.text();
     throw new Error(readApiError(body));
