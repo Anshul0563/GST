@@ -23,6 +23,7 @@ DOC_TYP = {
     "credit_note": "Credit Note",
 }
 GSTTOOL_B2CS_POS_ORDER = [
+    "35",
     "37",
     "18",
     "10",
@@ -213,6 +214,12 @@ def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool
     )
     if rate == Decimal("0.00"):
         return False
+    if (
+        mode == GSTTOOL_COMPATIBLE
+        and taxable == Decimal("0.00")
+        and total_tax == Decimal("0.00")
+    ):
+        return rate == Decimal("3.00")
     if mode == GSTTOOL_COMPATIBLE:
         return True
     return not (taxable == Decimal("0.00") and total_tax == Decimal("0.00"))
@@ -349,7 +356,7 @@ def build_b2cs(
         if (
             mode == GSTTOOL_COMPATIBLE
             and pos == "04"
-            and money(row.get("taxable_value")) != Decimal("0.00")
+            and money(row.get("taxable_value")) > Decimal("0.00")
         ):
             remapped_zero_keys.add((sply_ty, money(row.get("gst_rate")), "04", "OE"))
             pos = "03"
@@ -560,14 +567,7 @@ def build_doc_issue(
         if not valid_document_number and mode != GSTTOOL_COMPATIBLE:
             continue
         platform = str(row.get("platform") or "unknown").lower()
-        if mode == GSTTOOL_COMPATIBLE:
-            group_key = (
-                document_group_key(row, invoice_no)
-                if platform == "flipkart"
-                else f"{platform}:{doc_type}"
-            )
-        else:
-            group_key = document_group_key(row, invoice_no)
+        group_key = document_group_key(row, invoice_no)
         grouped[(doc_type, platform, group_key)].append(invoice_no)
 
     def doc_issue_group_sort_key(
@@ -576,10 +576,10 @@ def build_doc_issue(
         (doc_type, platform, group_key), values = item
         if mode == GSTTOOL_COMPATIBLE:
             order = {
-                "meesho": 0,
+                "flipkart:sales": 0,
+                "flipkart:cashback": 0,
                 "amazon": 1,
-                "flipkart:sales": 2,
-                "flipkart:cashback": 3,
+                "meesho": 2,
                 "flipkart": 4,
             }
             platform_key = (

@@ -75,6 +75,15 @@ def align_sale_date_to_report_period(row: dict, filing_period: str) -> None:
         row["invoice date"] = period_date
 
 
+def metadata_doc_type(raw_type: str) -> str | None:
+    normalized = raw_type.strip().lower().replace(" ", "_")
+    if normalized == "invoice":
+        return "invoice"
+    if normalized in {"credit_note", "credit_discount"}:
+        return "credit_note"
+    return None
+
+
 SOURCE_TOTAL_FIELDS = {
     "taxable_value": [
         "total taxable sale value",
@@ -204,6 +213,7 @@ class MeeshoParser(MarketplaceParser):
 
         loaded_frames: list[tuple[Path, str, object]] = []
         metadata_by_suborder: dict[str, dict[str, dict[str, object]]] = {}
+        metadata_documents: list[dict[str, object]] = []
         source_totals = {
             "taxable_value": Decimal("0"),
             "total_tax": Decimal("0"),
@@ -235,6 +245,31 @@ class MeeshoParser(MarketplaceParser):
                             )
                             or ""
                         ).lower()
+                        invoice_no = first_value(
+                            row,
+                            [
+                                "invoice no.",
+                                "invoice no",
+                                "invoice number",
+                                "tax invoice no",
+                            ],
+                        )
+                        doc_type_for_issue = metadata_doc_type(raw_type)
+                        if doc_type_for_issue and invoice_no not in (None, ""):
+                            metadata_documents.append(
+                                {
+                                    "doc_type": doc_type_for_issue,
+                                    "invoice_no": text(invoice_no),
+                                    "invoice_date": first_value(
+                                        row,
+                                        [
+                                            "invoice date",
+                                            "order date",
+                                            "document date",
+                                        ],
+                                    ),
+                                }
+                            )
 
                         metadata_type = (
                             "credit_note"
@@ -459,10 +494,66 @@ class MeeshoParser(MarketplaceParser):
                 )
                 result.transactions.append(finalized)
 
+        existing_documents = {
+            (
+                str(txn.get("doc_type") or "").lower(),
+                str(txn.get("invoice_no") or "").strip(),
+            )
+            for txn in result.transactions
+            if txn.get("invoice_no")
+        }
+        for document in metadata_documents:
+            key = (
+                str(document.get("doc_type") or "").lower(),
+                str(document.get("invoice_no") or "").strip(),
+            )
+            if not key[0] or not key[1] or key in existing_documents:
+                continue
+            result.transactions.append(
+                {
+                    "platform": self.platform,
+                    "gstin": self.gstin,
+                    "etin": "07AARCM9332R1CQ",
+                    "filing_period": self.filing_period,
+                    "order_id": None,
+                    "order_item_id": None,
+                    "invoice_no": key[1],
+                    "invoice_date": document.get("invoice_date"),
+                    "document_date": document.get("invoice_date"),
+                    "doc_type": key[0],
+                    "buyer_state_code": None,
+                    "buyer_state_name": None,
+                    "hsn": None,
+                    "product_name": None,
+                    "sku": None,
+                    "qty": Decimal("0.00"),
+                    "taxable_value": Decimal("0.00"),
+                    "gst_rate": Decimal("0.00"),
+                    "igst": Decimal("0.00"),
+                    "cgst": Decimal("0.00"),
+                    "sgst": Decimal("0.00"),
+                    "cess": Decimal("0.00"),
+                    "tcs": Decimal("0.00"),
+                    "tds": Decimal("0.00"),
+                    "gross_amount": Decimal("0.00"),
+                    "discount_seller": Decimal("0.00"),
+                    "discount_platform": Decimal("0.00"),
+                    "settlement_amount": Decimal("0.00"),
+                    "source_file": "Tax_invoice_details.xlsx:Invoice_Info",
+                    "raw_row_json": None,
+                    "validation_status": "skipped",
+                    "validation_errors": "Document issue metadata row",
+                }
+            )
+            existing_documents.add(key)
+
         reconcile_source_totals(result, source_totals)
 
         result.debug["meesho_metadata_rows"] = len(metadata_by_suborder)
 
-        result.debug["meesho_financial_rows"] = len(result.transactions)
+        result.debug["meesho_financial_rows"] = len(
+            [txn for txn in result.transactions if txn.get("gst_rate") != Decimal("0.00")]
+        )
+        result.debug["meesho_document_issue_rows"] = len(result.transactions)
 
         return result
