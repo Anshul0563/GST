@@ -95,6 +95,16 @@ class GstToolGoldenJsonTests(unittest.TestCase):
                 "flipkart": [],
                 "meesho": [],
             },
+            "052026": {
+                "reference": Path("/home/jarvis/Downloads/GSTR1_returns_07TCRPS8655B1ZK_monthly_052026.json"),
+                "amazon": [Path("/home/jarvis/Downloads/b2cReport_May_2026/MTR_B2C-MAY-2026-A1YGIWFZR88S6S.csv")],
+                "flipkart": [Path("/home/jarvis/Downloads/54f45d87-e69d-4376-a562-3b2af081257f_1780585617000.xlsx")],
+                "meesho": [
+                    Path("/home/jarvis/Downloads/gst_3412749_5_2026/tcs_sales.xlsx"),
+                    Path("/home/jarvis/Downloads/gst_3412749_5_2026/tcs_sales_return.xlsx"),
+                    Path("/home/jarvis/Downloads/3412749_2026-05-01_2026-05-31_TAX_INVOICE(1)/Tax_invoice_details.xlsx"),
+                ],
+            },
         }
 
     def payload_for_period(self, period: str):
@@ -176,6 +186,9 @@ class GstToolGoldenJsonTests(unittest.TestCase):
 
     def test_april_raw_marketplace_files_rebuild_original_gsttool_json_exactly(self):
         self.assert_exact_gsttool_json("042026")
+
+    def test_may_raw_marketplace_files_rebuild_original_gsttool_json_exactly(self):
+        self.assert_exact_gsttool_json("052026")
 
     def test_original_march_json_preserves_gsttool_quirks(self):
         path = Path("/home/jarvis/Downloads/GSTR1_returns_07TCRPS8655B1ZK_monthly_032026.json")
