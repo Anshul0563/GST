@@ -404,7 +404,7 @@ export function getTransactions(token: string, profile: Profile) {
   );
 }
 
-export async function getGstrPreviewResponse(token: string, profile: Profile, exportMode: Gstr1ExportMode = "clean_portal") {
+export async function getGstrPreviewResponse(token: string, profile: Profile, exportMode: Gstr1ExportMode = "gsttool_compatible") {
   const result = await request<Gstr1Payload | Gstr1PreviewResponse>(
     `/gstr1/preview/${profile.return_period}${queryString({ profile_id: profile.id, export_mode: exportMode })}`,
     {},
@@ -413,7 +413,7 @@ export async function getGstrPreviewResponse(token: string, profile: Profile, ex
   return "preview" in result ? result : { can_generate: true, validation_blockers: 0, export_mode: exportMode, parity_report: null, preview: result };
 }
 
-export async function getGstrPreview(token: string, profile: Profile, exportMode: Gstr1ExportMode = "clean_portal") {
+export async function getGstrPreview(token: string, profile: Profile, exportMode: Gstr1ExportMode = "gsttool_compatible") {
   const result = await getGstrPreviewResponse(token, profile, exportMode);
   return "preview" in result ? result.preview : result;
 }
@@ -472,7 +472,7 @@ export function deleteTransaction(token: string, transactionId: number) {
   return request<{ ok: boolean }>(`/transactions/${transactionId}`, { method: "DELETE" }, token);
 }
 
-export function generateGstr1(token: string, profile: Profile, exportMode: Gstr1ExportMode = "clean_portal") {
+export function generateGstr1(token: string, profile: Profile, exportMode: Gstr1ExportMode = "gsttool_compatible") {
   return request<{ status: string; export_mode?: Gstr1ExportMode; json: Gstr1Payload; report?: Record<string, unknown>; parity_report?: Gstr1ParityReport; download_json: string; download_excel: string }>("/gstr1/generate", {
     method: "POST",
     body: JSON.stringify({ profile_id: profile.id, period: profile.return_period, export_mode: exportMode })

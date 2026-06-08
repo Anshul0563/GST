@@ -13,7 +13,7 @@ export function Gstr1Page() {
   const activeProfileId = workspace.profile?.id;
   const activeProfilePeriod = workspace.profile?.return_period;
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
-  const [exportMode, setExportMode] = useState<Gstr1ExportMode>("clean_portal");
+  const [exportMode, setExportMode] = useState<Gstr1ExportMode>("gsttool_compatible");
   const [modePreview, setModePreview] = useState<Gstr1Payload | null>(null);
   const [parityReport, setParityReport] = useState<Gstr1ParityReport>(null);
   const [downloads, setDownloads] = useState<{ download_json: string; download_excel: string } | null>(null);
@@ -152,7 +152,7 @@ export function Gstr1Page() {
           <StatCard label="SGST" value={formatCurrency(previewTotals.sgst)} tone="saffron" />
           <StatCard label="Total GST" value={formatCurrency(previewGst)} tone="green" />
         </div>
-        <Panel title="Export Mode" subtitle="Clean Portal Optimized is default. GSTTool Compatible is optional and may differ for Flipkart due to report-cycle logic.">
+        <Panel title="Export Mode" subtitle="GSTTool Compatible is default and follows the offline-tool JSON structure. Clean Portal Optimized is available for stricter portal validation.">
           <div className="flex flex-wrap items-center gap-3">
             {([
               ["gsttool_compatible", "GSTTool Compatible"],

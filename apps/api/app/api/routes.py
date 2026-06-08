@@ -1935,7 +1935,7 @@ def gstr1_export_download(
 def preview_gstr1(
     period: str,
     profile_id: int,
-    export_mode: str = CLEAN_PORTAL,
+    export_mode: str = GSTTOOL_COMPATIBLE,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
