@@ -530,6 +530,21 @@ def clear_batch_transactions(batch: PlatformImportBatch, db: Session) -> None:
     db.flush()
 
 
+def clear_platform_period_transactions(batch: PlatformImportBatch, db: Session) -> int:
+    rows = db.scalars(
+        select(NormalizedTransaction).where(
+            NormalizedTransaction.user_id == batch.user_id,
+            NormalizedTransaction.profile_id == batch.profile_id,
+            NormalizedTransaction.filing_period == batch.period,
+            NormalizedTransaction.platform == batch.platform,
+        )
+    ).all()
+    for row in rows:
+        db.delete(row)
+    db.flush()
+    return len(rows)
+
+
 def transaction_row_import_is_usable(row: NormalizedTransaction, db: Session) -> bool:
     if row.batch_id is None:
         return True
@@ -1213,6 +1228,10 @@ def run_import_parser(
 
     if duplicate_rows:
         result.debug["aggregated_duplicate_rows"] = duplicate_rows
+
+    replaced_rows = clear_platform_period_transactions(batch, db)
+    if replaced_rows:
+        result.debug["replaced_platform_period_rows"] = replaced_rows
 
     inserted_rows = 0
     validation_error_rows = 0

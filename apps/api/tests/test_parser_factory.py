@@ -239,3 +239,93 @@ def test_run_import_parser_aggregates_meesho_duplicate_financial_lines(tmp_path:
         assert rows[0].validation_status == "valid"
     finally:
         db.close()
+
+
+def test_run_import_parser_replaces_old_platform_period_rows_on_reupload(tmp_path: Path):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    try:
+        user = User(
+            email="meesho-reupload@example.com",
+            password_hash="x",
+            role="user",
+            plan="admin_free",
+            subscription_status="active",
+        )
+        db.add(user)
+        db.flush()
+        profile = GSTProfile(
+            user_id=user.id,
+            gstin="07TCRPS8655B1ZK",
+            legal_name="Nayamo",
+            trade_name="Nayamo",
+            state_code="07",
+            filing_frequency="Monthly",
+            financial_year="2026-27",
+            return_period="052026",
+        )
+        db.add(profile)
+        db.flush()
+
+        sales = tmp_path / "tcs_sales.xlsx"
+        invoice = tmp_path / "Tax_invoice_details.xlsx"
+        pd.DataFrame([{
+            "sub order num": "SO-REUPLOAD-1",
+            "order date": "2026-05-10",
+            "hsn code": "711790",
+            "quantity": 1,
+            "gst rate": 3,
+            "total taxable sale value": 100,
+            "tax amount": 3,
+            "total invoice value": 103,
+            "end customer state new": "TELANGANA",
+            "eco tcs gstin": "07AARCM9332R1CQ",
+        }]).to_excel(sales, index=False)
+        pd.DataFrame([{
+            "type": "INVOICE",
+            "order date": "2026-05-10",
+            "suborder no.": "SO-REUPLOAD-1",
+            "product description": "Jewellery",
+            "hsn": "711790",
+            "invoice no.": "6p5kc27333",
+        }]).to_excel(invoice, sheet_name="Invoice_Info", index=False)
+
+        first_batch = PlatformImportBatch(
+            user_id=user.id,
+            profile_id=profile.id,
+            period="052026",
+            platform="meesho",
+            status="queued",
+        )
+        db.add(first_batch)
+        db.flush()
+        run_import_parser(first_batch, [str(sales)], db)
+
+        second_batch = PlatformImportBatch(
+            user_id=user.id,
+            profile_id=profile.id,
+            period="052026",
+            platform="meesho",
+            status="queued",
+        )
+        db.add(second_batch)
+        db.flush()
+        run_import_parser(second_batch, [str(sales), str(invoice)], db)
+        db.commit()
+
+        rows = db.scalars(select(NormalizedTransaction)).all()
+        assert len(rows) == 1
+        assert rows[0].batch_id == second_batch.id
+        assert rows[0].invoice_no == "6p5kc27333"
+        assert rows[0].taxable_value == Decimal("100.00")
+        assert second_batch.parsed_rows == 1
+        assert second_batch.error_rows == 0
+        assert '"replaced_platform_period_rows": 1' in (second_batch.error_report_json or "")
+    finally:
+        db.close()
