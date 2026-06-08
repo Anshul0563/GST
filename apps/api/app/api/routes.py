@@ -168,6 +168,43 @@ def require_valid_period(period: str | None) -> str:
     return normalized
 
 
+def is_super_admin(user: User) -> bool:
+    return str(getattr(user, "role", "") or "").lower() == "super_admin"
+
+
+def enforce_gst_profile_registration_limits(
+    user: User,
+    db: Session,
+    *,
+    gstin: str,
+    current_profile_id: int | None = None,
+) -> None:
+    if is_super_admin(user):
+        return
+
+    if current_profile_id is None:
+        existing_profile = db.scalar(
+            select(GSTProfile.id)
+            .where(GSTProfile.user_id == user.id)
+            .order_by(GSTProfile.id.asc())
+        )
+        if existing_profile is not None:
+            raise HTTPException(
+                409,
+                "Only one GSTIN can be registered per user account.",
+            )
+
+    duplicate_stmt = select(GSTProfile.id).where(GSTProfile.gstin == gstin)
+    if current_profile_id is not None:
+        duplicate_stmt = duplicate_stmt.where(GSTProfile.id != current_profile_id)
+    duplicate_profile = db.scalar(duplicate_stmt.order_by(GSTProfile.id.asc()))
+    if duplicate_profile is not None:
+        raise HTTPException(
+            409,
+            "This GSTIN is already registered with another account.",
+        )
+
+
 def paid_until(order: PaymentOrder | None) -> datetime | None:
     if not order or order.status != "paid" or not order.paid_at:
         return None
@@ -769,6 +806,7 @@ def create_profile(
     if not validate_gstin(gstin):
         raise HTTPException(422, "Invalid GSTIN")
     return_period = require_valid_period(payload.return_period)
+    enforce_gst_profile_registration_limits(user, db, gstin=gstin)
     profile = GSTProfile(
         user_id=user.id,
         gstin=gstin,
@@ -1006,6 +1044,12 @@ def update_profile(
     if not validate_gstin(gstin):
         raise HTTPException(422, "Invalid GSTIN")
     return_period = require_valid_period(payload.return_period)
+    enforce_gst_profile_registration_limits(
+        user,
+        db,
+        gstin=gstin,
+        current_profile_id=profile.id,
+    )
     for key, value in payload.model_dump().items():
         setattr(profile, key, value)
     profile.gstin = gstin
