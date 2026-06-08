@@ -450,6 +450,30 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -100, "iamt": -3, "csamt": 0}])
         self.assertEqual(clean_payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -100, "iamt": -3, "csamt": 0}])
 
+    def test_gsttool_mode_preserves_negative_pos04_adjustment(self):
+        rows = [
+            finalize_transaction({
+                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "052026",
+                "invoice_no": "6p5kc27202", "doc_type": "invoice", "buyer_state_code": "03", "taxable_value": 1165.88, "gst_rate": 3, "igst": 34.98,
+                "gross_amount": 1200.86,
+            }),
+            finalize_transaction({
+                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "052026",
+                "invoice_no": "6p5kc27202", "doc_type": "invoice", "buyer_state_code": "04", "taxable_value": -9.71, "gst_rate": 3, "igst": -0.29,
+                "gross_amount": -10.00, "_preserve_source_sign": True,
+            }),
+        ]
+        payload = build_gstr1_json("07ABCDE1234F1Z5", "052026", rows, GSTTOOL_COMPATIBLE)
+
+        self.assertIn(
+            {"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "04", "txval": -9.71, "iamt": -0.29, "csamt": 0},
+            payload["b2cs"],
+        )
+        self.assertIn(
+            {"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "03", "txval": 1165.88, "iamt": 34.98, "csamt": 0},
+            payload["b2cs"],
+        )
+
     def test_gstr1_generation_filters_rows_by_document_date_period(self):
         rows = [
             finalize_transaction({
