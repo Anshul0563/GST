@@ -7,6 +7,7 @@ from app.parsers.base import (
     excel_frames,
     finalize_period_transaction,
     first_value,
+    belongs_to_period,
     money,
     should_skip_transaction,
     text,
@@ -47,6 +48,32 @@ def has_financial_values(row: dict) -> bool:
 
 def is_empty(value: object) -> bool:
     return text(value) is None
+
+
+def report_period_date(row: dict) -> object | None:
+    return first_value(
+        row,
+        [
+            "manifest date",
+            "transaction date",
+            "report date",
+        ],
+    )
+
+
+def align_sale_date_to_report_period(row: dict, filing_period: str) -> None:
+    if first_value(row, ["invoice date", "invoice_date"]):
+        return
+
+    order_date = first_value(row, ["order date", "date"])
+    period_date = report_period_date(row)
+    if (
+        order_date not in (None, "")
+        and period_date not in (None, "")
+        and not belongs_to_period(order_date, filing_period)
+        and belongs_to_period(period_date, filing_period)
+    ):
+        row["invoice date"] = period_date
 
 
 SOURCE_TOTAL_FIELDS = {
@@ -372,6 +399,8 @@ class MeeshoParser(MarketplaceParser):
                     if return_date not in (None, ""):
                         row["credit note date"] = return_date
                         row["invoice date"] = return_date
+                else:
+                    align_sale_date_to_report_period(row, self.filing_period)
 
                 row["doc_type"] = "credit_note" if is_return else "invoice"
 

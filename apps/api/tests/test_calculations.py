@@ -725,6 +725,33 @@ class GstCalculationTests(unittest.TestCase):
             "-0.01",
         )
 
+    def test_meesho_parser_keeps_sales_manifested_in_return_period(self):
+        with TemporaryDirectory() as temp_dir:
+            sales = Path(temp_dir) / "tcs_sales.xlsx"
+            pd.DataFrame([{
+                "sub order num": "SO-MANIFEST-MAY",
+                "order date": "2026-04-30",
+                "manifest date": "2026-05-01",
+                "hsn code": "711790",
+                "quantity": 1,
+                "gst rate": 3,
+                "total taxable sale value": "110.2135922330097",
+                "tax amount": "3.306407766990291",
+                "total invoice value": "113.52",
+                "end customer state new": "UTTAR PRADESH",
+                "eco tcs gstin": "07AARCM9332R1CQ",
+                "financial year": 2026,
+                "month number": 5,
+            }]).to_excel(sales, index=False)
+
+            result = MeeshoParser("07TCRPS8655B1ZK", "052026").parse([sales])
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.debug.get("period_excluded_rows"), None)
+        self.assertEqual(len(result.transactions), 1)
+        self.assertEqual(result.transactions[0]["document_date"].isoformat(), "2026-05-01")
+        self.assertEqual(result.transactions[0]["taxable_value"], Decimal("110.21"))
+
     def test_gstr1_json_contract_matches_offline_tool_structure(self):
         rows = [
             finalize_transaction({
