@@ -669,10 +669,15 @@ class GstCalculationTests(unittest.TestCase):
             result = MeeshoParser("07TCRPS8655B1ZK", "032026").parse([returns, invoice])
 
         self.assertEqual(result.errors, [])
-        self.assertEqual(len(result.transactions), 1)
-        self.assertEqual(result.transactions[0]["invoice_no"], "SO-MISSING")
-        self.assertEqual(result.transactions[0]["doc_type"], "credit_note")
-        self.assertEqual(result.transactions[0]["validation_status"], "valid")
+        financial_rows = [row for row in result.transactions if row["gst_rate"] != Decimal("0.00")]
+        metadata_rows = [row for row in result.transactions if row["gst_rate"] == Decimal("0.00")]
+        self.assertEqual(len(financial_rows), 1)
+        self.assertEqual(financial_rows[0]["invoice_no"], "SO-MISSING")
+        self.assertEqual(financial_rows[0]["doc_type"], "credit_note")
+        self.assertEqual(financial_rows[0]["validation_status"], "valid")
+        self.assertEqual(len(metadata_rows), 1)
+        self.assertEqual(metadata_rows[0]["invoice_no"], "6p5kc26244")
+        self.assertEqual(metadata_rows[0]["validation_status"], "skipped")
 
     def test_meesho_parser_reconciles_sub_paise_source_totals(self):
         with TemporaryDirectory() as temp_dir:
