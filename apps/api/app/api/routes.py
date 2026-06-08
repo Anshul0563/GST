@@ -545,6 +545,41 @@ def clear_platform_period_transactions(batch: PlatformImportBatch, db: Session) 
     return len(rows)
 
 
+def clear_uploaded_files_for_profile_period(
+    user_id: int,
+    profile_id: int,
+    period: str,
+    db: Session,
+) -> int:
+    batches = db.scalars(
+        select(PlatformImportBatch).where(
+            PlatformImportBatch.user_id == user_id,
+            PlatformImportBatch.profile_id == profile_id,
+            PlatformImportBatch.period == period,
+        )
+    ).all()
+    if not batches:
+        return 0
+    batch_ids = [batch.id for batch in batches]
+    files = db.scalars(
+        select(UploadedFile).where(
+            UploadedFile.user_id == user_id,
+            UploadedFile.batch_id.in_(batch_ids),
+        )
+    ).all()
+    removed = 0
+    for uploaded in files:
+        if uploaded.stored_path:
+            try:
+                Path(uploaded.stored_path).unlink(missing_ok=True)
+            except OSError:
+                pass
+        db.delete(uploaded)
+        removed += 1
+    db.flush()
+    return removed
+
+
 def transaction_row_import_is_usable(row: NormalizedTransaction, db: Session) -> bool:
     if row.batch_id is None:
         return True
@@ -1919,9 +1954,18 @@ def generate_gstr1(
         excel_path=str(excel_path),
     )
     db.add(export)
+    uploaded_files_deleted = clear_uploaded_files_for_profile_period(
+        user.id,
+        profile.id,
+        payload.period,
+        db,
+    )
     db.add(
         AuditLog(
-            user_id=user.id, action="gstr1.generate", entity_type="gstr1_json_exports"
+            user_id=user.id,
+            action="gstr1.generate",
+            entity_type="gstr1_json_exports",
+            metadata_json=json.dumps({"uploaded_files_deleted": uploaded_files_deleted}),
         )
     )
     db.commit()

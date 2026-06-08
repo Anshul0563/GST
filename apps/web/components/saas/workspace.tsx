@@ -21,6 +21,8 @@ import {
 } from "@/lib/api";
 import { clearAuthToken, getStoredAuthToken } from "@/lib/auth";
 
+const ACTIVE_PROFILE_KEY = "gst_bharat_active_profile_id";
+
 export type Workspace = {
   token: string;
   user: { id: number; email: string; full_name?: string | null; role?: string; plan?: string; subscription_status?: string; subscription_expires_at?: string | null; free_access_reason?: string | null } | null;
@@ -65,6 +67,9 @@ export function useWorkspace(): Workspace {
 
   const selectProfile = useCallback((nextProfile: Profile) => {
     refreshSeq.current += 1;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(nextProfile.id));
+    }
     setActiveProfile(nextProfile);
     clearPeriodScopedState();
     setLoading(true);
@@ -96,9 +101,11 @@ export function useWorkspace(): Workspace {
       if (!activeProfile) {
         const [nextUser, nextProfiles] = await Promise.all([getCurrentUser(activeToken), listProfiles(activeToken)]);
         if (!isCurrent()) return;
+        const storedProfileId = typeof window !== "undefined" ? Number(window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0) : 0;
+        const nextProfile = nextProfiles.find((item) => item.id === storedProfileId) ?? nextProfiles[0] ?? null;
         setUser(nextUser);
         setProfiles(nextProfiles);
-        setActiveProfile(nextProfiles[0] ?? null);
+        setActiveProfile(nextProfile);
         clearPeriodScopedState();
         setError("");
         return;
@@ -113,9 +120,13 @@ export function useWorkspace(): Workspace {
         needs.companies ? listTallyCompanies(activeToken, activeProfile.id) : Promise.resolve([])
       ]);
       if (!isCurrent()) return;
+      const refreshedProfile = nextProfiles.find((item) => item.id === activeProfile.id) ?? activeProfile;
       setUser(nextUser);
       setProfiles(nextProfiles);
-      setActiveProfile(nextProfiles.find((item) => item.id === activeProfile.id) ?? activeProfile);
+      setActiveProfile(refreshedProfile);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(refreshedProfile.id));
+      }
       setSummary(nextSummary);
       setTransactions(nextRows);
       setBatches(nextBatches);
@@ -145,7 +156,11 @@ export function useWorkspace(): Workspace {
       return;
     }
     const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken), getMarketplaces()])
-      .then(([user, profiles, marketplaceResult]) => ({ token: storedToken, user, profiles, profile: profiles[0] ?? null, marketplaces: marketplaceResult.marketplaces }));
+      .then(([user, profiles, marketplaceResult]) => {
+        const storedProfileId = typeof window !== "undefined" ? Number(window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0) : 0;
+        const profile = profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
+        return { token: storedToken, user, profiles, profile, marketplaces: marketplaceResult.marketplaces };
+      });
     initializer
       .then(async ({ token, user, profiles, profile, marketplaces }) => {
         setToken(token);

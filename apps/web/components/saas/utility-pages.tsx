@@ -112,6 +112,18 @@ export function ProfilePage() {
     { label: "2A/2B Reconcile", value: `${workspace.profile?.return_period || dynamicDefaults.return_period} period` },
     { label: "eCom to Tally", value: `${workspace.companies.length} companies` },
   ];
+  useEffect(() => {
+    if (!workspace.profile) return;
+    setEditingId(workspace.profile.id);
+    setForm({
+      gstin: workspace.profile.gstin,
+      legal_name: workspace.profile.legal_name,
+      trade_name: workspace.profile.trade_name || "",
+      filing_frequency: workspace.profile.filing_frequency,
+      financial_year: workspace.profile.financial_year,
+      return_period: workspace.profile.return_period,
+    });
+  }, [workspace.profile]);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!workspace.token) return;

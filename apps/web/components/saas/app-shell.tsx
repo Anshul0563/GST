@@ -170,7 +170,15 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
       )}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-72 border-r border-slate-200/80 bg-white/95 p-5 shadow-[8px_0_30px_rgba(15,23,42,0.04)] backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/90 dark:shadow-none lg:block">
         <LogoMark />
-        <div className="mt-7 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#1746A2]/40 hover:bg-white hover:shadow-lg hover:shadow-slate-200/60 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/[0.07] dark:hover:shadow-none">
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => router.push("/modules/online-seller/profile")}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") router.push("/modules/online-seller/profile");
+          }}
+          className="mt-7 cursor-pointer rounded-2xl border border-slate-200 bg-slate-50/80 p-4 transition hover:border-[#1746A2]/40 hover:bg-white hover:shadow-lg hover:shadow-slate-200/60 focus:outline-none focus:ring-2 focus:ring-[#1746A2]/30 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/[0.07] dark:hover:shadow-none"
+        >
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-500"><ShieldCheck className="size-4 text-emerald-600" /> Workspace</div>
             <span className="rounded-full bg-[#1746A2]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-[#1746A2]">Edit</span>
@@ -180,7 +188,9 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             id="workspace-select"
             aria-label="Select workspace profile"
             value={String(profile?.id || "")}
+            onClick={(event) => event.stopPropagation()}
             onChange={(event) => {
+              event.stopPropagation();
               const next = profiles.find((item) => item.id === Number(event.target.value));
               if (next) onProfileChange?.(next);
             }}
