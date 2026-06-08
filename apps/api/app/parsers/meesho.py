@@ -9,6 +9,7 @@ from app.parsers.base import (
     first_value,
     belongs_to_period,
     money,
+    parse_date,
     should_skip_transaction,
     text,
 )
@@ -509,6 +510,7 @@ class MeeshoParser(MarketplaceParser):
             )
             if not key[0] or not key[1] or key in existing_documents:
                 continue
+            document_date = parse_date(document.get("invoice_date"))
             result.transactions.append(
                 {
                     "platform": self.platform,
@@ -518,8 +520,8 @@ class MeeshoParser(MarketplaceParser):
                     "order_id": None,
                     "order_item_id": None,
                     "invoice_no": key[1],
-                    "invoice_date": document.get("invoice_date"),
-                    "document_date": document.get("invoice_date"),
+                    "invoice_date": document_date,
+                    "document_date": document_date,
                     "doc_type": key[0],
                     "buyer_state_code": None,
                     "buyer_state_name": None,

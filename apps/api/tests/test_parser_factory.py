@@ -415,3 +415,92 @@ def test_gstr1_generation_cleanup_removes_uploaded_file_records_and_files(tmp_pa
         assert remaining[0].batch_id == other_period_batch.id
     finally:
         db.close()
+
+
+def test_meesho_import_persists_metadata_only_document_rows(tmp_path: Path):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    try:
+        user = User(
+            email="meesho-metadata@example.com",
+            password_hash="x",
+            role="user",
+            plan="admin_free",
+            subscription_status="active",
+        )
+        db.add(user)
+        db.flush()
+        profile = GSTProfile(
+            user_id=user.id,
+            gstin="07TCRPS8655B1ZK",
+            legal_name="Nayamo",
+            trade_name="Nayamo",
+            state_code="07",
+            filing_frequency="Monthly",
+            financial_year="2026-27",
+            return_period="052026",
+        )
+        db.add(profile)
+        db.flush()
+        batch = PlatformImportBatch(
+            user_id=user.id,
+            profile_id=profile.id,
+            period="052026",
+            platform="meesho",
+            status="queued",
+        )
+        db.add(batch)
+        db.flush()
+
+        sales = tmp_path / "tcs_sales.xlsx"
+        invoice = tmp_path / "Tax_invoice_details.xlsx"
+        pd.DataFrame([{
+            "sub order num": "SO-FINANCIAL",
+            "order date": "2026-05-10",
+            "hsn code": "711790",
+            "quantity": 1,
+            "gst rate": 3,
+            "total taxable sale value": 100,
+            "tax amount": 3,
+            "total invoice value": 103,
+            "end customer state new": "TELANGANA",
+            "eco tcs gstin": "07AARCM9332R1CQ",
+        }]).to_excel(sales, index=False)
+        pd.DataFrame([
+            {
+                "type": "INVOICE",
+                "order date": "2026-05-10 10:00:00",
+                "suborder no.": "SO-FINANCIAL",
+                "hsn": "711790",
+                "invoice no.": "6p5kc27333",
+            },
+            {
+                "type": "INVOICE",
+                "order date": "2026-05-11 12:00:00",
+                "suborder no.": "SO-METADATA-ONLY",
+                "hsn": "711790",
+                "invoice no.": "6p5kc27334",
+            },
+        ]).to_excel(invoice, sheet_name="Invoice_Info", index=False)
+
+        run_import_parser(batch, [str(sales), str(invoice)], db)
+        db.commit()
+
+        metadata_row = db.scalar(
+            select(NormalizedTransaction).where(
+                NormalizedTransaction.invoice_no == "6p5kc27334"
+            )
+        )
+        assert batch.status == "completed"
+        assert batch.error_rows == 0
+        assert metadata_row is not None
+        assert metadata_row.validation_status == "skipped"
+        assert metadata_row.invoice_date.isoformat() == "2026-05-11"
+    finally:
+        db.close()
