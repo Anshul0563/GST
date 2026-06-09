@@ -75,6 +75,32 @@ function suggestedReturnPeriod() {
   return `${month}${target.getFullYear()}`;
 }
 
+function monthLabel(month: number) {
+  return new Intl.DateTimeFormat("en-IN", { month: "short" }).format(new Date(2026, month - 1, 1));
+}
+
+function returnPeriodOptions(anchorPeriod = suggestedReturnPeriod()) {
+  const { month, year } = periodParts(anchorPeriod);
+  const anchor = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
+  return Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(anchor.getFullYear(), anchor.getMonth() + 3 - index, 1);
+    const optionMonth = date.getMonth() + 1;
+    const value = `${String(optionMonth).padStart(2, "0")}${date.getFullYear()}`;
+    return {
+      value,
+      label: `${monthLabel(optionMonth)} ${date.getFullYear()} (${value})`,
+    };
+  });
+}
+
+function financialYearOptions(anchorPeriod = suggestedReturnPeriod()) {
+  const anchorYear = Number(financialYearForPeriod(anchorPeriod).slice(0, 4)) || new Date().getFullYear();
+  return Array.from({ length: 8 }, (_, index) => {
+    const start = anchorYear + 2 - index;
+    return `${start}-${String(start + 1).slice(-2)}`;
+  });
+}
+
 function smartFilingFrequency(period: string) {
   const { month } = periodParts(period);
   return [3, 6, 9, 12].includes(month) ? "Quarterly" : "Monthly";
@@ -107,6 +133,8 @@ export function ProfilePage() {
   const dynamicDefaults = currentProfileDefaults();
   const nextRoute = (searchParams.get("next") || "/modules/online-seller/marketplaces") as Route;
   const detectedState = gstinStateName(form.gstin);
+  const returnPeriods = returnPeriodOptions(form.return_period || dynamicDefaults.return_period);
+  const financialYears = financialYearOptions(form.return_period || dynamicDefaults.return_period);
   const moduleUsage = [
     { label: "GST Online Seller", value: `${workspace.transactions.length} rows` },
     { label: "2A/2B Reconcile", value: `${workspace.profile?.return_period || dynamicDefaults.return_period} period` },
@@ -186,14 +214,20 @@ export function ProfilePage() {
               <label className="grid gap-2 text-sm font-bold">Return period
                 <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">
                   <CalendarDays className="size-4 text-[#1746A2]" />
-                  <input value={form.return_period} onChange={(event) => {
+                  <select value={form.return_period} onChange={(event) => {
                     const returnPeriod = event.target.value;
                     setForm({ ...form, return_period: returnPeriod, financial_year: financialYearForPeriod(returnPeriod), filing_frequency: smartFilingFrequency(returnPeriod) });
-                  }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" placeholder="MMYYYY e.g. 052026" required />
+                  }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" required>
+                    {!returnPeriods.some((item) => item.value === form.return_period) ? <option value={form.return_period}>{form.return_period}</option> : null}
+                    {returnPeriods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                  </select>
                 </div>
               </label>
               <label className="grid gap-2 text-sm font-bold">Financial year
-                <input value={form.financial_year} onChange={(event) => setForm({ ...form, financial_year: event.target.value })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" placeholder="2026-27" required />
+                <select value={form.financial_year} onChange={(event) => setForm({ ...form, financial_year: event.target.value })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" required>
+                  {!financialYears.includes(form.financial_year) ? <option value={form.financial_year}>{form.financial_year}</option> : null}
+                  {financialYears.map((item) => <option key={item} value={item}>{item}</option>)}
+                </select>
               </label>
             </div>
             <div className="rounded-3xl bg-slate-50 p-4 dark:bg-white/5">
