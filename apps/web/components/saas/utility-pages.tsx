@@ -76,19 +76,30 @@ function suggestedReturnPeriod() {
 }
 
 function monthLabel(month: number) {
-  return new Intl.DateTimeFormat("en-IN", { month: "short" }).format(new Date(2026, month - 1, 1));
+  return new Intl.DateTimeFormat("en-IN", { month: "long" }).format(new Date(2026, month - 1, 1));
 }
 
-function returnPeriodOptions(anchorPeriod = suggestedReturnPeriod()) {
-  const { month, year } = periodParts(anchorPeriod);
-  const anchor = new Date(year || new Date().getFullYear(), (month || new Date().getMonth() + 1) - 1, 1);
-  return Array.from({ length: 30 }, (_, index) => {
-    const date = new Date(anchor.getFullYear(), anchor.getMonth() + 3 - index, 1);
-    const optionMonth = date.getMonth() + 1;
-    const value = `${String(optionMonth).padStart(2, "0")}${date.getFullYear()}`;
+function financialYearStart(financialYear: string) {
+  return Number(financialYear.slice(0, 4)) || Number(financialYearForPeriod(suggestedReturnPeriod()).slice(0, 4));
+}
+
+function returnPeriodForMonth(month: number, financialYear: string) {
+  const start = financialYearStart(financialYear);
+  const year = month >= 4 ? start : start + 1;
+  return `${String(month).padStart(2, "0")}${year}`;
+}
+
+function returnPeriodMonthLabel(period: string) {
+  const { month } = periodParts(period);
+  return month ? monthLabel(month) : "--";
+}
+
+function returnPeriodOptions(financialYear: string) {
+  const months = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
+  return months.map((month) => {
     return {
-      value,
-      label: `${monthLabel(optionMonth)} ${date.getFullYear()} (${value})`,
+      value: returnPeriodForMonth(month, financialYear),
+      label: monthLabel(month),
     };
   });
 }
@@ -133,11 +144,11 @@ export function ProfilePage() {
   const dynamicDefaults = currentProfileDefaults();
   const nextRoute = (searchParams.get("next") || "/modules/online-seller/marketplaces") as Route;
   const detectedState = gstinStateName(form.gstin);
-  const returnPeriods = returnPeriodOptions(form.return_period || dynamicDefaults.return_period);
+  const returnPeriods = returnPeriodOptions(form.financial_year || dynamicDefaults.financial_year);
   const financialYears = financialYearOptions(form.return_period || dynamicDefaults.return_period);
   const moduleUsage = [
     { label: "GST Online Seller", value: `${workspace.transactions.length} rows` },
-    { label: "2A/2B Reconcile", value: `${workspace.profile?.return_period || dynamicDefaults.return_period} period` },
+    { label: "2A/2B Reconcile", value: `${returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} period` },
     { label: "eCom to Tally", value: `${workspace.companies.length} companies` },
   ];
   useEffect(() => {
@@ -187,7 +198,7 @@ export function ProfilePage() {
       {!workspace.token ? <EmptyState title="Login required" body="Login to create or update GST profile details." /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Active GSTIN" value={workspace.profile?.gstin || "Not set"} />
-        <StatCard label="Return period" value={workspace.profile?.return_period || dynamicDefaults.return_period} />
+        <StatCard label="Return period" value={returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} />
         <StatCard label="Filing mode" value={workspace.profile?.filing_frequency || dynamicDefaults.filing_frequency} />
         <StatCard label="Financial year" value={workspace.profile?.financial_year || dynamicDefaults.financial_year} />
       </div>
@@ -199,7 +210,7 @@ export function ProfilePage() {
                 <div>
                   <b>AI assisted setup</b>
                   <p className="mt-1 leading-6">
-                    Suggested return period {dynamicDefaults.return_period}, FY {dynamicDefaults.financial_year}
+                    Suggested return period {returnPeriodMonthLabel(dynamicDefaults.return_period)}, FY {dynamicDefaults.financial_year}
                     {detectedState ? `, GSTIN state ${detectedState}` : ""}.
                   </p>
                 </div>
@@ -218,13 +229,18 @@ export function ProfilePage() {
                     const returnPeriod = event.target.value;
                     setForm({ ...form, return_period: returnPeriod, financial_year: financialYearForPeriod(returnPeriod), filing_frequency: smartFilingFrequency(returnPeriod) });
                   }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" required>
-                    {!returnPeriods.some((item) => item.value === form.return_period) ? <option value={form.return_period}>{form.return_period}</option> : null}
+                    {!returnPeriods.some((item) => item.value === form.return_period) ? <option value={form.return_period}>{monthLabel(periodParts(form.return_period).month || 1)}</option> : null}
                     {returnPeriods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
               </label>
               <label className="grid gap-2 text-sm font-bold">Financial year
-                <select value={form.financial_year} onChange={(event) => setForm({ ...form, financial_year: event.target.value })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" required>
+                <select value={form.financial_year} onChange={(event) => {
+                  const financialYear = event.target.value;
+                  const { month } = periodParts(form.return_period);
+                  const returnPeriod = returnPeriodForMonth(month || 4, financialYear);
+                  setForm({ ...form, financial_year: financialYear, return_period: returnPeriod, filing_frequency: smartFilingFrequency(returnPeriod) });
+                }} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" required>
                   {!financialYears.includes(form.financial_year) ? <option value={form.financial_year}>{form.financial_year}</option> : null}
                   {financialYears.map((item) => <option key={item} value={item}>{item}</option>)}
                 </select>
@@ -268,7 +284,7 @@ export function ProfilePage() {
                   {active && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">Active</span>}
                 </div>
                 <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-bold text-slate-500">
-                  <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.return_period}</span>
+                  <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{returnPeriodMonthLabel(profile.return_period)}</span>
                   <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.filing_frequency}</span>
                   <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.financial_year}</span>
                 </div>
