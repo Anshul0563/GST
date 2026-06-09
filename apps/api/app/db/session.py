@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -5,6 +7,7 @@ from app.core.config import get_settings
 
 
 settings = get_settings()
+APP_ROOT = Path(__file__).resolve().parents[2]
 
 
 def normalize_database_url(database_url: str) -> str:
@@ -12,6 +15,10 @@ def normalize_database_url(database_url: str) -> str:
         return database_url.replace("postgres://", "postgresql+psycopg://", 1)
     if database_url.startswith("postgresql://"):
         return database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    if database_url.startswith("sqlite:///") and not database_url.startswith("sqlite:////"):
+        sqlite_path = database_url.removeprefix("sqlite:///")
+        if sqlite_path != ":memory:":
+            return f"sqlite:///{(APP_ROOT / sqlite_path).resolve()}"
     return database_url
 
 
