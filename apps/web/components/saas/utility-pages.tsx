@@ -95,11 +95,11 @@ function returnPeriodMonthLabel(period: string) {
   return month ? monthLabel(month) : "--";
 }
 
-function returnPeriodOptions(financialYear: string) {
+function returnPeriodOptions() {
   const months = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
   return months.map((month) => {
     return {
-      value: returnPeriodForMonth(month, financialYear),
+      value: String(month),
       label: monthLabel(month),
     };
   });
@@ -147,8 +147,9 @@ export function ProfilePage() {
   const nextRoute = (searchParams.get("next") || "/modules/online-seller/marketplaces") as Route;
   const activeToken = workspace.token || getStoredAuthToken();
   const detectedState = gstinStateName(form.gstin);
-  const returnPeriods = returnPeriodOptions(form.financial_year || dynamicDefaults.financial_year);
+  const returnPeriods = returnPeriodOptions();
   const financialYears = financialYearOptions(form.return_period || dynamicDefaults.return_period);
+  const selectedReturnMonth = String(periodParts(form.return_period).month || periodParts(dynamicDefaults.return_period).month || 4);
   const canCreateMultipleProfiles = workspace.user?.role === "super_admin";
   const profileLimitLabel = canCreateMultipleProfiles ? "Unlimited" : "1";
   const moduleUsage = [
@@ -171,11 +172,17 @@ export function ProfilePage() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!activeToken) return;
+    const normalizedReturnPeriod = returnPeriodForMonth(Number(selectedReturnMonth), form.financial_year);
+    const normalizedForm = {
+      ...form,
+      return_period: normalizedReturnPeriod,
+      filing_frequency: smartFilingFrequency(normalizedReturnPeriod),
+    };
     try {
       setSubmitError("");
       const savedProfile = editingId
-        ? await updateProfile(activeToken, editingId, form)
-        : await createProfile(activeToken, form);
+        ? await updateProfile(activeToken, editingId, normalizedForm)
+        : await createProfile(activeToken, normalizedForm);
       workspace.setProfile(savedProfile);
       await workspace.refresh(savedProfile);
       if (editingId) {
@@ -235,11 +242,12 @@ export function ProfilePage() {
               <label className="grid gap-2 text-sm font-bold">Return period
                 <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">
                   <CalendarDays className="size-4 text-[#1746A2]" />
-                  <select value={form.return_period} onChange={(event) => {
-                    const returnPeriod = event.target.value;
+                  <select value={selectedReturnMonth} onChange={(event) => {
+                    const month = Number(event.target.value);
+                    const returnPeriod = returnPeriodForMonth(month, form.financial_year);
                     setForm({ ...form, return_period: returnPeriod, financial_year: financialYearForPeriod(returnPeriod), filing_frequency: smartFilingFrequency(returnPeriod) });
                   }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" required>
-                    {!returnPeriods.some((item) => item.value === form.return_period) ? <option value={form.return_period}>{monthLabel(periodParts(form.return_period).month || 1)}</option> : null}
+                    {!returnPeriods.some((item) => item.value === selectedReturnMonth) ? <option value={selectedReturnMonth}>{monthLabel(Number(selectedReturnMonth))}</option> : null}
                     {returnPeriods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </div>
