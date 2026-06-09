@@ -7,11 +7,19 @@ import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatusPill } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
 import { marketplaceIconFor } from "@/lib/marketplaces";
-import { BatchStatus, ImportErrors, deleteImportBatch, getImportErrors, getImportStatus, reprocessImportBatch, uploadMarketplaceFiles } from "@/lib/api";
+import { BatchStatus, ImportErrors, deleteImportBatch, getImportErrors, getImportStatus, listProfileImportBatches, reprocessImportBatch, uploadMarketplaceFiles } from "@/lib/api";
 
 const ACCEPTED_IMPORT_FILES = ".csv,.xls,.xlsx,.xlsm";
 const TERMINAL_IMPORT_STATUSES = new Set(["completed", "completed_with_errors", "failed"]);
 const MAX_IMPORT_POLLS = 20;
+
+function periodLabel(period?: string | null) {
+  if (!period || period.length !== 6) return period || "--";
+  const month = Number(period.slice(0, 2));
+  const year = period.slice(2);
+  const label = new Intl.DateTimeFormat("en-IN", { month: "short" }).format(new Date(2026, month - 1, 1));
+  return `${label} ${year}`;
+}
 
 export function ImportsPage() {
   const params = useSearchParams();
@@ -24,6 +32,7 @@ export function ImportsPage() {
   const [errors, setErrors] = useState<ImportErrors | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [reprocessingId, setReprocessingId] = useState<number | null>(null);
+  const [profileBatches, setProfileBatches] = useState<BatchStatus[]>([]);
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
   const marketplaces = workspace.marketplaces;
   useEffect(() => {
@@ -35,6 +44,23 @@ export function ImportsPage() {
     setReprocessingId(null);
   }, [activeProfileKey]);
   useEffect(() => {
+    let cancelled = false;
+    if (!workspace.token || !workspace.profile) {
+      setProfileBatches([]);
+      return;
+    }
+    listProfileImportBatches(workspace.token, workspace.profile.id)
+      .then((batches) => {
+        if (!cancelled) setProfileBatches(batches);
+      })
+      .catch(() => {
+        if (!cancelled) setProfileBatches([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace.token, workspace.profile]);
+  useEffect(() => {
     if (!marketplaces.length) return;
     if (!marketplaces.some((item) => item.key === platformKey)) {
       setPlatformKey(marketplaces[0].key);
@@ -44,6 +70,8 @@ export function ImportsPage() {
   const SelectedIcon = selected ? marketplaceIconFor(selected.key) : FileSpreadsheet;
   const canImport = Boolean(selected && selected.status !== "Coming Soon");
   const canStartImport = canImport && Boolean(workspace.profile) && files.length > 0;
+  const timelineBatches = workspace.batches.length ? workspace.batches : profileBatches;
+  const activePeriodHasBatches = timelineBatches.some((batch) => batch.period === workspace.profile?.return_period);
   const importSteps = [
     { label: workspace.profile ? `Profile ${workspace.profile.gstin}` : "GST profile missing", done: Boolean(workspace.profile) },
     { label: selected ? `${selected.name} parser ${selected.status}` : "Parser catalog loading", done: Boolean(selected) },
@@ -94,6 +122,7 @@ export function ImportsPage() {
         setErrors(await getImportErrors(workspace.token, batch.id));
       }
       await workspace.refresh();
+      if (workspace.profile) setProfileBatches(await listProfileImportBatches(workspace.token, workspace.profile.id));
     } catch (exc) {
       setProgress(exc instanceof Error ? exc.message : "Import failed.");
     }
@@ -121,6 +150,7 @@ export function ImportsPage() {
       if (activeBatch?.id === batch.id) setActiveBatch(null);
       setErrors(null);
       await workspace.refresh();
+      if (workspace.profile) setProfileBatches(await listProfileImportBatches(workspace.token, workspace.profile.id));
       setProgress(`Batch #${batch.id} deleted.`);
     } catch (exc) {
       setProgress(exc instanceof Error ? exc.message : "Could not delete import batch.");
@@ -140,6 +170,7 @@ export function ImportsPage() {
       if (status.error_rows) setErrors(await getImportErrors(workspace.token, batch.id));
       else setErrors(null);
       await workspace.refresh();
+      if (workspace.profile) setProfileBatches(await listProfileImportBatches(workspace.token, workspace.profile.id));
       setProgress(`Batch #${batch.id} reprocessed. Parsed ${status.parsed_rows}, errors ${status.error_rows}.`);
     } catch (exc) {
       setProgress(exc instanceof Error ? exc.message : "Could not reprocess import batch.");
@@ -182,12 +213,13 @@ export function ImportsPage() {
       </div>
       <div className="mt-6">
         <Panel title="Import status timeline" subtitle="Recent parser jobs and error counts.">
-          {workspace.batches.length ? <div className="space-y-3">{workspace.batches.map((batch) => {
+          {workspace.profile && !workspace.batches.length && !activePeriodHasBatches && timelineBatches.length ? <div className="mb-4 rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-800">No imports found for active return period {periodLabel(workspace.profile.return_period)}. Showing imports from other periods.</div> : null}
+          {timelineBatches.length ? <div className="space-y-3">{timelineBatches.map((batch) => {
             const busy = deletingId === batch.id;
             const locked = ["queued", "processing"].includes(batch.status);
             return <div key={batch.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]">
               <b className="capitalize">{batch.platform}</b>
-              <span>{batch.period || workspace.profile?.return_period || "--"}</span>
+              <span>{periodLabel(batch.period || workspace.profile?.return_period)}</span>
               <span>{batch.parsed_rows} parsed</span>
               <span>{batch.error_rows} errors</span>
               <StatusPill status={batch.status} />

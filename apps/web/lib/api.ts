@@ -404,6 +404,14 @@ export function getTransactions(token: string, profile: Profile) {
   );
 }
 
+export function getProfileTransactions(token: string, profileId: number) {
+  return request<Transaction[]>(
+    `/transactions${queryString({ profile_id: profileId })}`,
+    {},
+    token
+  );
+}
+
 export async function getGstrPreviewResponse(token: string, profile: Profile, exportMode: Gstr1ExportMode = "gsttool_compatible") {
   const result = await request<Gstr1Payload | Gstr1PreviewResponse>(
     `/gstr1/preview/${profile.return_period}${queryString({ profile_id: profile.id, export_mode: exportMode })}`,
@@ -439,6 +447,14 @@ export function uploadMarketplaceFiles(token: string, profile: Profile, platform
 export function listImportBatches(token: string, profile?: Profile) {
   return request<BatchStatus[]>(
     `/imports${profile ? queryString({ profile_id: profile.id, period: profile.return_period }) : ""}`,
+    {},
+    token
+  );
+}
+
+export function listProfileImportBatches(token: string, profileId: number) {
+  return request<BatchStatus[]>(
+    `/imports${queryString({ profile_id: profileId })}`,
     {},
     token
   );

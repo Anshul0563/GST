@@ -5,8 +5,16 @@ import { Download, FileJson, FileSpreadsheet } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard, StatusPill } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { Gstr1ExportItem, Gstr1ExportMode, Gstr1ParityReport, Gstr1Payload, downloadAuthenticatedFile, generateGstr1, getGstr1History, getGstrPreviewResponse } from "@/lib/api";
+import { Gstr1ExportItem, Gstr1ExportMode, Gstr1ParityReport, Gstr1Payload, Transaction, downloadAuthenticatedFile, generateGstr1, getGstr1History, getGstrPreviewResponse, getProfileTransactions } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
+
+function periodLabel(period: string) {
+  if (!period || period.length !== 6) return period || "--";
+  const month = Number(period.slice(0, 2));
+  const year = period.slice(2);
+  const label = new Intl.DateTimeFormat("en-IN", { month: "long" }).format(new Date(2026, month - 1, 1));
+  return `${label} ${year}`;
+}
 
 export function Gstr1Page() {
   const workspace = useWorkspace();
@@ -21,6 +29,7 @@ export function Gstr1Page() {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [profileRows, setProfileRows] = useState<Transaction[]>([]);
   const historyRequest = useRef(0);
   const loadHistory = useCallback(async () => {
     const requestId = ++historyRequest.current;
@@ -48,7 +57,25 @@ export function Gstr1Page() {
     setParityReport(null);
     setDownloads(null);
     setError("");
+    setProfileRows([]);
   }, [activeProfileKey]);
+  useEffect(() => {
+    let cancelled = false;
+    if (!workspace.token || !workspace.profile) {
+      setProfileRows([]);
+      return;
+    }
+    getProfileTransactions(workspace.token, workspace.profile.id)
+      .then((rows) => {
+        if (!cancelled) setProfileRows(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setProfileRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workspace.token, workspace.profile]);
   useEffect(() => {
     if (!workspace.token || !workspace.profile) {
       setModePreview(null);
@@ -140,11 +167,23 @@ export function Gstr1Page() {
   ];
   const compatible = exportMode === "gsttool_compatible";
   const matchScore = parityReport?.match_score;
+  const rowsByPeriod = profileRows.reduce<Record<string, number>>((acc, row) => {
+    const period = row.filing_period || "";
+    if (period) acc[period] = (acc[period] || 0) + 1;
+    return acc;
+  }, {});
+  const alternatePeriods = Object.entries(rowsByPeriod)
+    .filter(([period]) => period !== activeProfilePeriod)
+    .sort(([a], [b]) => b.localeCompare(a));
+  const activePeriodHasRows = Boolean(activeProfilePeriod && rowsByPeriod[activeProfilePeriod]);
 
   return (
     <AppShell requiresSubscription requiredPlan="online_seller" token={workspace.token} user={workspace.user} productName="GST Online Seller" title="GSTR-1 Preview" subtitle="Preview B2CS, SUPECO and document issue summaries, then export GSTTool-compatible JSON/Excel or clean portal-optimized files." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<div className="flex flex-wrap gap-3"><button onClick={() => exportFile("json")} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileJson className="size-4" /> {busy ? "Preparing..." : "JSON Export"}</button><button onClick={() => exportFile("excel")} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileSpreadsheet className="size-4" /> {busy ? "Preparing..." : "Excel Export"}</button></div>}>
       <div className="space-y-6">
         {!workspace.token ? <EmptyState title="Login required" body="GSTR-1 preview and generation use authenticated backend APIs." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="GSTR-1 generation needs GSTIN, filing frequency and return period." /> : null}
+        {workspace.profile && !activePeriodHasRows && alternatePeriods.length ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
+          Active return period {periodLabel(workspace.profile.return_period)} has no imported rows. Rows exist in {alternatePeriods.map(([period, count]) => `${periodLabel(period)} (${count})`).join(", ")}. Change the GST Profile return period to preview that GSTR-1.
+        </div> : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <StatCard label="Taxable value" value={formatCurrency(previewTotals.taxable)} tone="blue" />
           <StatCard label="IGST" value={formatCurrency(previewTotals.igst)} tone="green" />
