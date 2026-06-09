@@ -155,19 +155,22 @@ export function useWorkspace(): Workspace {
       setLoading(false);
       return;
     }
-    const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken), getMarketplaces()])
-      .then(([user, profiles, marketplaceResult]) => {
+    setToken(storedToken);
+    getMarketplaces()
+      .then((result) => setMarketplaces(result.marketplaces))
+      .catch(() => setMarketplaces([]));
+    const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken)])
+      .then(([user, profiles]) => {
         const storedProfileId = typeof window !== "undefined" ? Number(window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0) : 0;
         const profile = profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
-        return { token: storedToken, user, profiles, profile, marketplaces: marketplaceResult.marketplaces };
+        return { token: storedToken, user, profiles, profile };
       });
     initializer
-      .then(async ({ token, user, profiles, profile, marketplaces }) => {
+      .then(async ({ token, user, profiles, profile }) => {
         setToken(token);
         setUser(user);
         setProfiles(profiles);
         setActiveProfile(profile);
-        setMarketplaces(marketplaces);
         if (profile) {
           await refreshWorkspace(token, profile, { user, profiles });
         } else {
@@ -176,6 +179,7 @@ export function useWorkspace(): Workspace {
       })
       .catch((exc) => {
         clearAuthToken();
+        setToken("");
         setError(exc instanceof Error ? exc.message : "Could not initialize workspace");
         setLoading(false);
       });

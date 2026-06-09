@@ -9,6 +9,7 @@ import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
 import { BillingPlan, BillingStatus, createBillingOrder, createProfile, getBillingPlans, getBillingStatus, updateProfile, verifyBillingPayment } from "@/lib/api";
+import { getStoredAuthToken } from "@/lib/auth";
 import { formatCurrency } from "@/lib/utils";
 
 const GST_STATE_NAMES: Record<string, string> = {
@@ -141,11 +142,15 @@ export function ProfilePage() {
   const [form, setForm] = useState(currentProfileDefaults);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const dynamicDefaults = currentProfileDefaults();
   const nextRoute = (searchParams.get("next") || "/modules/online-seller/marketplaces") as Route;
+  const activeToken = workspace.token || getStoredAuthToken();
   const detectedState = gstinStateName(form.gstin);
   const returnPeriods = returnPeriodOptions(form.financial_year || dynamicDefaults.financial_year);
   const financialYears = financialYearOptions(form.return_period || dynamicDefaults.return_period);
+  const canCreateMultipleProfiles = workspace.user?.role === "super_admin";
+  const profileLimitLabel = canCreateMultipleProfiles ? "Unlimited" : "1";
   const moduleUsage = [
     { label: "GST Online Seller", value: `${workspace.transactions.length} rows` },
     { label: "2A/2B Reconcile", value: `${returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} period` },
@@ -165,20 +170,25 @@ export function ProfilePage() {
   }, [workspace.profile]);
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!workspace.token) return;
-    const savedProfile = editingId
-      ? await updateProfile(workspace.token, editingId, form)
-      : await createProfile(workspace.token, form);
-    workspace.setProfile(savedProfile);
-    await workspace.refresh(savedProfile);
-    if (editingId) {
-      setForm({ gstin: savedProfile.gstin, legal_name: savedProfile.legal_name, trade_name: savedProfile.trade_name || "", filing_frequency: savedProfile.filing_frequency, financial_year: savedProfile.financial_year, return_period: savedProfile.return_period });
-    } else {
-      setForm(currentProfileDefaults());
-      setEditingId(savedProfile.id);
+    if (!activeToken) return;
+    try {
+      setSubmitError("");
+      const savedProfile = editingId
+        ? await updateProfile(activeToken, editingId, form)
+        : await createProfile(activeToken, form);
+      workspace.setProfile(savedProfile);
+      await workspace.refresh(savedProfile);
+      if (editingId) {
+        setForm({ gstin: savedProfile.gstin, legal_name: savedProfile.legal_name, trade_name: savedProfile.trade_name || "", filing_frequency: savedProfile.filing_frequency, financial_year: savedProfile.financial_year, return_period: savedProfile.return_period });
+      } else {
+        setForm(currentProfileDefaults());
+        setEditingId(savedProfile.id);
+      }
+      setMessage(editingId ? "GST profile updated." : "GST profile added.");
+      router.push(nextRoute);
+    } catch (exc) {
+      setSubmitError(exc instanceof Error ? exc.message : "Could not save GST profile");
     }
-    setMessage(editingId ? "GST profile updated." : "GST profile added.");
-    router.push(nextRoute);
   }
   function applySmartSetup() {
     const returnPeriod = form.return_period || dynamicDefaults.return_period;
@@ -195,7 +205,7 @@ export function ProfilePage() {
   }
   return <AppShell title="GST Profile & Filing Period" subtitle="Select the GSTIN, return period and Monthly/Quarterly filing mode before using any GST Bharat tool." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }}>
     <div className="space-y-6">
-      {!workspace.token ? <EmptyState title="Login required" body="Login to create or update GST profile details." /> : null}
+      {!activeToken ? <EmptyState title="Login required" body="Login to create or update GST profile details." /> : null}
       <div className="grid gap-4 md:grid-cols-4">
         <StatCard label="Active GSTIN" value={workspace.profile?.gstin || "Not set"} />
         <StatCard label="Return period" value={returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} />
@@ -263,15 +273,16 @@ export function ProfilePage() {
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <button disabled={!workspace.token} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{editingId ? "Update & continue to upload" : "Create & continue to upload"}</button>
+              <button disabled={!activeToken} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{editingId ? "Update & continue to upload" : "Create & continue to upload"}</button>
               {workspace.profile ? <Link href={nextRoute} className="btn-secondary">Continue to marketplace upload</Link> : null}
-              <button type="button" onClick={() => { setEditingId(null); setForm(currentProfileDefaults()); }} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 dark:border-white/10 dark:text-slate-300">New GSTIN</button>
+              {canCreateMultipleProfiles ? <button type="button" onClick={() => { setEditingId(null); setForm(currentProfileDefaults()); }} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 dark:border-white/10 dark:text-slate-300">New GSTIN</button> : null}
             </div>
+            {submitError && <div className="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{submitError}</div>}
             {message && <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</div>}
           </form>
         </Panel>
 
-        <Panel title="Saved GSTINs" subtitle={`Added ${workspace.profiles.length} / Limit 20`}>
+        <Panel title="Saved GSTINs" subtitle={`Added ${workspace.profiles.length} / Limit ${profileLimitLabel}`}>
           <div className="space-y-3">
             {workspace.profiles.map((profile) => {
               const active = workspace.profile?.id === profile.id;
