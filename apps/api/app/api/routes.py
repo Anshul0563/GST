@@ -168,6 +168,24 @@ def require_valid_period(period: str | None) -> str:
     return normalized
 
 
+def dedupe_profiles_by_gstin(profiles: list[GSTProfile]) -> list[GSTProfile]:
+    unique: dict[str, GSTProfile] = {}
+    for profile in profiles:
+        key = str(profile.gstin or "").upper()
+        if key not in unique:
+            unique[key] = profile
+    return list(unique.values())
+
+
+def apply_profile_payload(profile: GSTProfile, payload: GSTProfileIn, gstin: str, return_period: str) -> GSTProfile:
+    for key, value in payload.model_dump().items():
+        setattr(profile, key, value)
+    profile.gstin = gstin
+    profile.state_code = gstin[:2]
+    profile.return_period = return_period
+    return profile
+
+
 def is_super_admin(user: User) -> bool:
     return str(getattr(user, "role", "") or "").lower() == "super_admin"
 
@@ -856,6 +874,48 @@ def create_profile(
     if not validate_gstin(gstin):
         raise HTTPException(422, "Invalid GSTIN")
     return_period = require_valid_period(payload.return_period)
+    existing_same_gstin_profile = db.scalar(
+        select(GSTProfile)
+        .where(GSTProfile.user_id == user.id, GSTProfile.gstin == gstin)
+        .order_by(GSTProfile.id.asc())
+    )
+    if existing_same_gstin_profile:
+        apply_profile_payload(existing_same_gstin_profile, payload, gstin, return_period)
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="gst_profile.update_same_gstin",
+                entity_type="gst_profile",
+                entity_id=str(existing_same_gstin_profile.id),
+            )
+        )
+        db.commit()
+        db.refresh(existing_same_gstin_profile)
+        return existing_same_gstin_profile
+    existing_user_profile = db.scalar(
+        select(GSTProfile)
+        .where(GSTProfile.user_id == user.id)
+        .order_by(GSTProfile.id.asc())
+    )
+    if existing_user_profile and not is_super_admin(user):
+        enforce_gst_profile_registration_limits(
+            user,
+            db,
+            gstin=gstin,
+            current_profile_id=existing_user_profile.id,
+        )
+        apply_profile_payload(existing_user_profile, payload, gstin, return_period)
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="gst_profile.update_via_create",
+                entity_type="gst_profile",
+                entity_id=str(existing_user_profile.id),
+            )
+        )
+        db.commit()
+        db.refresh(existing_user_profile)
+        return existing_user_profile
     enforce_gst_profile_registration_limits(user, db, gstin=gstin)
     profile = GSTProfile(
         user_id=user.id,
@@ -882,7 +942,10 @@ def create_profile(
 def list_profiles(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    return db.scalars(select(GSTProfile).where(GSTProfile.user_id == user.id)).all()
+    profiles = db.scalars(
+        select(GSTProfile).where(GSTProfile.user_id == user.id).order_by(GSTProfile.id.asc())
+    ).all()
+    return dedupe_profiles_by_gstin(profiles)
 
 
 @router.post("/demo/seed")
@@ -1100,11 +1163,7 @@ def update_profile(
         gstin=gstin,
         current_profile_id=profile.id,
     )
-    for key, value in payload.model_dump().items():
-        setattr(profile, key, value)
-    profile.gstin = gstin
-    profile.state_code = gstin[:2]
-    profile.return_period = return_period
+    apply_profile_payload(profile, payload, gstin, return_period)
     db.commit()
     db.refresh(profile)
     return profile

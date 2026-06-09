@@ -135,6 +135,14 @@ function currentProfileDefaults() {
   };
 }
 
+function profileSaveErrorMessage(exc: unknown) {
+  const message = exc instanceof Error ? exc.message : "Could not save GST profile";
+  if (message.includes("already registered with another account")) {
+    return `${message} Login with the account that owns this GSTIN, or use a different GSTIN.`;
+  }
+  return message;
+}
+
 export function ProfilePage() {
   const workspace = useWorkspace();
   const router = useRouter();
@@ -150,8 +158,7 @@ export function ProfilePage() {
   const returnPeriods = returnPeriodOptions();
   const financialYears = financialYearOptions(form.return_period || dynamicDefaults.return_period);
   const selectedReturnMonth = String(periodParts(form.return_period).month || periodParts(dynamicDefaults.return_period).month || 4);
-  const canCreateMultipleProfiles = workspace.user?.role === "super_admin";
-  const profileLimitLabel = canCreateMultipleProfiles ? "Unlimited" : "1";
+  const profileLimitLabel = "1 active profile per GSTIN";
   const moduleUsage = [
     { label: "GST Online Seller", value: `${workspace.transactions.length} rows` },
     { label: "2A/2B Reconcile", value: `${returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} period` },
@@ -194,7 +201,7 @@ export function ProfilePage() {
       setMessage(editingId ? "GST profile updated." : "GST profile added.");
       router.push(nextRoute);
     } catch (exc) {
-      setSubmitError(exc instanceof Error ? exc.message : "Could not save GST profile");
+      setSubmitError(profileSaveErrorMessage(exc));
     }
   }
   function applySmartSetup() {
@@ -283,7 +290,6 @@ export function ProfilePage() {
             <div className="flex flex-wrap items-center gap-3">
               <button disabled={!activeToken} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{editingId ? "Update & continue to upload" : "Create & continue to upload"}</button>
               {workspace.profile ? <Link href={nextRoute} className="btn-secondary">Continue to marketplace upload</Link> : null}
-              {canCreateMultipleProfiles ? <button type="button" onClick={() => { setEditingId(null); setForm(currentProfileDefaults()); }} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-600 dark:border-white/10 dark:text-slate-300">New GSTIN</button> : null}
             </div>
             {submitError && <div className="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{submitError}</div>}
             {message && <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</div>}
