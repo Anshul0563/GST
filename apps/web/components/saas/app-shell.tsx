@@ -143,7 +143,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
     window.localStorage.setItem("gst_bharat_theme", nextTheme);
   }
   return (
-    <div className="min-h-screen bg-[#f3f6fa] text-slate-950 dark:bg-[#07111f] dark:text-white">
+    <div className="min-h-screen overflow-x-hidden bg-[#f3f6fa] text-slate-950 dark:bg-[#07111f] dark:text-white">
       {mobileNavOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-950/45 backdrop-blur-sm lg:hidden"
@@ -239,10 +239,10 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
       </aside>
       <div className="lg:pl-72">
         <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/80 backdrop-blur-xl dark:border-white/10 dark:bg-slate-950/75">
-          <div className="flex h-16 items-center justify-between px-5 lg:px-8">
-            <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-5 lg:px-8">
+            <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
               <button onClick={() => setMobileNavOpen(true)} aria-label="Open navigation" className="grid size-10 place-items-center rounded-xl border border-slate-200 bg-white lg:hidden dark:border-white/10 dark:bg-slate-900"><Menu className="size-5" /></button>
-              <div className="hidden min-w-0 md:block">
+              <div className="min-w-0">
                 <p className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Current View</p>
                 <div className="mt-0.5 flex min-w-0 items-center gap-2 text-sm font-black text-slate-800 dark:text-white">
                   {ActiveModuleIcon && <ActiveModuleIcon className="size-4 shrink-0 text-[#1746A2]" />}
@@ -250,7 +250,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
                 </div>
               </div>
             </div>
-            <div className="flex min-w-0 items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <Link href="/modules/online-seller/profile" className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-[#1746A2]/40 hover:text-[#1746A2] dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 md:flex">
                 <CalendarMini />
                 <span>{profile?.return_period || "Set period"}</span>
@@ -274,19 +274,19 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
             </div>
           </div>
         </header>
-        <main className="px-5 py-6 lg:px-8">
+        <main className="px-4 py-5 sm:px-5 sm:py-6 lg:px-8">
           <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
             <Link href="/dashboard" className="text-[#1746A2]">Dashboard</Link>
             {activeModuleConfig && <><span>/</span><Link href={activeModuleConfig.items[0].href as Route} className="text-[#1746A2]">{activeModuleConfig.title}</Link></>}
             {activeModuleConfig && currentItem && currentItem.href !== activeModuleConfig.items[0].href && <><span>/</span><span>{currentItem.label}</span></>}
           </div>
-          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white/65 p-5 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.03] md:flex-row md:items-end md:justify-between">
-            <div>
+          <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white/65 p-4 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/[0.03] sm:p-5 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-[0.16em] text-[#1746A2] dark:text-sky-300">GST Bharat Workspace</p>
-              <h1 className="mt-2 text-2xl font-black tracking-tight md:text-3xl">{title}</h1>
+              <h1 className="mt-2 break-words text-2xl font-black tracking-tight md:text-3xl">{title}</h1>
               {subtitle && <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">{subtitle}</p>}
             </div>
-            {!locked && actions}
+            {!locked && actions ? <div className="w-full shrink-0 md:w-auto">{actions}</div> : null}
           </div>
           {locked ? (
             <SubscriptionGate token={token || ""} user={user ?? null} productName={productName || activeModuleConfig?.title || title} requiredPlan={requiredPlan} />

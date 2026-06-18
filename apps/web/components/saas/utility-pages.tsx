@@ -219,7 +219,7 @@ export function ProfilePage() {
   return <AppShell title="GST Profile & Filing Period" subtitle="Select the GSTIN, return period and Monthly/Quarterly filing mode before using any GST Bharat tool." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }}>
     <div className="space-y-6">
       {!activeToken ? <EmptyState title="Login required" body="Login to create or update GST profile details." /> : null}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Active GSTIN" value={workspace.profile?.gstin || "Not set"} />
         <StatCard label="Return period" value={returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} />
         <StatCard label="Filing mode" value={workspace.profile?.filing_frequency || dynamicDefaults.filing_frequency} />
@@ -237,7 +237,7 @@ export function ProfilePage() {
                     {detectedState ? `, GSTIN state ${detectedState}` : ""}.
                   </p>
                 </div>
-                <button type="button" onClick={applySmartSetup} className="btn-secondary bg-white dark:bg-slate-900">Apply AI setup</button>
+                <button type="button" onClick={applySmartSetup} className="btn-secondary w-full bg-white dark:bg-slate-900 md:w-auto">Apply AI setup</button>
               </div>
             </div>
             <label className="grid gap-2 text-sm font-bold">GST number
@@ -286,9 +286,9 @@ export function ProfilePage() {
                 <input value={form.trade_name} onChange={(event) => setForm({ ...form, trade_name: event.target.value })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" placeholder="Brand / trade name" />
               </label>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button disabled={!activeToken} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{editingId ? "Update & continue to upload" : "Create & continue to upload"}</button>
-              {workspace.profile ? <Link href={nextRoute} className="btn-secondary">Continue to marketplace upload</Link> : null}
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <button disabled={!activeToken} className="w-full rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{editingId ? "Update & continue to upload" : "Create & continue to upload"}</button>
+              {workspace.profile ? <Link href={nextRoute} className="btn-secondary w-full sm:w-auto">Continue to marketplace upload</Link> : null}
             </div>
             {submitError && <div className="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{submitError}</div>}
             {message && <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</div>}
@@ -307,7 +307,7 @@ export function ProfilePage() {
                   </div>
                   {active && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">Active</span>}
                 </div>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-xs font-bold text-slate-500">
+                <div className="mt-4 grid gap-2 text-xs font-bold text-slate-500 sm:grid-cols-3">
                   <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{returnPeriodMonthLabel(profile.return_period)}</span>
                   <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.filing_frequency}</span>
                   <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.financial_year}</span>

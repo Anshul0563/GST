@@ -10,12 +10,12 @@ export function StatCard({ label, value, detail, tone = "blue" }: { label: strin
     red: "bg-rose-600"
   };
   return (
-    <div className="surface rounded-2xl p-5 transition hover:-translate-y-0.5">
+    <div className="surface rounded-2xl p-4 transition hover:-translate-y-0.5 sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
         <span className={`h-2.5 w-2.5 rounded-full ${tones[tone]}`} />
       </div>
-      <p className="text-2xl font-black tracking-tight text-slate-950 dark:text-white">{value}</p>
+      <p className="break-words text-xl font-black tracking-tight text-slate-950 dark:text-white sm:text-2xl">{value}</p>
       {detail && <p className="mt-2 text-xs font-medium leading-5 text-slate-500 dark:text-slate-400">{detail}</p>}
     </div>
   );
@@ -23,13 +23,13 @@ export function StatCard({ label, value, detail, tone = "blue" }: { label: strin
 
 export function Panel({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="surface rounded-2xl p-5">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
+    <section className="surface rounded-2xl p-4 sm:p-5">
+      <div className="mb-5 flex flex-col items-stretch gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-base font-black tracking-tight text-slate-950 dark:text-white">{title}</h2>
           {subtitle && <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400">{subtitle}</p>}
         </div>
-        {action}
+        {action ? <div className="shrink-0">{action}</div> : null}
       </div>
       {children}
     </section>

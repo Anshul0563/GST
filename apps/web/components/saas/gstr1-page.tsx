@@ -178,7 +178,7 @@ export function Gstr1Page() {
   const activePeriodHasRows = Boolean(activeProfilePeriod && rowsByPeriod[activeProfilePeriod]);
 
   return (
-    <AppShell requiresSubscription requiredPlan="online_seller" token={workspace.token} user={workspace.user} productName="GST Online Seller" title="GSTR-1 Preview" subtitle="Preview B2CS, SUPECO and document issue summaries, then export GSTTool-compatible JSON/Excel or clean portal-optimized files." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<div className="flex flex-wrap gap-3"><button onClick={() => exportFile("json")} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileJson className="size-4" /> {busy ? "Preparing..." : "JSON Export"}</button><button onClick={() => exportFile("excel")} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileSpreadsheet className="size-4" /> {busy ? "Preparing..." : "Excel Export"}</button></div>}>
+    <AppShell requiresSubscription requiredPlan="online_seller" token={workspace.token} user={workspace.user} productName="GST Online Seller" title="GSTR-1 Preview" subtitle="Preview B2CS, SUPECO and document issue summaries, then export GSTTool-compatible JSON/Excel or clean portal-optimized files." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }} actions={<div className="grid w-full gap-3 sm:flex sm:w-auto sm:flex-wrap"><button onClick={() => exportFile("json")} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileJson className="size-4" /> {busy ? "Preparing..." : "JSON Export"}</button><button onClick={() => exportFile("excel")} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><FileSpreadsheet className="size-4" /> {busy ? "Preparing..." : "Excel Export"}</button></div>}>
       <div className="space-y-6">
         {!workspace.token ? <EmptyState title="Login required" body="GSTR-1 preview and generation use authenticated backend APIs." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="GSTR-1 generation needs GSTIN, filing frequency and return period." /> : null}
         {workspace.profile && !activePeriodHasRows && alternatePeriods.length ? <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
@@ -192,7 +192,7 @@ export function Gstr1Page() {
           <StatCard label="Total GST" value={formatCurrency(previewGst)} tone="green" />
         </div>
         <Panel title="Export Mode" subtitle="GSTTool Compatible is default and follows the offline-tool JSON structure. Clean Portal Optimized is available for stricter portal validation.">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             {([
               ["gsttool_compatible", "GSTTool Compatible"],
               ["clean_portal", "Clean Portal Optimized"],
@@ -201,7 +201,7 @@ export function Gstr1Page() {
                 {label}
               </button>
             ))}
-            <div className="ml-auto flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 sm:ml-auto">
               <StatusPill status={compatible ? "GSTTool Compatible" : "Clean Export"} />
               <StatusPill status={compatible ? "Original GSTTool parity" : "Portal Safe"} />
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
