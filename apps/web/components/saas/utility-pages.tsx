@@ -129,7 +129,7 @@ function currentProfileDefaults() {
     gstin: "",
     legal_name: "",
     trade_name: "",
-    filing_frequency: smartFilingFrequency(returnPeriod),
+    filing_frequency: "Monthly",
     financial_year: financialYearForPeriod(returnPeriod),
     return_period: returnPeriod
   };
@@ -183,7 +183,6 @@ export function ProfilePage() {
     const normalizedForm = {
       ...form,
       return_period: normalizedReturnPeriod,
-      filing_frequency: smartFilingFrequency(normalizedReturnPeriod),
     };
     try {
       setSubmitError("");
@@ -252,7 +251,7 @@ export function ProfilePage() {
                   <select value={selectedReturnMonth} onChange={(event) => {
                     const month = Number(event.target.value);
                     const returnPeriod = returnPeriodForMonth(month, form.financial_year);
-                    setForm({ ...form, return_period: returnPeriod, financial_year: financialYearForPeriod(returnPeriod), filing_frequency: smartFilingFrequency(returnPeriod) });
+                    setForm({ ...form, return_period: returnPeriod, financial_year: financialYearForPeriod(returnPeriod) });
                   }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" required>
                     {!returnPeriods.some((item) => item.value === selectedReturnMonth) ? <option value={selectedReturnMonth}>{monthLabel(Number(selectedReturnMonth))}</option> : null}
                     {returnPeriods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
@@ -264,7 +263,7 @@ export function ProfilePage() {
                   const financialYear = event.target.value;
                   const { month } = periodParts(form.return_period);
                   const returnPeriod = returnPeriodForMonth(month || 4, financialYear);
-                  setForm({ ...form, financial_year: financialYear, return_period: returnPeriod, filing_frequency: smartFilingFrequency(returnPeriod) });
+                  setForm({ ...form, financial_year: financialYear, return_period: returnPeriod });
                 }} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" required>
                   {!financialYears.includes(form.financial_year) ? <option value={form.financial_year}>{form.financial_year}</option> : null}
                   {financialYears.map((item) => <option key={item} value={item}>{item}</option>)}
