@@ -586,14 +586,23 @@ def clear_uploaded_files_for_profile_period(
         )
     ).all()
     removed = 0
+    cleaned_dirs: set[Path] = set()
     for uploaded in files:
         if uploaded.stored_path:
+            path = Path(uploaded.stored_path)
             try:
-                Path(uploaded.stored_path).unlink(missing_ok=True)
+                path.unlink(missing_ok=True)
+                cleaned_dirs.add(path.parent)
             except OSError:
                 pass
         db.delete(uploaded)
         removed += 1
+    for directory in cleaned_dirs:
+        try:
+            if directory.exists() and not any(directory.iterdir()):
+                shutil.rmtree(directory, ignore_errors=True)
+        except OSError:
+            pass
     db.flush()
     return removed
 
@@ -2087,12 +2096,44 @@ def gstr1_export_download(
     if format == "xlsx":
         if not export.excel_path:
             raise HTTPException(404, "GSTR-1 Excel not found")
+        uploaded_files_deleted = clear_uploaded_files_for_profile_period(
+            user.id,
+            export.profile_id,
+            export.period,
+            db,
+        )
         export.status = "downloaded"
+        if uploaded_files_deleted:
+            db.add(
+                AuditLog(
+                    user_id=user.id,
+                    action="gstr1.download.cleanup_uploads",
+                    entity_type="gstr1_json_exports",
+                    entity_id=str(export.id),
+                    metadata_json=json.dumps({"uploaded_files_deleted": uploaded_files_deleted}),
+                )
+            )
         db.commit()
         return FileResponse(export.excel_path, filename=Path(export.excel_path).name)
     if not export.json_path:
         raise HTTPException(404, "GSTR-1 JSON not found")
+    uploaded_files_deleted = clear_uploaded_files_for_profile_period(
+        user.id,
+        export.profile_id,
+        export.period,
+        db,
+    )
     export.status = "downloaded"
+    if uploaded_files_deleted:
+        db.add(
+            AuditLog(
+                user_id=user.id,
+                action="gstr1.download.cleanup_uploads",
+                entity_type="gstr1_json_exports",
+                entity_id=str(export.id),
+                metadata_json=json.dumps({"uploaded_files_deleted": uploaded_files_deleted}),
+            )
+        )
     db.commit()
     return FileResponse(export.json_path, filename=Path(export.json_path).name)
 
@@ -2168,6 +2209,12 @@ def download_json(
     )
     if not export or not export.json_path:
         raise HTTPException(404, "Export not found")
+    clear_uploaded_files_for_profile_period(
+        user.id,
+        profile_id,
+        period,
+        db,
+    )
     export.status = "downloaded"
     db.commit()
     return FileResponse(export.json_path, filename=f"gstr1-{period}.json")
@@ -2192,6 +2239,12 @@ def download_excel(
     )
     if not export or not export.excel_path:
         raise HTTPException(404, "Export not found")
+    clear_uploaded_files_for_profile_period(
+        user.id,
+        profile_id,
+        period,
+        db,
+    )
     export.status = "downloaded"
     db.commit()
     return FileResponse(export.excel_path, filename=f"gstr1-{period}.xlsx")

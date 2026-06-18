@@ -379,7 +379,9 @@ def test_gstr1_generation_cleanup_removes_uploaded_file_records_and_files(tmp_pa
         )
         db.add_all([batch, other_period_batch])
         db.flush()
-        stored = tmp_path / "stored.xlsx"
+        stored_dir = tmp_path / "uploads" / str(batch.id)
+        stored_dir.mkdir(parents=True)
+        stored = stored_dir / "stored.xlsx"
         stored.write_text("uploaded", encoding="utf-8")
         other_stored = tmp_path / "other.xlsx"
         other_stored.write_text("keep", encoding="utf-8")
@@ -410,6 +412,7 @@ def test_gstr1_generation_cleanup_removes_uploaded_file_records_and_files(tmp_pa
 
         assert removed == 1
         assert not stored.exists()
+        assert not stored_dir.exists()
         assert other_stored.exists()
         assert len(remaining) == 1
         assert remaining[0].batch_id == other_period_batch.id
