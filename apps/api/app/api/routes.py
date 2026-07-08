@@ -169,12 +169,21 @@ def require_valid_period(period: str | None) -> str:
 
 
 def dedupe_profiles_by_gstin(profiles: list[GSTProfile]) -> list[GSTProfile]:
-    unique: dict[str, GSTProfile] = {}
+    """Return one profile per GSTIN while keeping a deterministic order.
+
+    We preserve the first-seen profile (based on the incoming list order),
+    so UI selections using "first profile" stay stable across reloads.
+    """
+    seen: set[str] = set()
+    out: list[GSTProfile] = []
     for profile in profiles:
         key = str(profile.gstin or "").upper()
-        if key not in unique:
-            unique[key] = profile
-    return list(unique.values())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(profile)
+    return out
+
 
 
 def apply_profile_payload(profile: GSTProfile, payload: GSTProfileIn, gstin: str, return_period: str) -> GSTProfile:
