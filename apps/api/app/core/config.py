@@ -10,7 +10,11 @@ class Settings(BaseSettings):
     app_name: str = "GST Bharat API"
     secret_key: str = "dev-secret-change-in-production"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 60 * 24 * 7
+    # Access token expiry (in minutes).
+    # Frontend stores JWT in localStorage and clears it when exp passes.
+    # Keep this reasonably long to avoid "login expired" while user is active.
+    access_token_expire_minutes: int = 60 * 24 * 30
+
     database_url: str = "sqlite:///./gst_bharat.db"
     upload_dir: Path = Path("../../storage/uploads")
     export_dir: Path = Path("../../storage/exports")
