@@ -171,6 +171,65 @@ def test_create_profile_does_not_replace_existing_normal_user_gstin():
         db.close()
 
 
+def test_create_profile_is_visible_to_same_user_after_login_reload():
+    Session = session_factory()
+    db = Session()
+    try:
+        user = add_user(db, "seller@example.com")
+
+        saved = create_profile(
+            GSTProfileIn(
+                gstin="07ABCDE1234F1Z5",
+                legal_name="Demo Seller",
+                trade_name="Demo",
+                filing_frequency="Monthly",
+                financial_year="2026-27",
+                return_period="042026",
+            ),
+            user,
+            db,
+        )
+
+        profiles = list_profiles(user, db)
+
+        assert len(profiles) == 1
+        assert profiles[0].id == saved.id
+        assert profiles[0].gstin == "07ABCDE1234F1Z5"
+    finally:
+        db.close()
+
+
+def test_create_profile_with_same_gstin_updates_existing_user_profile():
+    Session = session_factory()
+    db = Session()
+    try:
+        user = add_user(db, "seller@example.com")
+        profile = add_profile(db, user, "07ABCDE1234F1Z5")
+
+        saved = create_profile(
+            GSTProfileIn(
+                gstin="07abcde1234f1z5",
+                legal_name="Updated Seller",
+                trade_name=" Updated Trade ",
+                filing_frequency="Quarterly",
+                financial_year="2026-27",
+                return_period="082026",
+            ),
+            user,
+            db,
+        )
+
+        assert saved.id == profile.id
+        assert saved.gstin == "07ABCDE1234F1Z5"
+        assert saved.legal_name == "Updated Seller"
+        assert saved.trade_name == "Updated Trade"
+        assert saved.filing_frequency == "Quarterly"
+        assert saved.return_period == "082026"
+        assert db.query(GSTProfile).filter(GSTProfile.user_id == user.id).count() == 1
+    finally:
+        db.close()
+
+
 def test_create_profile_updates_same_gstin_instead_of_adding_duplicate_for_admin():
     Session = session_factory()
     db = Session()

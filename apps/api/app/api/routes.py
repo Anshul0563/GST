@@ -168,6 +168,29 @@ def require_valid_period(period: str | None) -> str:
     return normalized
 
 
+def normalize_profile_payload(payload: GSTProfileIn) -> tuple[str, str]:
+    gstin = payload.gstin.strip().upper()
+    if not validate_gstin(gstin):
+        raise HTTPException(422, "Invalid GSTIN")
+    return_period = require_valid_period(payload.return_period)
+    return gstin, return_period
+
+
+def current_user_profile_query(user: User):
+    stmt = select(GSTProfile)
+    if not is_super_admin(user):
+        stmt = stmt.where(GSTProfile.user_id == user.id)
+    return stmt
+
+
+def get_editable_profile(profile_id: int, user: User, db: Session) -> GSTProfile:
+    stmt = current_user_profile_query(user).where(GSTProfile.id == profile_id)
+    profile = db.scalar(stmt)
+    if not profile:
+        raise HTTPException(404, "Profile not found")
+    return profile
+
+
 def dedupe_profiles_by_gstin(profiles: list[GSTProfile]) -> list[GSTProfile]:
     """Return one profile per GSTIN while keeping a deterministic order.
 
@@ -187,10 +210,12 @@ def dedupe_profiles_by_gstin(profiles: list[GSTProfile]) -> list[GSTProfile]:
 
 
 def apply_profile_payload(profile: GSTProfile, payload: GSTProfileIn, gstin: str, return_period: str) -> GSTProfile:
-    for key, value in payload.model_dump().items():
-        setattr(profile, key, value)
     profile.gstin = gstin
+    profile.legal_name = payload.legal_name.strip()
+    profile.trade_name = payload.trade_name.strip() if payload.trade_name else None
     profile.state_code = gstin[:2]
+    profile.filing_frequency = payload.filing_frequency
+    profile.financial_year = payload.financial_year.strip()
     profile.return_period = return_period
     return profile
 
@@ -888,10 +913,7 @@ def create_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    gstin = payload.gstin.upper()
-    if not validate_gstin(gstin):
-        raise HTTPException(422, "Invalid GSTIN")
-    return_period = require_valid_period(payload.return_period)
+    gstin, return_period = normalize_profile_payload(payload)
     existing_same_gstin_profile = db.scalar(
         select(GSTProfile)
         .where(GSTProfile.user_id == user.id, GSTProfile.gstin == gstin)
@@ -911,15 +933,11 @@ def create_profile(
         db.refresh(existing_same_gstin_profile)
         return existing_same_gstin_profile
     enforce_gst_profile_registration_limits(user, db, gstin=gstin)
-    profile = GSTProfile(
-        user_id=user.id,
-        gstin=gstin,
-        legal_name=payload.legal_name,
-        trade_name=payload.trade_name,
-        state_code=gstin[:2],
-        filing_frequency=payload.filing_frequency,
-        financial_year=payload.financial_year,
-        return_period=return_period,
+    profile = apply_profile_payload(
+        GSTProfile(user_id=user.id),
+        payload,
+        gstin,
+        return_period,
     )
     db.add(profile)
     db.add(
@@ -936,15 +954,38 @@ def create_profile(
 def list_profiles(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    if is_super_admin(user):
-        profiles = db.scalars(
-            select(GSTProfile).order_by(GSTProfile.user_id.asc(), GSTProfile.id.asc())
-        ).all()
-        return dedupe_profiles_by_gstin(profiles)
-    profiles = db.scalars(
-        select(GSTProfile).where(GSTProfile.user_id == user.id).order_by(GSTProfile.id.asc())
-    ).all()
+    stmt = current_user_profile_query(user).order_by(GSTProfile.user_id.asc(), GSTProfile.id.asc())
+    profiles = db.scalars(stmt).all()
     return dedupe_profiles_by_gstin(profiles)
+
+
+@router.put("/gst-profile/{profile_id}", response_model=GSTProfileOut)
+def update_profile(
+    profile_id: int,
+    payload: GSTProfileIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    profile = get_editable_profile(profile_id, user, db)
+    gstin, return_period = normalize_profile_payload(payload)
+    enforce_gst_profile_registration_limits(
+        user,
+        db,
+        gstin=gstin,
+        current_profile_id=profile.id,
+    )
+    apply_profile_payload(profile, payload, gstin, return_period)
+    db.add(
+        AuditLog(
+            user_id=user.id,
+            action="gst_profile.update",
+            entity_type="gst_profile",
+            entity_id=str(profile.id),
+        )
+    )
+    db.commit()
+    db.refresh(profile)
+    return profile
 
 
 @router.post("/demo/seed")
@@ -1140,32 +1181,6 @@ def seed_demo(user: User = Depends(get_current_user), db: Session = Depends(get_
     )
     db.commit()
     return {"profile_id": profile.id, "transactions": len(rows), "status": "seeded"}
-
-
-@router.put("/gst-profile/{profile_id}", response_model=GSTProfileOut)
-def update_profile(
-    profile_id: int,
-    payload: GSTProfileIn,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    profile = db.get(GSTProfile, profile_id)
-    if not profile or profile.user_id != user.id:
-        raise HTTPException(404, "Profile not found")
-    gstin = payload.gstin.upper()
-    if not validate_gstin(gstin):
-        raise HTTPException(422, "Invalid GSTIN")
-    return_period = require_valid_period(payload.return_period)
-    enforce_gst_profile_registration_limits(
-        user,
-        db,
-        gstin=gstin,
-        current_profile_id=profile.id,
-    )
-    apply_profile_payload(profile, payload, gstin, return_period)
-    db.commit()
-    db.refresh(profile)
-    return profile
 
 
 @router.post("/imports/{platform}/upload", response_model=BatchStatus)
