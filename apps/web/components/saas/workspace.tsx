@@ -24,22 +24,45 @@ import { clearAuthToken, getStoredAuthToken } from "@/lib/auth";
 
 const ACTIVE_PROFILE_KEY = "gst_bharat_active_profile_id";
 
-function selectStoredProfile(profiles: Profile[]) {
-  const storedProfileId = typeof window !== "undefined" ? Number(window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0) : 0;
-  const profile = profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
-  if (typeof window !== "undefined") {
-    if (profile) {
-      window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(profile.id));
-    } else {
-      window.localStorage.removeItem(ACTIVE_PROFILE_KEY);
-    }
+type WorkspaceUser = {
+  id: number;
+  email: string;
+  full_name?: string | null;
+  role?: string;
+  plan?: string;
+  subscription_status?: string;
+  subscription_expires_at?: string | null;
+  free_access_reason?: string | null;
+} | null;
+
+function activeProfileKey(user: WorkspaceUser) {
+  return user?.id ? `${ACTIVE_PROFILE_KEY}:${user.id}` : ACTIVE_PROFILE_KEY;
+}
+
+function rememberActiveProfile(user: WorkspaceUser, profile: Profile | null) {
+  if (typeof window === "undefined") return;
+  const key = activeProfileKey(user);
+  if (profile) {
+    window.localStorage.setItem(key, String(profile.id));
+    window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(profile.id));
+  } else {
+    window.localStorage.removeItem(key);
+    window.localStorage.removeItem(ACTIVE_PROFILE_KEY);
   }
+}
+
+function selectStoredProfile(user: WorkspaceUser, profiles: Profile[]) {
+  const storedProfileId = typeof window !== "undefined"
+    ? Number(window.localStorage.getItem(activeProfileKey(user)) || window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0)
+    : 0;
+  const profile = profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
+  rememberActiveProfile(user, profile);
   return profile;
 }
 
 export type Workspace = {
   token: string;
-  user: { id: number; email: string; full_name?: string | null; role?: string; plan?: string; subscription_status?: string; subscription_expires_at?: string | null; free_access_reason?: string | null } | null;
+  user: WorkspaceUser;
   profile: Profile | null;
   profiles: Profile[];
   summary: DashboardSummary | null;
@@ -81,13 +104,11 @@ export function useWorkspace(): Workspace {
 
   const selectProfile = useCallback((nextProfile: Profile) => {
     refreshSeq.current += 1;
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(nextProfile.id));
-    }
+    rememberActiveProfile(user, nextProfile);
     setActiveProfile(nextProfile);
     clearPeriodScopedState();
     setLoading(true);
-  }, [clearPeriodScopedState]);
+  }, [clearPeriodScopedState, user]);
 
   const needs = useMemo(() => {
     const path = pathname || "";
@@ -115,7 +136,7 @@ export function useWorkspace(): Workspace {
       if (!activeProfile) {
         const [nextUser, nextProfiles] = await Promise.all([getCurrentUser(activeToken), listProfiles(activeToken)]);
         if (!isCurrent()) return;
-        const nextProfile = selectStoredProfile(nextProfiles);
+        const nextProfile = selectStoredProfile(nextUser, nextProfiles);
         setUser(nextUser);
         setProfiles(nextProfiles);
         setActiveProfile(nextProfile);
@@ -133,9 +154,7 @@ export function useWorkspace(): Workspace {
         setUser(nextUser);
         setProfiles(nextProfiles);
         setActiveProfile(null);
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem(ACTIVE_PROFILE_KEY);
-        }
+        rememberActiveProfile(nextUser, null);
         clearPeriodScopedState();
         setError("");
         return;
@@ -151,9 +170,7 @@ export function useWorkspace(): Workspace {
       setUser(nextUser);
       setProfiles(nextProfiles);
       setActiveProfile(refreshedProfile);
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(refreshedProfile.id));
-      }
+      rememberActiveProfile(nextUser, refreshedProfile);
       setSummary(nextSummary);
       setTransactions(nextRows);
       setBatches(nextBatches);
@@ -195,7 +212,7 @@ export function useWorkspace(): Workspace {
       .catch(() => setMarketplaces([]));
     const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken)])
       .then(([user, profiles]) => {
-        const profile = selectStoredProfile(profiles);
+        const profile = selectStoredProfile(user, profiles);
         return { token: storedToken, user, profiles, profile };
       });
     initializer
