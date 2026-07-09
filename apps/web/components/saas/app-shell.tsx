@@ -195,15 +195,15 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
               const next = profiles.find((item) => item.id === Number(event.target.value));
               if (next) onProfileChange?.(next);
             }}
-            className="field mt-3 font-bold"
+            className="field mt-3 min-w-0 max-w-full truncate font-bold"
           >
             {profiles.map((item) => (
               <option key={item.id} value={String(item.id)}>{item.trade_name || item.legal_name}</option>
             ))}
           </select>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-500">
-            <span className="rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200/80 dark:bg-slate-900 dark:ring-white/10">{profile?.gstin || "No GSTIN"}</span>
-            <span className="rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200/80 dark:bg-slate-900 dark:ring-white/10">FP {profile?.return_period || "--"}</span>
+          <div className="mt-3 grid min-w-0 grid-cols-2 gap-2 text-xs text-slate-500">
+            <span className="min-w-0 overflow-hidden break-all rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200/80 dark:bg-slate-900 dark:ring-white/10">{profile?.gstin || "No GSTIN"}</span>
+            <span className="min-w-0 truncate rounded-lg bg-white px-3 py-2 ring-1 ring-slate-200/80 dark:bg-slate-900 dark:ring-white/10">FP {profile?.return_period || "--"}</span>
           </div>
           <p className="mt-3 text-[11px] font-semibold text-slate-500">Click to set GSTIN, filing period and Monthly/Quarterly.</p>
         </div>
