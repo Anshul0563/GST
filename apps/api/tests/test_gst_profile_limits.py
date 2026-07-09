@@ -138,31 +138,34 @@ def test_super_admin_bypasses_gstin_profile_limits():
         db.close()
 
 
-def test_create_profile_updates_existing_normal_user_profile_idempotently():
+def test_create_profile_does_not_replace_existing_normal_user_gstin():
     Session = session_factory()
     db = Session()
     try:
         user = add_user(db, "seller@example.com")
         profile = add_profile(db, user, "07ABCDE1234F1Z5")
 
-        saved = create_profile(
-            GSTProfileIn(
-                gstin="27ABCDE1234F1Z5",
-                legal_name="Updated Seller",
-                trade_name="Updated",
-                filing_frequency="Monthly",
-                financial_year="2026-27",
-                return_period="082026",
+        assert_limit_error(
+            lambda: create_profile(
+                GSTProfileIn(
+                    gstin="27ABCDE1234F1Z5",
+                    legal_name="Updated Seller",
+                    trade_name="Updated",
+                    filing_frequency="Monthly",
+                    financial_year="2026-27",
+                    return_period="082026",
+                ),
+                user,
+                db,
             ),
-            user,
-            db,
+            "Only one GSTIN can be registered per user account.",
         )
 
-        assert saved.id == profile.id
-        assert saved.gstin == "27ABCDE1234F1Z5"
-        assert saved.state_code == "27"
-        assert saved.legal_name == "Updated Seller"
-        assert saved.return_period == "082026"
+        db.refresh(profile)
+        assert profile.gstin == "07ABCDE1234F1Z5"
+        assert profile.state_code == "07"
+        assert profile.legal_name == "Demo Seller"
+        assert profile.return_period == "042026"
         assert db.query(GSTProfile).filter(GSTProfile.user_id == user.id).count() == 1
     finally:
         db.close()

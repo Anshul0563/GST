@@ -910,30 +910,6 @@ def create_profile(
         db.commit()
         db.refresh(existing_same_gstin_profile)
         return existing_same_gstin_profile
-    existing_user_profile = db.scalar(
-        select(GSTProfile)
-        .where(GSTProfile.user_id == user.id)
-        .order_by(GSTProfile.id.asc())
-    )
-    if existing_user_profile and not is_super_admin(user):
-        enforce_gst_profile_registration_limits(
-            user,
-            db,
-            gstin=gstin,
-            current_profile_id=existing_user_profile.id,
-        )
-        apply_profile_payload(existing_user_profile, payload, gstin, return_period)
-        db.add(
-            AuditLog(
-                user_id=user.id,
-                action="gst_profile.update_via_create",
-                entity_type="gst_profile",
-                entity_id=str(existing_user_profile.id),
-            )
-        )
-        db.commit()
-        db.refresh(existing_user_profile)
-        return existing_user_profile
     enforce_gst_profile_registration_limits(user, db, gstin=gstin)
     profile = GSTProfile(
         user_id=user.id,
