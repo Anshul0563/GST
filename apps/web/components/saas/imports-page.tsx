@@ -13,7 +13,24 @@ const ACCEPTED_IMPORT_FILES = ".csv,.xls,.xlsx,.xlsm";
 const ACCEPTED_EXCEL_FILES = ".xls,.xlsx,.xlsm";
 const TERMINAL_IMPORT_STATUSES = new Set(["completed", "completed_with_errors", "failed"]);
 const MAX_IMPORT_POLLS = 20;
-const PLATFORM_DISPLAY_ORDER = ["meesho", "amazon", "flipkart", "myntra", "snapdeal", "jiomart", "blinkit", "custom"];
+const PLATFORM_DISPLAY_ORDER = ["meesho", "amazon", "flipkart", "myntra", "ajio", "tatacliq", "nykaa", "snapdeal", "jiomart", "blinkit", "shopify", "zomato", "swiggy", "firstcry", "paytm", "custom"];
+const PLATFORM_LOGO_DOMAINS: Record<string, string> = {
+  amazon: "amazon.in",
+  flipkart: "flipkart.com",
+  meesho: "meesho.com",
+  myntra: "myntra.com",
+  snapdeal: "snapdeal.com",
+  jiomart: "jiomart.com",
+  blinkit: "blinkit.com",
+  ajio: "ajio.com",
+  tatacliq: "tatacliq.com",
+  nykaa: "nykaa.com",
+  shopify: "shopify.com",
+  zomato: "zomato.com",
+  swiggy: "swiggy.com",
+  firstcry: "firstcry.com",
+  paytm: "paytm.com",
+};
 
 function platformShortLabel(key: string) {
   const labels: Record<string, string> = {
@@ -24,6 +41,14 @@ function platformShortLabel(key: string) {
     snapdeal: "B2C",
     jiomart: "B2C",
     blinkit: "Quick Commerce",
+    ajio: "Fashion",
+    tatacliq: "B2C",
+    nykaa: "Beauty",
+    shopify: "D2C Orders",
+    zomato: "Food Delivery",
+    swiggy: "Food Delivery",
+    firstcry: "B2C",
+    paytm: "B2C",
     custom: "Mapped Excel/CSV",
   };
   return labels[key] || "B2C";
@@ -35,28 +60,16 @@ function requiredFilesForPlatform(platform?: string, requiredFiles: string[] = [
 }
 
 function PlatformLogo({ platform, name }: { platform: string; name: string }) {
-  if (platform === "meesho") {
-    return <div className="grid size-20 place-items-center rounded-xl bg-[#e83e7c] text-center font-black text-white shadow-sm"><div><div className="text-4xl leading-none">m</div><div className="mt-1 text-[10px] lowercase">meesho</div></div></div>;
+  const domain = PLATFORM_LOGO_DOMAINS[platform];
+  if (domain) {
+    return (
+      <div className="grid h-20 w-full place-items-center rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-100 dark:bg-white">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={`https://logo.clearbit.com/${domain}`} alt={`${name} logo`} className="max-h-14 max-w-[150px] object-contain" loading="lazy" />
+      </div>
+    );
   }
-  if (platform === "amazon") {
-    return <div className="grid h-20 place-items-center"><div className="relative px-4 pb-2 text-7xl font-black leading-none text-black"><span>a</span><span className="absolute bottom-0 left-5 h-3 w-12 rounded-b-full border-b-[5px] border-orange-400" /></div></div>;
-  }
-  if (platform === "flipkart") {
-    return <div className="relative grid size-20 place-items-center rounded-lg bg-[#ffdf2e] text-[#2874f0] shadow-sm"><div className="absolute top-2 h-3 w-10 rounded-t-full border-2 border-white border-b-0" /><span className="text-6xl font-black italic leading-none">f</span></div>;
-  }
-  if (platform === "myntra") {
-    return <div className="grid size-20 place-items-center"><span className="bg-gradient-to-r from-[#ff2d83] via-[#ff7a2f] to-[#8a35ff] bg-clip-text text-7xl font-black leading-none text-transparent">M</span></div>;
-  }
-  if (platform === "snapdeal") {
-    return <div className="grid size-20 place-items-center bg-[#f51f3f] text-white shadow-sm"><div className="grid size-11 rotate-45 place-items-center rounded-md border-[7px] border-white"><span className="-rotate-45 text-sm font-black">S</span></div></div>;
-  }
-  if (platform === "jiomart") {
-    return <div className="grid size-20 place-items-center rounded-xl bg-[#0b62d6] text-center font-black text-white shadow-sm"><div><div className="text-2xl leading-none">Jio</div><div className="text-sm text-emerald-200">Mart</div></div></div>;
-  }
-  if (platform === "blinkit") {
-    return <div className="grid size-20 place-items-center rounded-xl bg-[#f8d71c] text-center font-black text-slate-950 shadow-sm"><div><div className="text-xl leading-none">blink</div><div className="text-xl leading-none">it</div></div></div>;
-  }
-  return <div className="grid size-20 place-items-center rounded-xl bg-slate-100 text-[#1746A2] shadow-sm dark:bg-slate-900"><FileSpreadsheet className="size-10" /><span className="sr-only">{name}</span></div>;
+  return <div className="grid h-20 w-full place-items-center rounded-xl bg-slate-100 text-[#1746A2] shadow-sm dark:bg-slate-900"><FileSpreadsheet className="size-10" /><span className="sr-only">{name}</span></div>;
 }
 
 function periodLabel(period?: string | null) {
@@ -240,7 +253,7 @@ export function ImportsPage() {
                 <span>Famous Platforms</span>
                 <span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {platformCards.map((item) => {
                   const active = item.key === selected?.key;
                   return (
@@ -255,7 +268,7 @@ export function ImportsPage() {
                         setErrors(null);
                         setUploadDialogOpen(true);
                       }}
-                      className={`platform-card-shadow flex min-h-56 flex-col items-center justify-between rounded-lg border bg-white p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xl dark:bg-slate-950 ${active ? "border-[#1746A2] ring-2 ring-[#1746A2]/20" : "border-slate-200 dark:border-white/10"}`}
+                      className={`platform-card-shadow flex min-h-52 flex-col items-center justify-between rounded-lg border bg-white p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xl dark:bg-slate-950 ${active ? "border-[#1746A2] ring-2 ring-[#1746A2]/20" : "border-slate-200 dark:border-white/10"}`}
                     >
                       <div className="grid justify-items-center">
                         <PlatformLogo platform={item.key} name={item.name} />

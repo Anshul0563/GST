@@ -12,6 +12,14 @@ PARSERS = {
     "jiomart": CustomExcelParser,
     "snapdeal": CustomExcelParser,
     "blinkit": CustomExcelParser,
+    "ajio": CustomExcelParser,
+    "tatacliq": CustomExcelParser,
+    "nykaa": CustomExcelParser,
+    "shopify": CustomExcelParser,
+    "zomato": CustomExcelParser,
+    "swiggy": CustomExcelParser,
+    "firstcry": CustomExcelParser,
+    "paytm": CustomExcelParser,
     "custom": CustomExcelParser,
 }
 
