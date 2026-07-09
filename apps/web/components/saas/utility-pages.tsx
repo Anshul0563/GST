@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -151,6 +151,7 @@ export function ProfilePage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const profileFetchTokenRef = useRef("");
   const dynamicDefaults = currentProfileDefaults();
   const nextRoute = (searchParams.get("next") || "/modules/online-seller/marketplaces") as Route;
   const activeToken = workspace.token || getStoredAuthToken();
@@ -168,6 +169,8 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (!activeToken) return;
+    if (profileFetchTokenRef.current === activeToken) return;
+    profileFetchTokenRef.current = activeToken;
     refreshWorkspace();
   }, [activeToken, refreshWorkspace]);
 
