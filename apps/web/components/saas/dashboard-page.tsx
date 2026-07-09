@@ -74,6 +74,8 @@ export function DashboardSaasPage() {
       subtitle="A focused product-suite cockpit. Open one GST Bharat tool at a time and keep workflows separated."
       profile={workspace.profile}
       profiles={workspace.profiles}
+      token={workspace.token}
+      user={workspace.user}
       loading={workspace.loading}
       error={workspace.error}
       onRetry={() => workspace.refresh()}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import {
   BatchStatus,
+  ApiError,
   DashboardSummary,
   Gstr1Payload,
   MarketplaceCatalogItem,
@@ -134,7 +135,14 @@ export function useWorkspace(): Workspace {
       setCompanies(nextCompanies);
       setError("");
     } catch (exc) {
-      if (isCurrent()) setError(exc instanceof Error ? exc.message : "Could not refresh workspace");
+      if (!isCurrent()) return;
+      if (exc instanceof ApiError && exc.status === 401) {
+        clearAuthToken();
+        setToken("");
+        setUser(null);
+        clearPeriodScopedState();
+      }
+      setError(exc instanceof Error ? exc.message : "Could not refresh workspace");
     } finally {
       if (isCurrent()) setLoading(false);
     }
@@ -178,8 +186,13 @@ export function useWorkspace(): Workspace {
         }
       })
       .catch((exc) => {
-        clearAuthToken();
-        setToken("");
+        if (exc instanceof ApiError && exc.status === 401) {
+          clearAuthToken();
+          setToken("");
+          setUser(null);
+        } else {
+          setToken(storedToken);
+        }
         setError(exc instanceof Error ? exc.message : "Could not initialize workspace");
         setLoading(false);
       });

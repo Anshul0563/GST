@@ -4,6 +4,16 @@ export const API_BASE =
 const API_TIMEOUT_MS = 30000;
 const DOWNLOAD_TIMEOUT_MS = 120000;
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 function queryString(params: Record<string, string | number | boolean | undefined | null>) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -288,7 +298,7 @@ export async function request<T>(path: string, options: RequestInit = {}, token?
   );
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(readApiError(body));
+    throw new ApiError(readApiError(body), response.status);
   }
   if (response.status === 204) return undefined as T;
   const text = await response.text();

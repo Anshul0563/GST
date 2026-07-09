@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud, X } from "lucide-react";
+import { Building2, CreditCard, FileJson, FileSpreadsheet, Home, LockKeyhole, LogIn, LogOut, Menu, Moon, ReceiptText, Repeat2, Settings, ShieldCheck, Sun, UploadCloud, X } from "lucide-react";
 import { BillingPlan, Profile, getBillingPlans } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
 import { AppFooter } from "@/components/saas/footer";
@@ -121,6 +121,7 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
   const pageContext = currentItem?.label || activeModuleConfig?.title || "Product Suite";
   const workspaceName = profile?.trade_name || profile?.legal_name || "Workspace";
   const workspaceInitial = workspaceName.trim().charAt(0).toUpperCase() || "G";
+  const isAuthenticated = Boolean(token || user);
   const locked = Boolean(token && user && requiresSubscription && !hasPaidAccess(user, requiredPlan));
   function logout() {
     if (typeof window !== "undefined") {
@@ -261,14 +262,23 @@ export function AppShell({ title, subtitle, profile, profiles, onProfileChange, 
                 <button onClick={() => setProfileMenuOpen((open) => !open)} className="flex max-w-64 items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm transition hover:border-[#1746A2]/40 dark:border-white/10 dark:bg-slate-900">
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-orange-500 font-black text-white">{workspaceInitial}</span>
                   <span className="min-w-0 text-left">
-                    <span className="block truncate text-sm font-black">{workspaceName}</span>
-                    <span className="block truncate text-xs font-semibold text-slate-500">{profile?.gstin || user?.email || "GSTIN not set"}</span>
+                    <span className="block truncate text-sm font-black">{isAuthenticated ? workspaceName : "Login required"}</span>
+                    <span className="block truncate text-xs font-semibold text-slate-500">{isAuthenticated ? profile?.gstin || user?.email || "GSTIN not set" : "Open your workspace"}</span>
                   </span>
                 </button>
                 {profileMenuOpen && <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-200/70 dark:border-white/10 dark:bg-slate-950 dark:shadow-none">
-                  <Link onClick={() => setProfileMenuOpen(false)} href="/modules/online-seller/profile" className="block rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10">GST Profile</Link>
-                  <Link onClick={() => setProfileMenuOpen(false)} href="/billing" className="block rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10">Billing</Link>
-                  <button onClick={logout} className="block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10">Logout</button>
+                  {isAuthenticated ? (
+                    <>
+                      <Link onClick={() => setProfileMenuOpen(false)} href="/modules/online-seller/profile" className="block rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10">GST Profile</Link>
+                      <Link onClick={() => setProfileMenuOpen(false)} href="/billing" className="block rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10">Billing</Link>
+                      <button onClick={logout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10"><LogOut className="size-4" /> Logout</button>
+                    </>
+                  ) : (
+                    <>
+                      <Link onClick={() => setProfileMenuOpen(false)} href="/login" className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold text-[#1746A2] hover:bg-slate-50 dark:text-sky-300 dark:hover:bg-white/10"><LogIn className="size-4" /> Login</Link>
+                      <Link onClick={() => setProfileMenuOpen(false)} href="/register" className="block rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10">Create workspace</Link>
+                    </>
+                  )}
                 </div>}
               </div>
             </div>
