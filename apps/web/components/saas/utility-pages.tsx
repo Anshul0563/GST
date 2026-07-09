@@ -4,7 +4,7 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, CheckCircle2, CreditCard, Settings, ShieldCheck } from "lucide-react";
+import { CalendarDays, CheckCircle2, CreditCard, Database, RefreshCw, Settings, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
@@ -158,12 +158,19 @@ export function ProfilePage() {
   const returnPeriods = returnPeriodOptions();
   const financialYears = financialYearOptions(form.return_period || dynamicDefaults.return_period);
   const selectedReturnMonth = String(periodParts(form.return_period).month || periodParts(dynamicDefaults.return_period).month || 4);
+  const refreshWorkspace = workspace.refresh;
   const profileLimitLabel = "1 active profile per GSTIN";
   const moduleUsage = [
     { label: "GST Online Seller", value: `${workspace.transactions.length} rows` },
     { label: "2A/2B Reconcile", value: `${returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} period` },
     { label: "eCom to Tally", value: `${workspace.companies.length} companies` },
   ];
+
+  useEffect(() => {
+    if (!activeToken) return;
+    refreshWorkspace();
+  }, [activeToken, refreshWorkspace]);
+
   useEffect(() => {
     if (!workspace.profile) return;
     setEditingId(workspace.profile.id);
@@ -215,6 +222,19 @@ export function ProfilePage() {
       trade_name: form.trade_name.trim(),
     });
     setMessage(detectedState ? `AI setup applied. GSTIN state detected: ${detectedState}.` : "AI setup applied. Return period and financial year are synced.");
+  }
+  function editProfile(profile: typeof workspace.profiles[number]) {
+    workspace.setProfile(profile);
+    workspace.refresh(profile);
+    setEditingId(profile.id);
+    setForm({
+      gstin: profile.gstin,
+      legal_name: profile.legal_name,
+      trade_name: profile.trade_name || "",
+      filing_frequency: profile.filing_frequency,
+      financial_year: profile.financial_year,
+      return_period: profile.return_period,
+    });
   }
   return <AppShell title="GST Profile & Filing Period" subtitle="Select the GSTIN, return period and Monthly/Quarterly filing mode before using any GST Bharat tool." profile={workspace.profile} profiles={workspace.profiles} token={workspace.token} user={workspace.user} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }}>
     <div className="space-y-6">
@@ -295,26 +315,48 @@ export function ProfilePage() {
           </form>
         </Panel>
 
-        <Panel title="Saved GSTINs" subtitle={`Added ${workspace.profiles.length} / Limit ${profileLimitLabel}`}>
+        <Panel
+          title="Saved GSTINs"
+          subtitle={`Fetched from backend DB. Added ${workspace.profiles.length} / Limit ${profileLimitLabel}`}
+          action={
+            <button
+              type="button"
+              onClick={() => workspace.refresh()}
+              disabled={!activeToken || workspace.loading}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-[#1746A2]/40 hover:text-[#1746A2] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 sm:w-auto"
+            >
+              <RefreshCw className={`size-4 ${workspace.loading ? "animate-spin" : ""}`} />
+              Refresh DB
+            </button>
+          }
+        >
           <div className="space-y-3">
+            {activeToken ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                <Database className="size-4" />
+                {workspace.loading ? "Fetching GST profiles from DB..." : `${workspace.profiles.length} GST profile${workspace.profiles.length === 1 ? "" : "s"} loaded from DB`}
+              </div>
+            ) : null}
             {workspace.profiles.map((profile) => {
               const active = workspace.profile?.id === profile.id;
-              return <button key={profile.id} onClick={() => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }} className={`w-full rounded-3xl border p-4 text-left transition ${active ? "border-[#1746A2] bg-blue-50 dark:bg-blue-500/10" : "border-slate-200 bg-slate-50 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-slate-900"}`}>
+              return <button key={profile.id} onClick={() => editProfile(profile)} className={`w-full rounded-3xl border p-4 text-left transition ${active ? "border-[#1746A2] bg-blue-50 dark:bg-blue-500/10" : "border-slate-200 bg-slate-50 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-slate-900"}`}>
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <b>{profile.gstin}</b>
-                    <p className="mt-1 text-sm text-slate-500">{profile.trade_name || profile.legal_name}</p>
+                  <div className="min-w-0">
+                    <b className="break-all">{profile.gstin}</b>
+                    <p className="mt-1 break-words text-sm text-slate-500">{profile.trade_name || profile.legal_name}</p>
+                    <p className="mt-1 text-xs font-bold text-slate-400">Profile ID #{profile.id} / State {profile.state_code}</p>
                   </div>
                   {active && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">Active</span>}
                 </div>
-                <div className="mt-4 grid gap-2 text-xs font-bold text-slate-500 sm:grid-cols-3">
+                <div className="mt-4 grid gap-2 text-xs font-bold text-slate-500 sm:grid-cols-4">
                   <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{returnPeriodMonthLabel(profile.return_period)}</span>
                   <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.filing_frequency}</span>
                   <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.financial_year}</span>
+                  <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.return_period}</span>
                 </div>
               </button>;
             })}
-            {!workspace.profiles.length && <EmptyState title="No GSTIN added" body="Submit GST information to create first backend profile." />}
+            {!workspace.profiles.length && !workspace.loading && <EmptyState title="No GSTIN found in DB" body="No saved GST profile was returned by the backend for this login. Submit GST information to create the first backend profile." />}
           </div>
         </Panel>
       </div>
