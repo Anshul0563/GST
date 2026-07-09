@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowRight, FileSpreadsheet, RotateCw, Trash2, UploadCloud } from "lucide-react";
+import { AlertTriangle, ArrowRight, FileSpreadsheet, RotateCw, Trash2, UploadCloud, X } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatusPill } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
@@ -10,6 +10,7 @@ import { marketplaceIconFor } from "@/lib/marketplaces";
 import { BatchStatus, ImportErrors, deleteImportBatch, getImportErrors, getImportStatus, listProfileImportBatches, reprocessImportBatch, uploadMarketplaceFiles } from "@/lib/api";
 
 const ACCEPTED_IMPORT_FILES = ".csv,.xls,.xlsx,.xlsm";
+const ACCEPTED_EXCEL_FILES = ".xls,.xlsx,.xlsm";
 const TERMINAL_IMPORT_STATUSES = new Set(["completed", "completed_with_errors", "failed"]);
 const MAX_IMPORT_POLLS = 20;
 const PLATFORM_DISPLAY_ORDER = ["meesho", "amazon", "flipkart", "myntra", "snapdeal", "jiomart", "blinkit", "custom"];
@@ -26,6 +27,11 @@ function platformShortLabel(key: string) {
     custom: "Mapped Excel/CSV",
   };
   return labels[key] || "B2C";
+}
+
+function requiredFilesForPlatform(platform?: string, requiredFiles: string[] = []) {
+  if (platform === "flipkart") return ["Sales report Excel"];
+  return requiredFiles.length ? requiredFiles : ["Excel/CSV report"];
 }
 
 function PlatformLogo({ platform, name }: { platform: string; name: string }) {
@@ -73,6 +79,7 @@ export function ImportsPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [reprocessingId, setReprocessingId] = useState<number | null>(null);
   const [profileBatches, setProfileBatches] = useState<BatchStatus[]>([]);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
   const marketplaces = workspace.marketplaces;
   useEffect(() => {
@@ -117,14 +124,8 @@ export function ImportsPage() {
   const canStartImport = canImport && Boolean(workspace.profile) && files.length > 0;
   const timelineBatches = workspace.batches.length ? workspace.batches : profileBatches;
   const activePeriodHasBatches = timelineBatches.some((batch) => batch.period === workspace.profile?.return_period);
-  const importSteps = [
-    { label: workspace.profile ? `Profile ${workspace.profile.gstin}` : "GST profile missing", done: Boolean(workspace.profile) },
-    { label: selected ? `${selected.name} parser ${selected.status}` : "Parser catalog loading", done: Boolean(selected) },
-    { label: `${files.length} files selected`, done: files.length > 0 },
-    { label: activeBatch ? `Batch #${activeBatch.id} ${activeBatch.status}` : "No active batch", done: Boolean(activeBatch) },
-    { label: activeBatch ? `${activeBatch.parsed_rows} parsed rows` : "Parser not started", done: Boolean(activeBatch?.parsed_rows) },
-    { label: activeBatch ? `${activeBatch.error_rows} parser errors` : "Error report pending", done: Boolean(activeBatch && activeBatch.status !== "queued" && activeBatch.status !== "processing") },
-  ];
+  const uploadFields = requiredFilesForPlatform(selected?.key, selected?.required_files || []);
+  const fileAccept = selected?.key === "flipkart" ? ACCEPTED_EXCEL_FILES : ACCEPTED_IMPORT_FILES;
 
   function addFiles(index: number, selectedFiles: File[]) {
     if (!selectedFiles.length) return;
@@ -168,6 +169,7 @@ export function ImportsPage() {
       }
       await workspace.refresh();
       if (workspace.profile) setProfileBatches(await listProfileImportBatches(workspace.token, workspace.profile.id));
+      setUploadDialogOpen(false);
     } catch (exc) {
       setProgress(exc instanceof Error ? exc.message : "Import failed.");
     }
@@ -227,12 +229,7 @@ export function ImportsPage() {
   return (
     <AppShell requiresSubscription requiredPlan="online_seller" token={workspace.token} user={workspace.user} productName="GST Online Seller" title="Marketplace Upload" subtitle="Select profile, platform, required files and track parser progress from upload to normalized transactions." profile={workspace.profile} profiles={workspace.profiles} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
       {!workspace.token ? <EmptyState title="Login required" body="Imports are connected to secure backend APIs. Login before uploading marketplace files." /> : !workspace.profile ? <EmptyState title="Create GST profile first" body="Uploads require a GST profile and return period so normalized rows are stored against the correct GSTIN." /> : null}
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-        <Panel title="Import steps" subtitle="A production upload flow with profile, period and parser feedback.">
-          <div className="space-y-3">
-            {importSteps.map((step, index) => <div key={step.label} className={`flex items-center gap-3 rounded-2xl p-3 text-sm font-semibold ${step.done ? "bg-blue-50 text-blue-700" : "bg-slate-50 text-slate-600 dark:bg-white/5"}`}><span className="grid size-7 place-items-center rounded-full bg-white text-xs shadow-sm">{index + 1}</span>{step.label}</div>)}
-          </div>
-        </Panel>
+      <div className="grid gap-6">
         <Panel title="Upload workspace" subtitle="Parser catalog, required files and platform status are loaded from the backend.">
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-bold">GST profile<select className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option>{workspace.profile?.gstin || "No GSTIN"}</option></select></label>
@@ -254,6 +251,9 @@ export function ImportsPage() {
                         setPlatformKey(item.key);
                         setFiles([]);
                         setProgress("");
+                        setActiveBatch(null);
+                        setErrors(null);
+                        setUploadDialogOpen(true);
                       }}
                       className={`platform-card-shadow flex min-h-56 flex-col items-center justify-between rounded-lg border bg-white p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xl dark:bg-slate-950 ${active ? "border-[#1746A2] ring-2 ring-[#1746A2]/20" : "border-slate-200 dark:border-white/10"}`}
                     >
@@ -269,23 +269,36 @@ export function ImportsPage() {
               </div>
             </div>
           </div>
-          <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/5">
+        </Panel>
+      </div>
+      {uploadDialogOpen && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4" onClick={() => setUploadDialogOpen(false)}>
+        <div onClick={(event) => event.stopPropagation()} className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-950 sm:p-6">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-400">Upload marketplace data</p>
+              <h2 className="mt-1 text-xl font-black text-slate-950 dark:text-white">{selected?.name || "Marketplace"} import</h2>
+            </div>
+            <button type="button" onClick={() => setUploadDialogOpen(false)} className="grid size-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-white/10 dark:text-white">
+              <X className="size-5" />
+            </button>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/5">
             {selected ? <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><div className="grid size-11 shrink-0 place-items-center rounded-xl bg-white text-[#1746A2] shadow-sm dark:bg-slate-900"><SelectedIcon className="size-5" /></div><div className="min-w-0"><h3 className="font-black">{selected.name}</h3><p className="text-sm text-slate-500">{selected.guide}</p><p className="mt-1 break-words text-xs font-bold text-slate-400">Parser: {selected.parser}</p></div></div><StatusPill status={selected.status} /></div> : <EmptyState title="Marketplace catalog not loaded" body="Backend marketplace endpoint did not return parser data yet." />}
             {selected && !canImport && <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-800">{selected.name} parser is not enabled by the backend yet.</div>}
             <div className="mt-4 grid gap-3">
-              {(selected?.required_files || []).map((file, index) => <label key={file} className={`flex min-h-16 flex-col gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm dark:border-white/10 dark:bg-slate-900 sm:flex-row sm:items-center ${canImport ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}><FileSpreadsheet className="size-5 shrink-0 text-emerald-600" /><span className="font-bold sm:w-44">{file}</span><input type="file" multiple disabled={!canImport} className="w-full min-w-0 text-xs sm:flex-1" onChange={(event) => {
+              {uploadFields.map((file, index) => <label key={file} className={`flex min-h-16 flex-col gap-3 rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm dark:border-white/10 dark:bg-slate-900 sm:flex-row sm:items-center ${canImport ? "cursor-pointer" : "cursor-not-allowed opacity-60"}`}><FileSpreadsheet className="size-5 shrink-0 text-emerald-600" /><span className="font-bold sm:w-44">{file}</span><input type="file" multiple={selected?.key !== "flipkart"} disabled={!canImport} className="w-full min-w-0 text-xs sm:flex-1" onChange={(event) => {
                 const selectedFiles = Array.from(event.target.files || []);
                 addFiles(index, selectedFiles);
                 event.currentTarget.value = "";
-              }} accept={ACCEPTED_IMPORT_FILES} /></label>)}
+              }} accept={fileAccept} /></label>)}
             </div>
             {files.length ? <div className="mt-4 space-y-2 rounded-2xl bg-white p-4 text-xs font-semibold text-slate-600 dark:bg-slate-900 dark:text-slate-300">{files.map((file, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2 dark:bg-white/5"><span className="min-w-0 truncate">{file.name}</span><button type="button" onClick={() => removeFile(index)} className="rounded-lg px-2 py-1 text-rose-700 hover:bg-rose-50">Remove</button></div>)}</div> : null}
             <button onClick={startImport} disabled={!canStartImport} className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"><UploadCloud className="size-4" /> {canImport ? "Start import" : "Coming soon"} <ArrowRight className="size-4" /></button>
             {progress && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{progress}</div>}
             {activeBatch && <div className="mt-4 grid gap-3 rounded-2xl bg-white p-4 text-sm dark:bg-slate-900 md:grid-cols-3"><b>Batch #{activeBatch.id}</b><span>{activeBatch.parsed_rows} parsed</span><span>{activeBatch.error_rows} errors</span></div>}
           </div>
-        </Panel>
-      </div>
+        </div>
+      </div>}
       <div className="mt-6">
         <Panel title="Import status timeline" subtitle="Recent parser jobs and error counts.">
           {workspace.profile && !workspace.batches.length && !activePeriodHasBatches && timelineBatches.length ? <div className="mb-4 rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-800">No imports found for active return period {periodLabel(workspace.profile.return_period)}. Showing imports from other periods.</div> : null}
