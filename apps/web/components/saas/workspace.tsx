@@ -24,6 +24,19 @@ import { clearAuthToken, getStoredAuthToken } from "@/lib/auth";
 
 const ACTIVE_PROFILE_KEY = "gst_bharat_active_profile_id";
 
+function selectStoredProfile(profiles: Profile[]) {
+  const storedProfileId = typeof window !== "undefined" ? Number(window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0) : 0;
+  const profile = profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
+  if (typeof window !== "undefined") {
+    if (profile) {
+      window.localStorage.setItem(ACTIVE_PROFILE_KEY, String(profile.id));
+    } else {
+      window.localStorage.removeItem(ACTIVE_PROFILE_KEY);
+    }
+  }
+  return profile;
+}
+
 export type Workspace = {
   token: string;
   user: { id: number; email: string; full_name?: string | null; role?: string; plan?: string; subscription_status?: string; subscription_expires_at?: string | null; free_access_reason?: string | null } | null;
@@ -102,8 +115,7 @@ export function useWorkspace(): Workspace {
       if (!activeProfile) {
         const [nextUser, nextProfiles] = await Promise.all([getCurrentUser(activeToken), listProfiles(activeToken)]);
         if (!isCurrent()) return;
-        const storedProfileId = typeof window !== "undefined" ? Number(window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0) : 0;
-        const nextProfile = nextProfiles.find((item) => item.id === storedProfileId) ?? nextProfiles[0] ?? null;
+        const nextProfile = selectStoredProfile(nextProfiles);
         setUser(nextUser);
         setProfiles(nextProfiles);
         setActiveProfile(nextProfile);
@@ -111,17 +123,31 @@ export function useWorkspace(): Workspace {
         setError("");
         return;
       }
-      const [nextUser, nextProfiles, nextSummary, nextRows, nextBatches, nextPreview, nextCompanies] = await Promise.all([
+      const [nextUser, nextProfiles] = await Promise.all([
         base ? Promise.resolve(base.user) : getCurrentUser(activeToken),
         base ? Promise.resolve(base.profiles) : listProfiles(activeToken),
-        needs.summary ? getSummary(activeToken, activeProfile) : Promise.resolve(null),
-        needs.transactions ? getTransactions(activeToken, activeProfile) : Promise.resolve([]),
-        needs.batches ? listImportBatches(activeToken, activeProfile) : Promise.resolve([]),
-        needs.preview ? getGstrPreview(activeToken, activeProfile) : Promise.resolve(null),
-        needs.companies ? listTallyCompanies(activeToken, activeProfile.id) : Promise.resolve([])
       ]);
       if (!isCurrent()) return;
-      const refreshedProfile = nextProfiles.find((item) => item.id === activeProfile.id) ?? activeProfile;
+      const refreshedProfile = nextProfiles.find((item) => item.id === activeProfile.id) ?? nextProfiles[0] ?? null;
+      if (!refreshedProfile) {
+        setUser(nextUser);
+        setProfiles(nextProfiles);
+        setActiveProfile(null);
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(ACTIVE_PROFILE_KEY);
+        }
+        clearPeriodScopedState();
+        setError("");
+        return;
+      }
+      const [nextSummary, nextRows, nextBatches, nextPreview, nextCompanies] = await Promise.all([
+        needs.summary ? getSummary(activeToken, refreshedProfile) : Promise.resolve(null),
+        needs.transactions ? getTransactions(activeToken, refreshedProfile) : Promise.resolve([]),
+        needs.batches ? listImportBatches(activeToken, refreshedProfile) : Promise.resolve([]),
+        needs.preview ? getGstrPreview(activeToken, refreshedProfile) : Promise.resolve(null),
+        needs.companies ? listTallyCompanies(activeToken, refreshedProfile.id) : Promise.resolve([])
+      ]);
+      if (!isCurrent()) return;
       setUser(nextUser);
       setProfiles(nextProfiles);
       setActiveProfile(refreshedProfile);
@@ -169,8 +195,7 @@ export function useWorkspace(): Workspace {
       .catch(() => setMarketplaces([]));
     const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken)])
       .then(([user, profiles]) => {
-        const storedProfileId = typeof window !== "undefined" ? Number(window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0) : 0;
-        const profile = profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
+        const profile = selectStoredProfile(profiles);
         return { token: storedToken, user, profiles, profile };
       });
     initializer

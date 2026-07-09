@@ -213,3 +213,36 @@ def test_list_profiles_hides_same_user_duplicate_gstin_profiles():
         assert profiles[0].gstin == "07ABCDE1234F1Z5"
     finally:
         db.close()
+
+
+def test_list_profiles_only_returns_current_normal_user_profiles():
+    Session = session_factory()
+    db = Session()
+    try:
+        owner = add_user(db, "owner@example.com")
+        other = add_user(db, "other@example.com")
+        add_profile(db, owner, "07ABCDE1234F1Z5")
+        other_profile = add_profile(db, other, "27ABCDE1234F1Z5")
+
+        profiles = list_profiles(other, db)
+
+        assert len(profiles) == 1
+        assert profiles[0].id == other_profile.id
+    finally:
+        db.close()
+
+
+def test_list_profiles_returns_all_profiles_for_super_admin():
+    Session = session_factory()
+    db = Session()
+    try:
+        owner = add_user(db, "owner@example.com")
+        admin = add_user(db, "admin@example.com", role="super_admin")
+        owner_profile = add_profile(db, owner, "07ABCDE1234F1Z5")
+        admin_profile = add_profile(db, admin, "27ABCDE1234F1Z5")
+
+        profiles = list_profiles(admin, db)
+
+        assert [profile.id for profile in profiles] == [owner_profile.id, admin_profile.id]
+    finally:
+        db.close()

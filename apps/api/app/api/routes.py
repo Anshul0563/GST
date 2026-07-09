@@ -936,6 +936,11 @@ def create_profile(
 def list_profiles(
     user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
+    if is_super_admin(user):
+        profiles = db.scalars(
+            select(GSTProfile).order_by(GSTProfile.user_id.asc(), GSTProfile.id.asc())
+        ).all()
+        return dedupe_profiles_by_gstin(profiles)
     profiles = db.scalars(
         select(GSTProfile).where(GSTProfile.user_id == user.id).order_by(GSTProfile.id.asc())
     ).all()
