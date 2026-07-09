@@ -12,6 +12,46 @@ import { BatchStatus, ImportErrors, deleteImportBatch, getImportErrors, getImpor
 const ACCEPTED_IMPORT_FILES = ".csv,.xls,.xlsx,.xlsm";
 const TERMINAL_IMPORT_STATUSES = new Set(["completed", "completed_with_errors", "failed"]);
 const MAX_IMPORT_POLLS = 20;
+const PLATFORM_DISPLAY_ORDER = ["meesho", "amazon", "flipkart", "myntra", "snapdeal", "jiomart", "blinkit", "custom"];
+
+function platformShortLabel(key: string) {
+  const labels: Record<string, string> = {
+    amazon: "B2C",
+    flipkart: "B2C Sales Report",
+    meesho: "B2C",
+    myntra: "B2C",
+    snapdeal: "B2C",
+    jiomart: "B2C",
+    blinkit: "Quick Commerce",
+    custom: "Mapped Excel/CSV",
+  };
+  return labels[key] || "B2C";
+}
+
+function PlatformLogo({ platform, name }: { platform: string; name: string }) {
+  if (platform === "meesho") {
+    return <div className="grid size-20 place-items-center rounded-xl bg-[#e83e7c] text-center font-black text-white shadow-sm"><div><div className="text-4xl leading-none">m</div><div className="mt-1 text-[10px] lowercase">meesho</div></div></div>;
+  }
+  if (platform === "amazon") {
+    return <div className="grid h-20 place-items-center"><div className="relative px-4 pb-2 text-7xl font-black leading-none text-black"><span>a</span><span className="absolute bottom-0 left-5 h-3 w-12 rounded-b-full border-b-[5px] border-orange-400" /></div></div>;
+  }
+  if (platform === "flipkart") {
+    return <div className="relative grid size-20 place-items-center rounded-lg bg-[#ffdf2e] text-[#2874f0] shadow-sm"><div className="absolute top-2 h-3 w-10 rounded-t-full border-2 border-white border-b-0" /><span className="text-6xl font-black italic leading-none">f</span></div>;
+  }
+  if (platform === "myntra") {
+    return <div className="grid size-20 place-items-center"><span className="bg-gradient-to-r from-[#ff2d83] via-[#ff7a2f] to-[#8a35ff] bg-clip-text text-7xl font-black leading-none text-transparent">M</span></div>;
+  }
+  if (platform === "snapdeal") {
+    return <div className="grid size-20 place-items-center bg-[#f51f3f] text-white shadow-sm"><div className="grid size-11 rotate-45 place-items-center rounded-md border-[7px] border-white"><span className="-rotate-45 text-sm font-black">S</span></div></div>;
+  }
+  if (platform === "jiomart") {
+    return <div className="grid size-20 place-items-center rounded-xl bg-[#0b62d6] text-center font-black text-white shadow-sm"><div><div className="text-2xl leading-none">Jio</div><div className="text-sm text-emerald-200">Mart</div></div></div>;
+  }
+  if (platform === "blinkit") {
+    return <div className="grid size-20 place-items-center rounded-xl bg-[#f8d71c] text-center font-black text-slate-950 shadow-sm"><div><div className="text-xl leading-none">blink</div><div className="text-xl leading-none">it</div></div></div>;
+  }
+  return <div className="grid size-20 place-items-center rounded-xl bg-slate-100 text-[#1746A2] shadow-sm dark:bg-slate-900"><FileSpreadsheet className="size-10" /><span className="sr-only">{name}</span></div>;
+}
 
 function periodLabel(period?: string | null) {
   if (!period || period.length !== 6) return period || "--";
@@ -67,6 +107,11 @@ export function ImportsPage() {
     }
   }, [marketplaces, platformKey]);
   const selected = useMemo(() => marketplaces.find((item) => item.key === platformKey) || marketplaces[0] || null, [marketplaces, platformKey]);
+  const platformCards = useMemo(() => [...marketplaces].sort((left, right) => {
+    const leftIndex = PLATFORM_DISPLAY_ORDER.indexOf(left.key);
+    const rightIndex = PLATFORM_DISPLAY_ORDER.indexOf(right.key);
+    return (leftIndex === -1 ? 99 : leftIndex) - (rightIndex === -1 ? 99 : rightIndex) || left.name.localeCompare(right.name);
+  }), [marketplaces]);
   const SelectedIcon = selected ? marketplaceIconFor(selected.key) : FileSpreadsheet;
   const canImport = Boolean(selected && selected.status !== "Coming Soon");
   const canStartImport = canImport && Boolean(workspace.profile) && files.length > 0;
@@ -192,7 +237,37 @@ export function ImportsPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-sm font-bold">GST profile<select className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900"><option>{workspace.profile?.gstin || "No GSTIN"}</option></select></label>
             <label className="text-sm font-bold">Filing period<input value={workspace.profile?.return_period || ""} readOnly className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900" /></label>
-            <label className="text-sm font-bold md:col-span-2">Platform<select value={selected?.key || ""} disabled={!marketplaces.length} onChange={(event) => { setPlatformKey(event.target.value); setFiles([]); setProgress(""); }} className="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">{marketplaces.map((item) => <option key={item.key} value={item.key}>{item.name} - {item.status}</option>)}</select></label>
+            <div className="md:col-span-2">
+              <div className="mb-4 flex items-center gap-3 text-sm font-bold text-slate-500">
+                <span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+                <span>Famous Platforms</span>
+                <span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {platformCards.map((item) => {
+                  const active = item.key === selected?.key;
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        setPlatformKey(item.key);
+                        setFiles([]);
+                        setProgress("");
+                      }}
+                      className={`platform-card-shadow flex min-h-56 flex-col items-center justify-between rounded-lg border bg-white p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xl dark:bg-slate-950 ${active ? "border-[#1746A2] ring-2 ring-[#1746A2]/20" : "border-slate-200 dark:border-white/10"}`}
+                    >
+                      <div className="grid justify-items-center">
+                        <PlatformLogo platform={item.key} name={item.name} />
+                        <h3 className="mt-3 text-lg font-black text-slate-950 dark:text-white">{item.name}</h3>
+                        <p className="mt-0.5 text-sm font-semibold text-slate-500">{platformShortLabel(item.key)}</p>
+                      </div>
+                      <span className={`mt-5 rounded-full px-5 py-2 text-xs font-black uppercase tracking-wide ${active ? "bg-[#1746A2] text-white" : "bg-slate-100 text-slate-900 dark:bg-white/10 dark:text-white"}`}>Import Data</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
           <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-white/5">
             {selected ? <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex min-w-0 items-start gap-3"><div className="grid size-11 shrink-0 place-items-center rounded-xl bg-white text-[#1746A2] shadow-sm dark:bg-slate-900"><SelectedIcon className="size-5" /></div><div className="min-w-0"><h3 className="font-black">{selected.name}</h3><p className="text-sm text-slate-500">{selected.guide}</p><p className="mt-1 break-words text-xs font-bold text-slate-400">Parser: {selected.parser}</p></div></div><StatusPill status={selected.status} /></div> : <EmptyState title="Marketplace catalog not loaded" body="Backend marketplace endpoint did not return parser data yet." />}
