@@ -14,23 +14,6 @@ const ACCEPTED_EXCEL_FILES = ".xls,.xlsx,.xlsm";
 const TERMINAL_IMPORT_STATUSES = new Set(["completed", "completed_with_errors", "failed"]);
 const MAX_IMPORT_POLLS = 20;
 const PLATFORM_DISPLAY_ORDER = ["meesho", "amazon", "flipkart", "myntra", "ajio", "tatacliq", "nykaa", "snapdeal", "jiomart", "blinkit", "shopify", "zomato", "swiggy", "firstcry", "paytm", "custom"];
-const PLATFORM_LOGO_DOMAINS: Record<string, string> = {
-  amazon: "amazon.in",
-  flipkart: "flipkart.com",
-  meesho: "meesho.com",
-  myntra: "myntra.com",
-  snapdeal: "snapdeal.com",
-  jiomart: "jiomart.com",
-  blinkit: "blinkit.com",
-  ajio: "ajio.com",
-  tatacliq: "tatacliq.com",
-  nykaa: "nykaa.com",
-  shopify: "shopify.com",
-  zomato: "zomato.com",
-  swiggy: "swiggy.com",
-  firstcry: "firstcry.com",
-  paytm: "paytm.com",
-};
 
 function platformShortLabel(key: string) {
   const labels: Record<string, string> = {
@@ -59,15 +42,55 @@ function requiredFilesForPlatform(platform?: string, requiredFiles: string[] = [
   return requiredFiles.length ? requiredFiles : ["Excel/CSV report"];
 }
 
+function LogoShell({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`grid h-20 w-full place-items-center rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-100 ${className}`}>{children}</div>;
+}
+
 function PlatformLogo({ platform, name }: { platform: string; name: string }) {
-  const domain = PLATFORM_LOGO_DOMAINS[platform];
-  if (domain) {
-    return (
-      <div className="grid h-20 w-full place-items-center rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-100 dark:bg-white">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`https://logo.clearbit.com/${domain}`} alt={`${name} logo`} className="max-h-14 max-w-[150px] object-contain" loading="lazy" />
-      </div>
-    );
+  if (platform === "amazon") {
+    return <LogoShell><div className="relative pb-3 text-3xl font-black tracking-tight text-[#111820]">amazon<span className="absolute bottom-0 left-7 h-3 w-16 rounded-b-full border-b-[5px] border-[#ff9900]" /></div></LogoShell>;
+  }
+  if (platform === "flipkart") {
+    return <LogoShell className="bg-[#2874f0]"><div className="flex items-center gap-2 text-white"><span className="grid size-11 place-items-center rounded-md bg-[#ffe11b] text-3xl font-black italic text-[#2874f0]">f</span><span className="text-2xl font-black italic">Flipkart</span></div></LogoShell>;
+  }
+  if (platform === "meesho") {
+    return <LogoShell className="bg-[#fdf0f6]"><span className="text-4xl font-black lowercase tracking-tight text-[#e83e7c]">meesho</span></LogoShell>;
+  }
+  if (platform === "myntra") {
+    return <LogoShell><span className="bg-gradient-to-r from-[#ff2d83] via-[#ff7a2f] to-[#8a35ff] bg-clip-text text-5xl font-black leading-none text-transparent">Myntra</span></LogoShell>;
+  }
+  if (platform === "ajio") {
+    return <LogoShell><span className="text-4xl font-black tracking-[0.12em] text-[#1f2937]">AJIO</span></LogoShell>;
+  }
+  if (platform === "tatacliq") {
+    return <LogoShell><div className="text-center leading-none"><div className="text-xl font-black text-[#143d8d]">TATA</div><div className="text-3xl font-black text-[#d71955]">CLiQ</div></div></LogoShell>;
+  }
+  if (platform === "nykaa") {
+    return <LogoShell className="bg-[#fff0f7]"><span className="text-4xl font-black lowercase text-[#e80071]">nykaa</span></LogoShell>;
+  }
+  if (platform === "snapdeal") {
+    return <LogoShell className="bg-[#f51f3f]"><div className="flex items-center gap-3 text-white"><div className="grid size-10 rotate-45 place-items-center rounded-md border-[6px] border-white"><span className="-rotate-45 text-xs font-black">S</span></div><span className="text-2xl font-black lowercase">snapdeal</span></div></LogoShell>;
+  }
+  if (platform === "jiomart") {
+    return <LogoShell className="bg-[#0b62d6]"><div className="text-center font-black text-white"><span className="text-3xl">Jio</span><span className="text-3xl text-[#9be564]">Mart</span></div></LogoShell>;
+  }
+  if (platform === "blinkit") {
+    return <LogoShell className="bg-[#f8d71c]"><span className="text-4xl font-black lowercase text-slate-950">blinkit</span></LogoShell>;
+  }
+  if (platform === "shopify") {
+    return <LogoShell className="bg-[#f4fbef]"><span className="text-4xl font-black text-[#95bf47]">Shopify</span></LogoShell>;
+  }
+  if (platform === "zomato") {
+    return <LogoShell className="bg-[#e23744]"><span className="text-4xl font-black lowercase text-white">zomato</span></LogoShell>;
+  }
+  if (platform === "swiggy") {
+    return <LogoShell className="bg-[#fff4e8]"><span className="text-4xl font-black lowercase text-[#fc8019]">swiggy</span></LogoShell>;
+  }
+  if (platform === "firstcry") {
+    return <LogoShell><span className="text-3xl font-black text-[#1c75bc]">first<span className="text-[#ed1c24]">cry</span></span></LogoShell>;
+  }
+  if (platform === "paytm") {
+    return <LogoShell><span className="text-4xl font-black"><span className="text-[#002e6e]">Pay</span><span className="text-[#00baf2]">tm</span></span></LogoShell>;
   }
   return <div className="grid h-20 w-full place-items-center rounded-xl bg-slate-100 text-[#1746A2] shadow-sm dark:bg-slate-900"><FileSpreadsheet className="size-10" /><span className="sr-only">{name}</span></div>;
 }
