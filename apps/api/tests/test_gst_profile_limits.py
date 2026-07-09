@@ -120,19 +120,37 @@ def test_normal_user_cannot_update_profile_to_duplicate_gstin():
         db.close()
 
 
-def test_super_admin_bypasses_gstin_profile_limits():
+def test_super_admin_bypasses_account_profile_count_limit():
     Session = session_factory()
     db = Session()
     try:
-        owner = add_user(db, "owner@example.com")
         admin = add_user(db, "admin@example.com", role="super_admin")
-        add_profile(db, owner, "07ABCDE1234F1Z5")
         add_profile(db, admin, "27ABCDE1234F1Z5")
 
         enforce_gst_profile_registration_limits(
             admin,
             db,
             gstin="07ABCDE1234F1Z5",
+        )
+    finally:
+        db.close()
+
+
+def test_super_admin_cannot_create_duplicate_gstin_rows():
+    Session = session_factory()
+    db = Session()
+    try:
+        owner = add_user(db, "owner@example.com")
+        admin = add_user(db, "admin@example.com", role="super_admin")
+        add_profile(db, owner, "07ABCDE1234F1Z5")
+
+        assert_limit_error(
+            lambda: enforce_gst_profile_registration_limits(
+                admin,
+                db,
+                gstin="07ABCDE1234F1Z5",
+            ),
+            "This GSTIN is already registered with another account.",
         )
     finally:
         db.close()
@@ -254,6 +272,35 @@ def test_create_profile_updates_same_gstin_instead_of_adding_duplicate_for_admin
         assert saved.legal_name == "Updated Same GSTIN"
         assert saved.return_period == "082026"
         assert db.query(GSTProfile).filter(GSTProfile.user_id == admin.id).count() == 1
+    finally:
+        db.close()
+
+
+def test_super_admin_create_profile_updates_existing_global_gstin_instead_of_duplicate():
+    Session = session_factory()
+    db = Session()
+    try:
+        owner = add_user(db, "owner@example.com")
+        admin = add_user(db, "admin@example.com", role="super_admin")
+        owner_profile = add_profile(db, owner, "07ABCDE1234F1Z5")
+
+        saved = create_profile(
+            GSTProfileIn(
+                gstin="07ABCDE1234F1Z5",
+                legal_name="Admin Updated Owner Profile",
+                trade_name="Admin Updated",
+                filing_frequency="Monthly",
+                financial_year="2026-27",
+                return_period="082026",
+            ),
+            admin,
+            db,
+        )
+
+        assert saved.id == owner_profile.id
+        assert saved.user_id == owner.id
+        assert saved.legal_name == "Admin Updated Owner Profile"
+        assert db.query(GSTProfile).filter(GSTProfile.gstin == "07ABCDE1234F1Z5").count() == 1
     finally:
         db.close()
 
