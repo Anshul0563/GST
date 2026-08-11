@@ -197,6 +197,9 @@ export function ImportsPage() {
   const [fileUploadStatus, setFileUploadStatus] = useState<
     "idle" | "selected" | "uploading" | "success" | "error"
   >("idle");
+  const [successfulPlatforms, setSuccessfulPlatforms] = useState<
+    Record<string, boolean>
+  >({});
   const [activeBatch, setActiveBatch] = useState<BatchStatus | null>(null);
   const [errors, setErrors] = useState<ImportErrors | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -342,7 +345,13 @@ export function ImportsPage() {
         setFileUploadStatus("error");
       } else {
         setFileUploadStatus("success");
-        setProgress(`Batch ${batch.id} uploaded successfully.`);
+
+        setSuccessfulPlatforms((current) => ({
+          ...current,
+          [selected.key]: true,
+        }));
+
+        setProgress(`✓ ${selected.name} data imported successfully.`);
       }
       await workspace.refresh();
       if (workspace.profile)
@@ -488,33 +497,53 @@ export function ImportsPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {platformCards.map((item) => {
                   const active = item.key === selected?.key;
+                  const uploadSuccess = successfulPlatforms[item.key];
                   return (
                     <button
                       key={item.key}
                       type="button"
                       onClick={() => {
+                        if (successfulPlatforms[item.key]) {
+                          return;
+                        }
                         setPlatformKey(item.key);
                         setFiles([]);
                         setProgress("");
                         setActiveBatch(null);
                         setErrors(null);
+                        setFileUploadStatus("idle");
                         setUploadDialogOpen(true);
                       }}
-                      className={`platform-card-shadow flex min-h-52 flex-col items-center justify-between rounded-lg border bg-white p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xl dark:bg-slate-950 ${active ? "border-[#1746A2] ring-2 ring-[#1746A2]/20" : "border-slate-200 dark:border-white/10"}`}
+                      className={`platform-card-shadow flex min-h-52 flex-col items-center justify-between rounded-lg border p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xl dark:bg-slate-950 ${
+                        uploadSuccess
+                          ? "border-emerald-400 bg-emerald-50/70 ring-2 ring-emerald-400/20 dark:border-emerald-500/50 dark:bg-emerald-950/20"
+                          : active
+                            ? "border-[#1746A2] bg-white ring-2 ring-[#1746A2]/20 dark:bg-slate-950"
+                            : "border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950"
+                      }`}
                     >
                       <div className="grid justify-items-center">
                         <PlatformLogo platform={item.key} name={item.name} />
-                        <h3 className="mt-3 text-lg font-black text-slate-950 dark:text-white">
-                          {item.name}
-                        </h3>
+                        {uploadSuccess && (
+                          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
+                            <CheckCircle2 className="size-4" />
+                            Successfully Imported
+                          </div>
+                        )}
                         <p className="mt-0.5 text-sm font-semibold text-slate-500">
                           {platformShortLabel(item.key)}
                         </p>
                       </div>
                       <span
-                        className={`mt-5 rounded-full px-5 py-2 text-xs font-black uppercase tracking-wide ${active ? "bg-[#1746A2] text-white" : "bg-slate-100 text-slate-900 dark:bg-white/10 dark:text-white"}`}
+                        className={`mt-5 rounded-full px-5 py-2 text-xs font-black uppercase tracking-wide ${
+                          uploadSuccess
+                            ? "bg-emerald-600 text-white"
+                            : active
+                              ? "bg-[#1746A2] text-white"
+                              : "bg-slate-100 text-slate-900 dark:bg-white/10 dark:text-white"
+                        }`}
                       >
-                        Import Data
+                        {uploadSuccess ? "✓ Import Successful" : "Import Data"}
                       </span>
                     </button>
                   );
@@ -694,13 +723,34 @@ export function ImportsPage() {
                 </div>
               ) : null}
               <button
+                type="button"
                 onClick={startImport}
                 disabled={!canStartImport}
-                className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white transition sm:w-auto ${
+                  fileUploadStatus === "success"
+                    ? "bg-emerald-600"
+                    : fileUploadStatus === "uploading"
+                      ? "bg-slate-500"
+                      : "bg-[#10244d] disabled:cursor-not-allowed disabled:opacity-50"
+                }`}
               >
-                <UploadCloud className="size-4" />{" "}
-                {canImport ? "Start import" : "Coming soon"}{" "}
-                <ArrowRight className="size-4" />
+                {fileUploadStatus === "success" ? (
+                  <>
+                    <CheckCircle2 className="size-4" />
+                    Import Successful
+                  </>
+                ) : fileUploadStatus === "uploading" ? (
+                  <>
+                    <UploadCloud className="size-4 animate-pulse" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="size-4" />
+                    {canImport ? "Start import" : "Coming soon"}
+                    <ArrowRight className="size-4" />
+                  </>
+                )}
               </button>
               {progress && (
                 <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
