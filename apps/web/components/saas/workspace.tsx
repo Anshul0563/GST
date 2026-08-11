@@ -1,10 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 import {
-  BatchStatus,
   ApiError,
+  BatchStatus,
   DashboardSummary,
   Gstr1Payload,
   MarketplaceCatalogItem,
@@ -21,6 +19,8 @@ import {
   listTallyCompanies
 } from "@/lib/api";
 import { clearAuthToken, getStoredAuthToken } from "@/lib/auth";
+import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const ACTIVE_PROFILE_KEY = "gst_bharat_active_profile_id";
 
@@ -52,9 +52,12 @@ function rememberActiveProfile(user: WorkspaceUser, profile: Profile | null) {
 }
 
 function selectStoredProfile(user: WorkspaceUser, profiles: Profile[]) {
-  const storedProfileId = typeof window !== "undefined"
-    ? Number(window.localStorage.getItem(activeProfileKey(user)) || window.localStorage.getItem(ACTIVE_PROFILE_KEY) || 0)
-    : 0;
+  if (typeof window === "undefined") {
+    return profiles[0] ?? null;
+  }
+
+  const userKey = activeProfileKey(user);
+  const storedProfileId = Number(window.localStorage.getItem(userKey) || "0");
   const profile = profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
   rememberActiveProfile(user, profile);
   return profile;

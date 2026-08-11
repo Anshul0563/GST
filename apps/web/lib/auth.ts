@@ -1,4 +1,5 @@
 const TOKEN_KEY = "gst_bharat_token";
+const ACTIVE_PROFILE_KEY = "gst_bharat_active_profile_id";
 
 type JwtPayload = {
   exp?: number;
@@ -22,6 +23,7 @@ export function persistAuthToken(token: string) {
 
 export function clearAuthToken() {
   window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(ACTIVE_PROFILE_KEY);
 }
 
 export function getStoredAuthToken() {

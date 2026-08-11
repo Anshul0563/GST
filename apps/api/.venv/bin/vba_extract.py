@@ -1,4 +1,4 @@
-#!/home/jarvis/Documents/IT/GST/apps/api/.venv/bin/python3
+#!/home/jarvis/Documents/IT/GST/apps/api/.venv/bin/python
 
 ##############################################################################
 #
