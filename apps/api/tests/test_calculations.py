@@ -4,20 +4,24 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pandas as pd
-
+from app.api.routes import apply_transaction_update, require_valid_period
+from app.models.entities import NormalizedTransaction
 from app.parsers.amazon import AmazonParser
 from app.parsers.flipkart import FlipkartParser
 from app.parsers.meesho import MeeshoParser
-from fastapi import HTTPException
-
-from app.api.routes import apply_transaction_update, require_valid_period
-from app.models.entities import NormalizedTransaction
 from app.services.excel_export import write_gstr1_excel
-from app.services.gst import CLEAN_PORTAL, GSTTOOL_COMPATIBLE, build_gstr1_json, gstr1_generation_report, row_belongs_to_period
+from app.services.gst import (
+    CLEAN_PORTAL,
+    GSTTOOL_COMPATIBLE,
+    build_gstr1_json,
+    gstr1_generation_report,
+    row_belongs_to_period,
+)
 from app.services.gsttool_parity_validator import compare_against_reference
 from app.services.official_calculator import calculate_marketplace_summary
 from app.services.transaction_normalizer import finalize_transaction
 from app.services.validation import money
+from fastapi import HTTPException
 
 
 class GstCalculationTests(unittest.TestCase):
@@ -141,24 +145,27 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_flipkart_cashback_document_number_and_tcs_are_parsed(self):
         parser = FlipkartParser("07TCRPS8655B1ZK", "032026")
-        txn = parser.normalize_row({
-            "Seller GSTIN": "07TCRPS8655B1ZK",
-            "Order ID": "OD337009368354503100",
-            "Order Item ID": "337009368354503100",
-            "Document Type": "Credit Note",
-            "Credit Note ID/ Debit Note ID": "CANQ1W2600000015",
-            "Invoice Amount": "8.0",
-            "Invoice Date": "2026-03-11 00:00:00.0",
-            "Taxable Value": "7.77",
-            "IGST Rate": "3.0",
-            "IGST Amount": "0.23",
-            "TCS IGST Rate": "0.5",
-            "TCS IGST Amount": "0.039",
-            "Total TCS Deducted": "0.04",
-            "Customer's Delivery State": "Madhya Pradesh",
-            "TDS Rate": "0.1",
-            "TDS Amount": "0.008",
-        }, "flipkart.xlsx:Cash Back Report")
+        txn = parser.normalize_row(
+            {
+                "Seller GSTIN": "07TCRPS8655B1ZK",
+                "Order ID": "OD337009368354503100",
+                "Order Item ID": "337009368354503100",
+                "Document Type": "Credit Note",
+                "Credit Note ID/ Debit Note ID": "CANQ1W2600000015",
+                "Invoice Amount": "8.0",
+                "Invoice Date": "2026-03-11 00:00:00.0",
+                "Taxable Value": "7.77",
+                "IGST Rate": "3.0",
+                "IGST Amount": "0.23",
+                "TCS IGST Rate": "0.5",
+                "TCS IGST Amount": "0.039",
+                "Total TCS Deducted": "0.04",
+                "Customer's Delivery State": "Madhya Pradesh",
+                "TDS Rate": "0.1",
+                "TDS Amount": "0.008",
+            },
+            "flipkart.xlsx:Cash Back Report",
+        )
         txn["doc_type"] = "credit_note"
         txn = finalize_transaction(txn)
 
@@ -235,44 +242,48 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(result.transactions[0]["validation_status"], "valid")
 
     def test_inter_state_invoice_uses_igst(self):
-        txn = finalize_transaction({
-            "platform": "meesho",
-            "gstin": "07ABCDE1234F1Z5",
-            "etin": "07AARCM9332R1CQ",
-            "filing_period": "042026",
-            "invoice_no": "A1",
-            "invoice_date": "2026-04-01",
-            "doc_type": "invoice",
-            "buyer_state_code": "37",
-            "taxable_value": 1000,
-            "gst_rate": 3,
-            "igst": 30,
-            "cgst": 0,
-            "sgst": 0,
-            "cess": 0,
-        })
+        txn = finalize_transaction(
+            {
+                "platform": "meesho",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "07AARCM9332R1CQ",
+                "filing_period": "042026",
+                "invoice_no": "A1",
+                "invoice_date": "2026-04-01",
+                "doc_type": "invoice",
+                "buyer_state_code": "37",
+                "taxable_value": 1000,
+                "gst_rate": 3,
+                "igst": 30,
+                "cgst": 0,
+                "sgst": 0,
+                "cess": 0,
+            }
+        )
         self.assertEqual(txn["igst"], Decimal("30.00"))
         self.assertEqual(txn["cgst"], Decimal("0.00"))
         self.assertEqual(txn["sgst"], Decimal("0.00"))
         self.assertEqual(txn["validation_status"], "valid")
 
     def test_intra_state_invoice_splits_tax_even_if_source_has_igst(self):
-        txn = finalize_transaction({
-            "platform": "amazon",
-            "gstin": "07ABCDE1234F1Z5",
-            "etin": "29AAICA3918J1C9",
-            "filing_period": "042026",
-            "invoice_no": "A2",
-            "invoice_date": "2026-04-01",
-            "doc_type": "invoice",
-            "buyer_state_code": "07",
-            "taxable_value": 1000,
-            "gst_rate": 18,
-            "igst": 180,
-            "cgst": 0,
-            "sgst": 0,
-            "cess": 0,
-        })
+        txn = finalize_transaction(
+            {
+                "platform": "amazon",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "29AAICA3918J1C9",
+                "filing_period": "042026",
+                "invoice_no": "A2",
+                "invoice_date": "2026-04-01",
+                "doc_type": "invoice",
+                "buyer_state_code": "07",
+                "taxable_value": 1000,
+                "gst_rate": 18,
+                "igst": 180,
+                "cgst": 0,
+                "sgst": 0,
+                "cess": 0,
+            }
+        )
         self.assertEqual(txn["igst"], Decimal("0.00"))
         self.assertEqual(txn["cgst"], Decimal("90.00"))
         self.assertEqual(txn["sgst"], Decimal("90.00"))
@@ -280,72 +291,105 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_intra_state_aggregate_split_is_stable_with_one_paise_drift(self):
         rows = [
-            finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-                "invoice_no": "A1", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 333.33, "gst_rate": 3, "cgst": 5, "sgst": 5,
-            }),
-            finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-                "invoice_no": "A2", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 346.67, "gst_rate": 3, "cgst": 5.2, "sgst": 5.2,
-            }),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": "A1",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "07",
+                    "taxable_value": 333.33,
+                    "gst_rate": 3,
+                    "cgst": 5,
+                    "sgst": 5,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": "A2",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "07",
+                    "taxable_value": 346.67,
+                    "gst_rate": 3,
+                    "cgst": 5.2,
+                    "sgst": 5.2,
+                }
+            ),
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
         intra = next(item for item in payload["b2cs"] if item["sply_ty"] == "INTRA")
 
-        self.assertLessEqual(abs(Decimal(str(intra["camt"])) - Decimal(str(intra["samt"]))), Decimal("0.01"))
-        self.assertEqual(Decimal(str(intra["camt"])) + Decimal(str(intra["samt"])), Decimal("20.40"))
+        self.assertLessEqual(
+            abs(Decimal(str(intra["camt"])) - Decimal(str(intra["samt"]))),
+            Decimal("0.01"),
+        )
+        self.assertEqual(
+            Decimal(str(intra["camt"])) + Decimal(str(intra["samt"])), Decimal("20.40")
+        )
 
     def test_credit_note_signs_are_normalized_before_validation(self):
-        txn = finalize_transaction({
-            "platform": "flipkart",
-            "gstin": "07ABCDE1234F1Z5",
-            "etin": "29AACCF0683K1C8",
-            "filing_period": "042026",
-            "invoice_no": "CN1",
-            "invoice_date": "2026-04-02",
-            "doc_type": "credit_note",
-            "buyer_state_code": "37",
-            "taxable_value": 420,
-            "gst_rate": 3,
-            "igst": 12.6,
-            "cgst": 0,
-            "sgst": 0,
-            "cess": 0,
-        })
+        txn = finalize_transaction(
+            {
+                "platform": "flipkart",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "29AACCF0683K1C8",
+                "filing_period": "042026",
+                "invoice_no": "CN1",
+                "invoice_date": "2026-04-02",
+                "doc_type": "credit_note",
+                "buyer_state_code": "37",
+                "taxable_value": 420,
+                "gst_rate": 3,
+                "igst": 12.6,
+                "cgst": 0,
+                "sgst": 0,
+                "cess": 0,
+            }
+        )
         self.assertEqual(txn["taxable_value"], Decimal("-420.00"))
         self.assertEqual(txn["igst"], Decimal("-12.60"))
         self.assertEqual(txn["validation_status"], "valid")
 
     def test_gstr1_groups_by_supply_rate_pos_and_operator(self):
         rows = [
-            finalize_transaction({
-                "platform": "meesho",
-                "gstin": "07ABCDE1234F1Z5",
-                "etin": "07AARCM9332R1CQ",
-                "filing_period": "042026",
-                "invoice_no": "S1",
-                "invoice_date": "2026-04-01",
-                "doc_type": "invoice",
-                "buyer_state_code": "37",
-                "taxable_value": 1000,
-                "gst_rate": 3,
-                "igst": 30,
-                "cess": 0,
-            }),
-            finalize_transaction({
-                "platform": "meesho",
-                "gstin": "07ABCDE1234F1Z5",
-                "etin": "07AARCM9332R1CQ",
-                "filing_period": "042026",
-                "invoice_no": "CN1",
-                "invoice_date": "2026-04-03",
-                "doc_type": "credit_note",
-                "buyer_state_code": "37",
-                "taxable_value": 100,
-                "gst_rate": 3,
-                "igst": 3,
-                "cess": 0,
-            }),
+            finalize_transaction(
+                {
+                    "platform": "meesho",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AARCM9332R1CQ",
+                    "filing_period": "042026",
+                    "invoice_no": "S1",
+                    "invoice_date": "2026-04-01",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "37",
+                    "taxable_value": 1000,
+                    "gst_rate": 3,
+                    "igst": 30,
+                    "cess": 0,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "meesho",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AARCM9332R1CQ",
+                    "filing_period": "042026",
+                    "invoice_no": "CN1",
+                    "invoice_date": "2026-04-03",
+                    "doc_type": "credit_note",
+                    "buyer_state_code": "37",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                    "cess": 0,
+                }
+            ),
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
         self.assertEqual(payload["b2cs"][0]["txval"], 900.0)
@@ -353,45 +397,53 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(payload["supeco"]["clttx"][0]["suppval"], 900.0)
         self.assertEqual(len(payload["doc_issue"]["doc_det"]), 2)
         self.assertEqual(payload["hash"], "hash")
-        self.assertEqual(payload["doc_issue"]["doc_det"][0]["doc_typ"], "Invoices for outward supply")
+        self.assertEqual(
+            payload["doc_issue"]["doc_det"][0]["doc_typ"], "Invoices for outward supply"
+        )
 
     def test_gstr1_excludes_invalid_and_zero_b2cs_rows(self):
         rows = [
-            finalize_transaction({
-                "platform": "amazon",
-                "gstin": "07ABCDE1234F1Z5",
-                "etin": "07AAICA3918J1CV",
-                "filing_period": "042026",
-                "invoice_no": "IN-1",
-                "doc_type": "invoice",
-                "buyer_state_code": "27",
-                "taxable_value": 100,
-                "gst_rate": 3,
-                "igst": 3,
-            }),
-            finalize_transaction({
-                "platform": "amazon",
-                "gstin": "07ABCDE1234F1Z5",
-                "etin": "07AAICA3918J1CV",
-                "filing_period": "042026",
-                "invoice_no": "IN-ZERO",
-                "doc_type": "invoice",
-                "buyer_state_code": "27",
-                "taxable_value": 0,
-                "gst_rate": 0,
-                "igst": 0,
-            }),
-            finalize_transaction({
-                "platform": "amazon",
-                "gstin": "07ABCDE1234F1Z5",
-                "etin": "07AAICA3918J1CV",
-                "filing_period": "042026",
-                "invoice_no": "IN-NOPOS",
-                "doc_type": "invoice",
-                "taxable_value": 100,
-                "gst_rate": 3,
-                "igst": 3,
-            }),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": "IN-1",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "27",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": "IN-ZERO",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "27",
+                    "taxable_value": 0,
+                    "gst_rate": 0,
+                    "igst": 0,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": "IN-NOPOS",
+                    "doc_type": "invoice",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            ),
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
         self.assertEqual(len(payload["b2cs"]), 1)
@@ -400,113 +452,304 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_document_series_grouping_keeps_platform_prefixes_separate(self):
         rows = [
-            finalize_transaction({
-                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "042026",
-                "invoice_no": "6p5kc26133", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-            }),
-            finalize_transaction({
-                "platform": "flipkart", "gstin": "07ABCDE1234F1Z5", "etin": "07AACCF0683K1CU", "filing_period": "042026",
-                "invoice_no": "LWABOG7260000005", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-            }),
+            finalize_transaction(
+                {
+                    "platform": "meesho",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AARCM9332R1CQ",
+                    "filing_period": "042026",
+                    "invoice_no": "6p5kc26133",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "37",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "flipkart",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AACCF0683K1CU",
+                    "filing_period": "042026",
+                    "invoice_no": "LWABOG7260000005",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "37",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            ),
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
-        invoice_doc = next(item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1)
+        invoice_doc = next(
+            item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1
+        )
         self.assertEqual(len(invoice_doc["docs"]), 2)
 
     def test_document_series_with_gaps_splits_ranges(self):
         rows = [
-            finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-                "invoice_no": invoice_no, "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-            })
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": invoice_no,
+                    "doc_type": "invoice",
+                    "buyer_state_code": "27",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            )
             for invoice_no in ("IN-5", "IN-6", "IN-8", "IN-9")
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows, CLEAN_PORTAL)
-        invoice_doc = next(item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1)
-        ranges = [(item["from"], item["to"], item["totnum"]) for item in invoice_doc["docs"]]
+        invoice_doc = next(
+            item for item in payload["doc_issue"]["doc_det"] if item["doc_num"] == 1
+        )
+        ranges = [
+            (item["from"], item["to"], item["totnum"]) for item in invoice_doc["docs"]
+        ]
         self.assertEqual(ranges, [("IN-5", "IN-6", 2), ("IN-8", "IN-9", 2)])
         self.assertEqual(gstr1_generation_report(payload, rows)["errors"], [])
 
     def test_gsttool_mode_preserves_zero_b2cs_rows(self):
-        row = finalize_transaction({
-            "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-            "invoice_no": "IN-ZERO", "doc_type": "invoice", "buyer_state_code": "18", "taxable_value": 0, "gst_rate": 3, "igst": 0,
-        })
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
-        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
+        row = finalize_transaction(
+            {
+                "platform": "amazon",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "07AAICA3918J1CV",
+                "filing_period": "042026",
+                "invoice_no": "IN-ZERO",
+                "doc_type": "invoice",
+                "buyer_state_code": "18",
+                "taxable_value": 0,
+                "gst_rate": 3,
+                "igst": 0,
+            }
+        )
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE
+        )
+        clean_payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL
+        )
 
-        self.assertIn({"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "18", "txval": 0, "iamt": 0, "csamt": 0}, payload["b2cs"])
+        self.assertIn(
+            {
+                "sply_ty": "INTER",
+                "rt": 3,
+                "typ": "OE",
+                "pos": "18",
+                "txval": 0,
+                "iamt": 0,
+                "csamt": 0,
+            },
+            payload["b2cs"],
+        )
         self.assertEqual({row["pos"] for row in payload["b2cs"]}, {"18"})
         self.assertEqual(clean_payload["b2cs"], [])
 
     def test_gsttool_mode_preserves_negative_b2cs_rows(self):
-        row = finalize_transaction({
-            "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-            "invoice_no": "CN-NEG", "doc_type": "credit_note", "buyer_state_code": "36", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-        })
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
-        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
+        row = finalize_transaction(
+            {
+                "platform": "amazon",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "07AAICA3918J1CV",
+                "filing_period": "042026",
+                "invoice_no": "CN-NEG",
+                "doc_type": "credit_note",
+                "buyer_state_code": "36",
+                "taxable_value": 100,
+                "gst_rate": 3,
+                "igst": 3,
+            }
+        )
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE
+        )
+        clean_payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL
+        )
 
-        self.assertEqual(payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -100, "iamt": -3, "csamt": 0}])
-        self.assertEqual(clean_payload["b2cs"], [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "36", "txval": -100, "iamt": -3, "csamt": 0}])
+        self.assertEqual(
+            payload["b2cs"],
+            [
+                {
+                    "sply_ty": "INTER",
+                    "rt": 3,
+                    "typ": "OE",
+                    "pos": "36",
+                    "txval": -100,
+                    "iamt": -3,
+                    "csamt": 0,
+                }
+            ],
+        )
+        self.assertEqual(
+            clean_payload["b2cs"],
+            [
+                {
+                    "sply_ty": "INTER",
+                    "rt": 3,
+                    "typ": "OE",
+                    "pos": "36",
+                    "txval": -100,
+                    "iamt": -3,
+                    "csamt": 0,
+                }
+            ],
+        )
 
     def test_gsttool_mode_preserves_negative_pos04_adjustment(self):
         rows = [
-            finalize_transaction({
-                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "052026",
-                "invoice_no": "6p5kc27202", "doc_type": "invoice", "buyer_state_code": "03", "taxable_value": 1165.88, "gst_rate": 3, "igst": 34.98,
-                "gross_amount": 1200.86,
-            }),
-            finalize_transaction({
-                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "052026",
-                "invoice_no": "6p5kc27202", "doc_type": "invoice", "buyer_state_code": "04", "taxable_value": -9.71, "gst_rate": 3, "igst": -0.29,
-                "gross_amount": -10.00, "_preserve_source_sign": True,
-            }),
+            finalize_transaction(
+                {
+                    "platform": "meesho",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AARCM9332R1CQ",
+                    "filing_period": "052026",
+                    "invoice_no": "6p5kc27202",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "03",
+                    "taxable_value": 1165.88,
+                    "gst_rate": 3,
+                    "igst": 34.98,
+                    "gross_amount": 1200.86,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "meesho",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AARCM9332R1CQ",
+                    "filing_period": "052026",
+                    "invoice_no": "6p5kc27202",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "04",
+                    "taxable_value": -9.71,
+                    "gst_rate": 3,
+                    "igst": -0.29,
+                    "gross_amount": -10.00,
+                    "_preserve_source_sign": True,
+                }
+            ),
         ]
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "052026", rows, GSTTOOL_COMPATIBLE)
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "052026", rows, GSTTOOL_COMPATIBLE
+        )
 
         self.assertIn(
-            {"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "04", "txval": -9.71, "iamt": -0.29, "csamt": 0},
+            {
+                "sply_ty": "INTER",
+                "rt": 3,
+                "typ": "OE",
+                "pos": "04",
+                "txval": -9.71,
+                "iamt": -0.29,
+                "csamt": 0,
+            },
             payload["b2cs"],
         )
         self.assertIn(
-            {"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "03", "txval": 1165.88, "iamt": 34.98, "csamt": 0},
+            {
+                "sply_ty": "INTER",
+                "rt": 3,
+                "typ": "OE",
+                "pos": "03",
+                "txval": 1165.88,
+                "iamt": 34.98,
+                "csamt": 0,
+            },
             payload["b2cs"],
         )
 
     def test_gstr1_generation_filters_rows_by_document_date_period(self):
         rows = [
-            finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "022026",
-                "invoice_no": "IN-FEB", "invoice_date": "2026-02-28", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-            }),
-            finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "022026",
-                "invoice_no": "IN-MAR", "invoice_date": "2026-03-01", "doc_type": "invoice", "buyer_state_code": "29", "taxable_value": 200, "gst_rate": 3, "igst": 6,
-            }),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "022026",
+                    "invoice_no": "IN-FEB",
+                    "invoice_date": "2026-02-28",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "27",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "022026",
+                    "invoice_no": "IN-MAR",
+                    "invoice_date": "2026-03-01",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "29",
+                    "taxable_value": 200,
+                    "gst_rate": 3,
+                    "igst": 6,
+                }
+            ),
         ]
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "022026", rows, GSTTOOL_COMPATIBLE)
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "022026", rows, GSTTOOL_COMPATIBLE
+        )
 
         self.assertEqual([row["pos"] for row in payload["b2cs"]], ["27"])
-        self.assertEqual(payload["doc_issue"]["doc_det"][0]["docs"][0]["from"], "IN-FEB")
+        self.assertEqual(
+            payload["doc_issue"]["doc_det"][0]["docs"][0]["from"], "IN-FEB"
+        )
 
     def test_document_date_overrides_wrong_batch_period(self):
-        row = finalize_transaction({
-            "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "032026",
-            "invoice_no": "IN-FEB-BATCHED-MAR", "invoice_date": "2026-02-14", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-        })
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "022026", [row], GSTTOOL_COMPATIBLE)
-        wrong_month = build_gstr1_json("07ABCDE1234F1Z5", "032026", [row], GSTTOOL_COMPATIBLE)
+        row = finalize_transaction(
+            {
+                "platform": "amazon",
+                "gstin": "07ABCDE1234F1Z5",
+                "etin": "07AAICA3918J1CV",
+                "filing_period": "032026",
+                "invoice_no": "IN-FEB-BATCHED-MAR",
+                "invoice_date": "2026-02-14",
+                "doc_type": "invoice",
+                "buyer_state_code": "27",
+                "taxable_value": 100,
+                "gst_rate": 3,
+                "igst": 3,
+            }
+        )
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "022026", [row], GSTTOOL_COMPATIBLE
+        )
+        wrong_month = build_gstr1_json(
+            "07ABCDE1234F1Z5", "032026", [row], GSTTOOL_COMPATIBLE
+        )
 
         self.assertEqual(payload["b2cs"][0]["pos"], "27")
         self.assertEqual(wrong_month["b2cs"], [])
 
     def test_credit_note_date_controls_return_period(self):
         row = {
-            "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "022026",
-            "invoice_no": "CN-MAR", "doc_type": "credit_note", "buyer_state_code": "29", "taxable_value": -100,
-            "gst_rate": 3, "igst": -3, "cess": 0, "invoice_date": "2026-02-15",
-            "credit_note_date": "2026-03-01", "validation_status": "valid",
+            "platform": "meesho",
+            "gstin": "07ABCDE1234F1Z5",
+            "etin": "07AARCM9332R1CQ",
+            "filing_period": "022026",
+            "invoice_no": "CN-MAR",
+            "doc_type": "credit_note",
+            "buyer_state_code": "29",
+            "taxable_value": -100,
+            "gst_rate": 3,
+            "igst": -3,
+            "cess": 0,
+            "invoice_date": "2026-02-15",
+            "credit_note_date": "2026-03-01",
+            "validation_status": "valid",
         }
 
         self.assertTrue(row_belongs_to_period(row, "032026"))
@@ -514,10 +757,20 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_debit_note_date_controls_return_period(self):
         row = {
-            "platform": "flipkart", "gstin": "07ABCDE1234F1Z5", "etin": "07AACCF0683K1CU", "filing_period": "022026",
-            "invoice_no": "DN-MAR", "doc_type": "debit_note", "buyer_state_code": "29", "taxable_value": 100,
-            "gst_rate": 3, "igst": 3, "cess": 0, "invoice_date": "2026-02-15",
-            "debit_note_date": "2026-03-01", "validation_status": "valid",
+            "platform": "flipkart",
+            "gstin": "07ABCDE1234F1Z5",
+            "etin": "07AACCF0683K1CU",
+            "filing_period": "022026",
+            "invoice_no": "DN-MAR",
+            "doc_type": "debit_note",
+            "buyer_state_code": "29",
+            "taxable_value": 100,
+            "gst_rate": 3,
+            "igst": 3,
+            "cess": 0,
+            "invoice_date": "2026-02-15",
+            "debit_note_date": "2026-03-01",
+            "validation_status": "valid",
         }
 
         self.assertTrue(row_belongs_to_period(row, "032026"))
@@ -525,28 +778,70 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_gsttool_mode_merges_cross_prefix_document_ranges(self):
         rows = [
-            finalize_transaction({
-                "platform": "flipkart", "source_file": "flipkart.xlsx:Sales Report", "gstin": "07ABCDE1234F1Z5", "etin": "07AACCF0683K1CU", "filing_period": "032026",
-                "invoice_no": invoice_no, "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-            })
+            finalize_transaction(
+                {
+                    "platform": "flipkart",
+                    "source_file": "flipkart.xlsx:Sales Report",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AACCF0683K1CU",
+                    "filing_period": "032026",
+                    "invoice_no": invoice_no,
+                    "doc_type": "invoice",
+                    "buyer_state_code": "37",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            )
             for invoice_no in ("FAWRLX2600000080", "LWABOG7260000005")
         ]
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "032026", rows, GSTTOOL_COMPATIBLE)
-        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "032026", rows, CLEAN_PORTAL)
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "032026", rows, GSTTOOL_COMPATIBLE
+        )
+        clean_payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "032026", rows, CLEAN_PORTAL
+        )
         gsttool_ranges = payload["doc_issue"]["doc_det"][0]["docs"]
         clean_ranges = clean_payload["doc_issue"]["doc_det"][0]["docs"]
 
-        self.assertEqual(gsttool_ranges, [{"num": 1, "from": "FAWRLX2600000080", "to": "LWABOG7260000005", "totnum": 2, "cancel": 0, "net_issue": 2}])
+        self.assertEqual(
+            gsttool_ranges,
+            [
+                {
+                    "num": 1,
+                    "from": "FAWRLX2600000080",
+                    "to": "LWABOG7260000005",
+                    "totnum": 2,
+                    "cancel": 0,
+                    "net_issue": 2,
+                }
+            ],
+        )
         self.assertEqual(len(clean_ranges), 2)
 
     def test_gsttool_mode_preserves_source_cgst_sgst_rounding(self):
         row = {
-            "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-            "invoice_no": "A1", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 100, "gst_rate": 3, "cgst": 1.49, "sgst": 1.50,
-            "igst": 0, "cess": 0, "validation_status": "valid",
+            "platform": "amazon",
+            "gstin": "07ABCDE1234F1Z5",
+            "etin": "07AAICA3918J1CV",
+            "filing_period": "042026",
+            "invoice_no": "A1",
+            "doc_type": "invoice",
+            "buyer_state_code": "07",
+            "taxable_value": 100,
+            "gst_rate": 3,
+            "cgst": 1.49,
+            "sgst": 1.50,
+            "igst": 0,
+            "cess": 0,
+            "validation_status": "valid",
         }
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE)
-        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL)
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "042026", [row], GSTTOOL_COMPATIBLE
+        )
+        clean_payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL
+        )
 
         gsttool_row = next(row for row in payload["b2cs"] if row.get("pos") == "07")
         self.assertEqual(gsttool_row["camt"], 1.49)
@@ -556,15 +851,38 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_gsttool_mode_uses_flipkart_operator_level_supeco_rounding(self):
         row = {
-            "platform": "flipkart", "gstin": "07ABCDE1234F1Z5", "etin": "07AACCF0683K1CU", "filing_period": "032026",
-            "invoice_no": "LWABOG7260000002", "doc_type": "invoice", "buyer_state_code": "07", "taxable_value": 99.02,
-            "gst_rate": 3, "igst": 0, "cgst": 1.50, "sgst": 1.49, "cess": 0, "validation_status": "valid",
+            "platform": "flipkart",
+            "gstin": "07ABCDE1234F1Z5",
+            "etin": "07AACCF0683K1CU",
+            "filing_period": "032026",
+            "invoice_no": "LWABOG7260000002",
+            "doc_type": "invoice",
+            "buyer_state_code": "07",
+            "taxable_value": 99.02,
+            "gst_rate": 3,
+            "igst": 0,
+            "cgst": 1.50,
+            "sgst": 1.49,
+            "cess": 0,
+            "validation_status": "valid",
         }
-        payload = build_gstr1_json("07ABCDE1234F1Z5", "032026", [row], GSTTOOL_COMPATIBLE)
-        clean_payload = build_gstr1_json("07ABCDE1234F1Z5", "032026", [row], CLEAN_PORTAL)
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "032026", [row], GSTTOOL_COMPATIBLE
+        )
+        clean_payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "032026", [row], CLEAN_PORTAL
+        )
 
-        gsttool_eco = next(row for row in payload["supeco"]["clttx"] if row["etin"] == "07AACCF0683K1CU")
-        clean_eco = next(row for row in clean_payload["supeco"]["clttx"] if row["etin"] == "07AACCF0683K1CU")
+        gsttool_eco = next(
+            row
+            for row in payload["supeco"]["clttx"]
+            if row["etin"] == "07AACCF0683K1CU"
+        )
+        clean_eco = next(
+            row
+            for row in clean_payload["supeco"]["clttx"]
+            if row["etin"] == "07AACCF0683K1CU"
+        )
         self.assertEqual(gsttool_eco["cgst"], 1.49)
         self.assertEqual(gsttool_eco["sgst"], 1.49)
         self.assertEqual(clean_eco["cgst"], 1.5)
@@ -576,9 +894,36 @@ class GstCalculationTests(unittest.TestCase):
             "fp": "032026",
             "version": "GST3.1.6",
             "hash": "hash",
-            "b2cs": [{"sply_ty": "INTER", "rt": 3, "typ": "OE", "pos": "18", "txval": 0, "iamt": 0, "csamt": 0}],
+            "b2cs": [
+                {
+                    "sply_ty": "INTER",
+                    "rt": 3,
+                    "typ": "OE",
+                    "pos": "18",
+                    "txval": 0,
+                    "iamt": 0,
+                    "csamt": 0,
+                }
+            ],
             "supeco": {"clttx": []},
-            "doc_issue": {"doc_det": [{"doc_num": 1, "doc_typ": "Invoices for outward supply", "docs": [{"num": 1, "from": "FAWRLX2600000080", "to": "LWABOG7260000005", "totnum": 2, "cancel": 0, "net_issue": 2}]}]},
+            "doc_issue": {
+                "doc_det": [
+                    {
+                        "doc_num": 1,
+                        "doc_typ": "Invoices for outward supply",
+                        "docs": [
+                            {
+                                "num": 1,
+                                "from": "FAWRLX2600000080",
+                                "to": "LWABOG7260000005",
+                                "totnum": 2,
+                                "cancel": 0,
+                                "net_issue": 2,
+                            }
+                        ],
+                    }
+                ]
+            },
         }
         report = compare_against_reference(reference, reference)
 
@@ -587,20 +932,42 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_uploaded_platform_without_valid_rows_warns_without_zero_supeco(self):
         rows = [
-            finalize_transaction({
-                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "042026",
-                "invoice_no": "6p5kc26133", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 0, "gst_rate": 0, "igst": 0,
-            }),
-            finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-                "invoice_no": "IN-5", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-            }),
+            finalize_transaction(
+                {
+                    "platform": "meesho",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AARCM9332R1CQ",
+                    "filing_period": "042026",
+                    "invoice_no": "6p5kc26133",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "37",
+                    "taxable_value": 0,
+                    "gst_rate": 0,
+                    "igst": 0,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": "IN-5",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "27",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            ),
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
         etins = [item["etin"] for item in payload["supeco"]["clttx"]]
         report = gstr1_generation_report(payload, rows)
         self.assertNotIn("07AARCM9332R1CQ", etins)
-        self.assertIn("No valid Meesho rows found for period 042026", report["warnings"])
+        self.assertIn(
+            "No valid Meesho rows found for period 042026", report["warnings"]
+        )
 
     def test_meesho_parser_joins_financial_rows_with_invoice_metadata(self):
         with TemporaryDirectory() as temp_dir:
@@ -608,36 +975,62 @@ class GstCalculationTests(unittest.TestCase):
             sales = base / "tcs_sales.xlsx"
             returns = base / "tcs_sales_return.xlsx"
             invoice = base / "Tax_invoice_details.xlsx"
-            pd.DataFrame([{
-                "sub order num": "SO-1",
-                "order date": "2026-03-22",
-                "hsn code": "711790",
-                "quantity": 1,
-                "gst rate": 3,
-                "total taxable sale value": 100,
-                "tax amount": 3,
-                "total invoice value": 103,
-                "end customer state new": "TELANGANA",
-                "eco tcs gstin": "07AARCM9332R1CQ",
-            }]).to_excel(sales, index=False)
-            pd.DataFrame([{
-                "sub order num": "SO-2",
-                "order date": "2026-03-23",
-                "hsn code": "711790",
-                "quantity": 1,
-                "gst rate": 3,
-                "total taxable sale value": 50,
-                "tax amount": 1.5,
-                "total invoice value": 51.5,
-                "end customer state new": "KARNATAKA",
-                "eco tcs gstin": "07AARCM9332R1CQ",
-            }]).to_excel(returns, index=False)
-            pd.DataFrame([
-                {"type": "INVOICE", "order date": "2026-03-22", "suborder no.": "SO-1", "product description": "Jewellery", "hsn": "711790", "invoice no.": "6p5kc26244"},
-                {"type": "CREDIT", "order date": "2026-03-23", "suborder no.": "SO-2", "product description": "Jewellery", "hsn": "711790", "invoice no.": "6p5kcC26244"},
-            ]).to_excel(invoice, sheet_name="Invoice_Info", index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "sub order num": "SO-1",
+                        "order date": "2026-03-22",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": 100,
+                        "tax amount": 3,
+                        "total invoice value": 103,
+                        "end customer state new": "TELANGANA",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                    }
+                ]
+            ).to_excel(sales, index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "sub order num": "SO-2",
+                        "order date": "2026-03-23",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": 50,
+                        "tax amount": 1.5,
+                        "total invoice value": 51.5,
+                        "end customer state new": "KARNATAKA",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                    }
+                ]
+            ).to_excel(returns, index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "type": "INVOICE",
+                        "order date": "2026-03-22",
+                        "suborder no.": "SO-1",
+                        "product description": "Jewellery",
+                        "hsn": "711790",
+                        "invoice no.": "6p5kc26244",
+                    },
+                    {
+                        "type": "CREDIT",
+                        "order date": "2026-03-23",
+                        "suborder no.": "SO-2",
+                        "product description": "Jewellery",
+                        "hsn": "711790",
+                        "invoice no.": "6p5kcC26244",
+                    },
+                ]
+            ).to_excel(invoice, sheet_name="Invoice_Info", index=False)
 
-            result = MeeshoParser("07TCRPS8655B1ZK", "032026").parse([sales, returns, invoice])
+            result = MeeshoParser("07TCRPS8655B1ZK", "032026").parse(
+                [sales, returns, invoice]
+            )
 
         self.assertEqual(result.errors, [])
         self.assertEqual(len(result.transactions), 2)
@@ -647,6 +1040,92 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(invoices["6p5kc26244"]["taxable_value"], Decimal("100.00"))
         self.assertEqual(invoices["6p5kcC26244"]["doc_type"], "credit_note")
         self.assertEqual(invoices["6p5kcC26244"]["taxable_value"], Decimal("-50.00"))
+
+    def test_flipkart_parser_joins_tcs_sales_rows_with_invoice_metadata(self):
+        with TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            sales = base / "tcs_sales.xlsx"
+            returns = base / "tcs_sales_return.xlsx"
+            invoice = base / "Tax_invoice_details.xlsx"
+            pd.DataFrame(
+                [
+                    {
+                        "sub order num": "SO-1",
+                        "order date": "2026-03-22",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": 100,
+                        "tax amount": 3,
+                        "total invoice value": 103,
+                        "end customer state new": "TELANGANA",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                    }
+                ]
+            ).to_excel(sales, index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "sub order num": "SO-2",
+                        "order date": "2026-03-23",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": 50,
+                        "tax amount": 1.5,
+                        "total invoice value": 51.5,
+                        "end customer state new": "KARNATAKA",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                    }
+                ]
+            ).to_excel(returns, index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "type": "INVOICE",
+                        "order date": "2026-03-22",
+                        "suborder no.": "SO-1",
+                        "product description": "Jewellery",
+                        "hsn": "711790",
+                        "invoice no.": "6p5kc26244",
+                    },
+                    {
+                        "type": "CREDIT",
+                        "order date": "2026-03-23",
+                        "suborder no.": "SO-2",
+                        "product description": "Jewellery",
+                        "hsn": "711790",
+                        "invoice no.": "6p5kcC26244",
+                    },
+                ]
+            ).to_excel(invoice, sheet_name="Invoice_Info", index=False)
+
+            result = FlipkartParser("07TCRPS8655B1ZK", "032026").parse(
+                [sales, returns, invoice]
+            )
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.transactions), 2)
+        valid_rows = [
+            txn for txn in result.transactions if txn["validation_status"] == "valid"
+        ]
+        self.assertEqual(len(valid_rows), 2)
+        invoice_rows = [
+            txn
+            for txn in result.transactions
+            if txn["invoice_no"] == "6p5kc26244"
+            and txn["taxable_value"] == Decimal("100.00")
+        ]
+        credit_rows = [
+            txn
+            for txn in result.transactions
+            if txn["invoice_no"] == "6p5kcC26244"
+            and txn["taxable_value"] == Decimal("-50.00")
+        ]
+        self.assertEqual(len(invoice_rows), 1)
+        self.assertEqual(len(credit_rows), 1)
+        self.assertEqual(invoice_rows[0]["doc_type"], "invoice")
+        self.assertEqual(credit_rows[0]["doc_type"], "credit_note")
 
     def test_meesho_parser_accepts_csv_uploads(self):
         with TemporaryDirectory() as temp_dir:
@@ -665,36 +1144,50 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(txn["buyer_state_code"], "36")
         self.assertEqual(txn["taxable_value"], Decimal("100.00"))
 
-    def test_meesho_parser_uses_suborder_fallback_when_invoice_metadata_is_missing(self):
+    def test_meesho_parser_uses_suborder_fallback_when_invoice_metadata_is_missing(
+        self,
+    ):
         with TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
             returns = base / "tcs_sales_return.xlsx"
             invoice = base / "Tax_invoice_details.xlsx"
-            pd.DataFrame([{
-                "sub order num": "SO-MISSING",
-                "order date": "2026-03-23",
-                "hsn code": "711790",
-                "quantity": 1,
-                "gst rate": 3,
-                "total taxable sale value": 50,
-                "tax amount": 1.5,
-                "total invoice value": 51.5,
-                "end customer state new": "KARNATAKA",
-                "eco tcs gstin": "07AARCM9332R1CQ",
-            }]).to_excel(returns, index=False)
-            pd.DataFrame([{
-                "type": "INVOICE",
-                "order date": "2026-03-22",
-                "suborder no.": "OTHER",
-                "hsn": "711790",
-                "invoice no.": "6p5kc26244",
-            }]).to_excel(invoice, sheet_name="Invoice_Info", index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "sub order num": "SO-MISSING",
+                        "order date": "2026-03-23",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": 50,
+                        "tax amount": 1.5,
+                        "total invoice value": 51.5,
+                        "end customer state new": "KARNATAKA",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                    }
+                ]
+            ).to_excel(returns, index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "type": "INVOICE",
+                        "order date": "2026-03-22",
+                        "suborder no.": "OTHER",
+                        "hsn": "711790",
+                        "invoice no.": "6p5kc26244",
+                    }
+                ]
+            ).to_excel(invoice, sheet_name="Invoice_Info", index=False)
 
             result = MeeshoParser("07TCRPS8655B1ZK", "032026").parse([returns, invoice])
 
         self.assertEqual(result.errors, [])
-        financial_rows = [row for row in result.transactions if row["gst_rate"] != Decimal("0.00")]
-        metadata_rows = [row for row in result.transactions if row["gst_rate"] == Decimal("0.00")]
+        financial_rows = [
+            row for row in result.transactions if row["gst_rate"] != Decimal("0.00")
+        ]
+        metadata_rows = [
+            row for row in result.transactions if row["gst_rate"] == Decimal("0.00")
+        ]
         self.assertEqual(len(financial_rows), 1)
         self.assertEqual(financial_rows[0]["invoice_no"], "SO-MISSING")
         self.assertEqual(financial_rows[0]["doc_type"], "credit_note")
@@ -707,38 +1200,42 @@ class GstCalculationTests(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
             sales = base / "tcs_sales.xlsx"
-            pd.DataFrame([
-                {
-                    "sub order num": "SO-ROUND-1",
-                    "order date": "2026-04-10",
-                    "invoice no.": "6p5kc27R1",
-                    "hsn code": "711790",
-                    "quantity": 1,
-                    "gst rate": 3,
-                    "total taxable sale value": "100.005",
-                    "tax amount": "3.005",
-                    "total invoice value": "103.01",
-                    "end customer state new": "TELANGANA",
-                    "eco tcs gstin": "07AARCM9332R1CQ",
-                },
-                {
-                    "sub order num": "SO-ROUND-2",
-                    "order date": "2026-04-10",
-                    "invoice no.": "6p5kc27R2",
-                    "hsn code": "711790",
-                    "quantity": 1,
-                    "gst rate": 3,
-                    "total taxable sale value": "100.005",
-                    "tax amount": "3.005",
-                    "total invoice value": "103.01",
-                    "end customer state new": "TELANGANA",
-                    "eco tcs gstin": "07AARCM9332R1CQ",
-                },
-            ]).to_excel(sales, index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "sub order num": "SO-ROUND-1",
+                        "order date": "2026-04-10",
+                        "invoice no.": "6p5kc27R1",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": "100.005",
+                        "tax amount": "3.005",
+                        "total invoice value": "103.01",
+                        "end customer state new": "TELANGANA",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                    },
+                    {
+                        "sub order num": "SO-ROUND-2",
+                        "order date": "2026-04-10",
+                        "invoice no.": "6p5kc27R2",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": "100.005",
+                        "tax amount": "3.005",
+                        "total invoice value": "103.01",
+                        "end customer state new": "TELANGANA",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                    },
+                ]
+            ).to_excel(sales, index=False)
 
             result = MeeshoParser("07TCRPS8655B1ZK", "042026").parse([sales])
 
-        taxable = sum((txn["taxable_value"] for txn in result.transactions), Decimal("0.00"))
+        taxable = sum(
+            (txn["taxable_value"] for txn in result.transactions), Decimal("0.00")
+        )
         total_tax = sum(
             (
                 txn["igst"] + txn["cgst"] + txn["sgst"] + txn["cess"]
@@ -750,57 +1247,103 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(taxable, Decimal("200.01"))
         self.assertEqual(total_tax, Decimal("6.01"))
         self.assertEqual(
-            result.debug["source_total_reconciliation"]["deltas_applied"]["taxable_value"],
+            result.debug["source_total_reconciliation"]["deltas_applied"][
+                "taxable_value"
+            ],
             "-0.01",
         )
 
     def test_meesho_parser_keeps_sales_manifested_in_return_period(self):
         with TemporaryDirectory() as temp_dir:
             sales = Path(temp_dir) / "tcs_sales.xlsx"
-            pd.DataFrame([{
-                "sub order num": "SO-MANIFEST-MAY",
-                "order date": "2026-04-30",
-                "manifest date": "2026-05-01",
-                "hsn code": "711790",
-                "quantity": 1,
-                "gst rate": 3,
-                "total taxable sale value": "110.2135922330097",
-                "tax amount": "3.306407766990291",
-                "total invoice value": "113.52",
-                "end customer state new": "UTTAR PRADESH",
-                "eco tcs gstin": "07AARCM9332R1CQ",
-                "financial year": 2026,
-                "month number": 5,
-            }]).to_excel(sales, index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "sub order num": "SO-MANIFEST-MAY",
+                        "order date": "2026-04-30",
+                        "manifest date": "2026-05-01",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": "110.2135922330097",
+                        "tax amount": "3.306407766990291",
+                        "total invoice value": "113.52",
+                        "end customer state new": "UTTAR PRADESH",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                        "financial year": 2026,
+                        "month number": 5,
+                    }
+                ]
+            ).to_excel(sales, index=False)
 
             result = MeeshoParser("07TCRPS8655B1ZK", "052026").parse([sales])
 
         self.assertEqual(result.errors, [])
         self.assertEqual(result.debug.get("period_excluded_rows"), None)
         self.assertEqual(len(result.transactions), 1)
-        self.assertEqual(result.transactions[0]["document_date"].isoformat(), "2026-05-01")
+        self.assertEqual(
+            result.transactions[0]["document_date"].isoformat(), "2026-05-01"
+        )
         self.assertEqual(result.transactions[0]["taxable_value"], Decimal("110.21"))
 
     def test_gstr1_json_contract_matches_offline_tool_structure(self):
         rows = [
-            finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-                "invoice_no": "IN-1", "doc_type": "invoice", "buyer_state_code": "27", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-            }),
-            finalize_transaction({
-                "platform": "amazon", "gstin": "07ABCDE1234F1Z5", "etin": "07AAICA3918J1CV", "filing_period": "042026",
-                "invoice_no": "CN-1", "doc_type": "credit_note", "buyer_state_code": "27", "taxable_value": 10, "gst_rate": 3, "igst": 0.3,
-            }),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": "IN-1",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "27",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            ),
+            finalize_transaction(
+                {
+                    "platform": "amazon",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AAICA3918J1CV",
+                    "filing_period": "042026",
+                    "invoice_no": "CN-1",
+                    "doc_type": "credit_note",
+                    "buyer_state_code": "27",
+                    "taxable_value": 10,
+                    "gst_rate": 3,
+                    "igst": 0.3,
+                }
+            ),
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
 
-        self.assertEqual(list(payload.keys()), ["gstin", "fp", "version", "hash", "b2cs", "supeco", "doc_issue"])
+        self.assertEqual(
+            list(payload.keys()),
+            ["gstin", "fp", "version", "hash", "b2cs", "supeco", "doc_issue"],
+        )
         self.assertEqual(payload["hash"], "hash")
         self.assertEqual(set(payload["supeco"].keys()), {"clttx"})
         self.assertNotIn("supeco_det", payload["supeco"])
-        self.assertEqual(set(payload["b2cs"][0].keys()), {"sply_ty", "rt", "typ", "pos", "txval", "iamt", "csamt"})
-        self.assertTrue(all(set(section.keys()) == {"doc_num", "doc_typ", "docs"} for section in payload["doc_issue"]["doc_det"]))
-        self.assertTrue(all(set(doc.keys()) == {"num", "from", "to", "totnum", "cancel", "net_issue"} for section in payload["doc_issue"]["doc_det"] for doc in section["docs"]))
+        self.assertEqual(
+            set(payload["b2cs"][0].keys()),
+            {"sply_ty", "rt", "typ", "pos", "txval", "iamt", "csamt"},
+        )
+        self.assertTrue(
+            all(
+                set(section.keys()) == {"doc_num", "doc_typ", "docs"}
+                for section in payload["doc_issue"]["doc_det"]
+            )
+        )
+        self.assertTrue(
+            all(
+                set(doc.keys())
+                == {"num", "from", "to", "totnum", "cancel", "net_issue"}
+                for section in payload["doc_issue"]["doc_det"]
+                for doc in section["docs"]
+            )
+        )
 
     def test_gstr1_report_blocks_schema_drift_and_fake_rows(self):
         payload = {
@@ -808,46 +1351,142 @@ class GstCalculationTests(unittest.TestCase):
             "fp": "042026",
             "version": "GST3.1.6",
             "hash": "bad",
-            "b2cs": [{"sply_ty": "INTER", "rt": 0, "typ": "OE", "pos": "27", "txval": 0, "iamt": 0, "csamt": 0}],
+            "b2cs": [
+                {
+                    "sply_ty": "INTER",
+                    "rt": 0,
+                    "typ": "OE",
+                    "pos": "27",
+                    "txval": 0,
+                    "iamt": 0,
+                    "csamt": 0,
+                }
+            ],
             "supeco": {"supeco_det": []},
-            "doc_issue": {"doc_det": [{"doc_num": 1, "doc_typ": "Wrong", "docs": [{"num": 1, "from": "IN-1", "to": "IN-3", "totnum": 2, "cancel": 0, "net_issue": 2}]}]},
+            "doc_issue": {
+                "doc_det": [
+                    {
+                        "doc_num": 1,
+                        "doc_typ": "Wrong",
+                        "docs": [
+                            {
+                                "num": 1,
+                                "from": "IN-1",
+                                "to": "IN-3",
+                                "totnum": 2,
+                                "cancel": 0,
+                                "net_issue": 2,
+                            }
+                        ],
+                    }
+                ]
+            },
         }
         report = gstr1_generation_report(payload, [])
 
         self.assertTrue(any("hash" in error for error in report["errors"]))
         self.assertTrue(any("SUPECO" in error for error in report["errors"]))
-        self.assertTrue(any("fake" in error.lower() or "rate" in error.lower() for error in report["errors"]))
-        self.assertTrue(any("implies 3 documents" in error for error in report["errors"]))
+        self.assertTrue(
+            any(
+                "fake" in error.lower() or "rate" in error.lower()
+                for error in report["errors"]
+            )
+        )
+        self.assertTrue(
+            any("implies 3 documents" in error for error in report["errors"])
+        )
 
     def test_gstr1_excel_contract_matches_offline_tool_sheet_layout(self):
         rows = [
-            finalize_transaction({
-                "platform": "meesho", "gstin": "07ABCDE1234F1Z5", "etin": "07AARCM9332R1CQ", "filing_period": "042026",
-                "invoice_no": "6p5kc271", "doc_type": "invoice", "buyer_state_code": "37", "taxable_value": 100, "gst_rate": 3, "igst": 3,
-            })
+            finalize_transaction(
+                {
+                    "platform": "meesho",
+                    "gstin": "07ABCDE1234F1Z5",
+                    "etin": "07AARCM9332R1CQ",
+                    "filing_period": "042026",
+                    "invoice_no": "6p5kc271",
+                    "doc_type": "invoice",
+                    "buyer_state_code": "37",
+                    "taxable_value": 100,
+                    "gst_rate": 3,
+                    "igst": 3,
+                }
+            )
         ]
         payload = build_gstr1_json("07ABCDE1234F1Z5", "042026", rows)
         with TemporaryDirectory() as temp_dir:
             path = write_gstr1_excel(Path(temp_dir) / "gstr1.xlsx", payload, rows)
             xl = pd.ExcelFile(path)
-            self.assertEqual(xl.sheet_names, ["b2b,sez,de", "b2cl", "b2cs", "cdnr", "hsn", "hsn(b2b)", "hsn(b2c)", "exemp", "eco", "docs"])
+            self.assertEqual(
+                xl.sheet_names,
+                [
+                    "b2b,sez,de",
+                    "b2cl",
+                    "b2cs",
+                    "cdnr",
+                    "hsn",
+                    "hsn(b2b)",
+                    "hsn(b2c)",
+                    "exemp",
+                    "eco",
+                    "docs",
+                ],
+            )
             b2cs = pd.read_excel(path, sheet_name="b2cs", header=None, dtype=object)
             eco = pd.read_excel(path, sheet_name="eco", header=None, dtype=object)
             docs = pd.read_excel(path, sheet_name="docs", header=None, dtype=object)
 
-        self.assertEqual(list(b2cs.iloc[3, :7]), ["Type", "Place Of Supply", "Applicable % of Tax Rate", "Rate", "Taxable Value", "Cess Amount", "E-Commerce GSTIN"])
+        self.assertEqual(
+            list(b2cs.iloc[3, :7]),
+            [
+                "Type",
+                "Place Of Supply",
+                "Applicable % of Tax Rate",
+                "Rate",
+                "Taxable Value",
+                "Cess Amount",
+                "E-Commerce GSTIN",
+            ],
+        )
         self.assertEqual(b2cs.iloc[4, 1], "37-Andhra Pradesh")
-        self.assertEqual(list(eco.iloc[3, :8]), ["Nature of Supply", "GSTIN of E-Commerce Operator", "E-Commerce Operator Name", "Net value of supplies", "Integrated tax", "Central tax", "State/UT tax", "Cess"])
+        self.assertEqual(
+            list(eco.iloc[3, :8]),
+            [
+                "Nature of Supply",
+                "GSTIN of E-Commerce Operator",
+                "E-Commerce Operator Name",
+                "Net value of supplies",
+                "Integrated tax",
+                "Central tax",
+                "State/UT tax",
+                "Cess",
+            ],
+        )
         self.assertEqual(eco.iloc[4, 1], "07AARCM9332R1CQ")
-        self.assertEqual(list(docs.iloc[3, :5]), ["Nature of Document", "Sr. No. From", "Sr. No. To", "Total Number", "Cancelled"])
+        self.assertEqual(
+            list(docs.iloc[3, :5]),
+            [
+                "Nature of Document",
+                "Sr. No. From",
+                "Sr. No. To",
+                "Total Number",
+                "Cancelled",
+            ],
+        )
 
     def test_flipkart_february_and_march_report_cycle_totals_stay_stable(self):
         paths = [
-            Path("/home/jarvis/Downloads/68b9958b-9e39-4c6b-877d-dac7f386164d_1779267751000.xlsx"),
-            Path("/home/jarvis/Downloads/11d11828-0221-4866-b714-b5a26595f116_1779106486000.xlsx"),
+            Path(
+                "/home/jarvis/Downloads/68b9958b-9e39-4c6b-877d-dac7f386164d_1779267751000.xlsx"
+            ),
+            Path(
+                "/home/jarvis/Downloads/11d11828-0221-4866-b714-b5a26595f116_1779106486000.xlsx"
+            ),
         ]
         if not all(path.exists() for path in paths):
-            self.skipTest("Flipkart February/March source files are not available on this machine.")
+            self.skipTest(
+                "Flipkart February/March source files are not available on this machine."
+            )
 
         expected = {
             "022026": {
@@ -890,8 +1529,12 @@ class GstCalculationTests(unittest.TestCase):
             "meesho_invoice": "/home/jarvis/Downloads/3412749_2026-04-01_2026-04-30_TAX_INVOICE/Tax_invoice_details.xlsx",
             "amazon": "/home/jarvis/Downloads/b2cReport_April_2026/MTR_B2C-APRIL-2026-A1YGIWFZR88S6S.csv",
         }
-        if not all(__import__("pathlib").Path(path).exists() for path in paths.values()):
-            self.skipTest("Real marketplace sample files are not available on this machine.")
+        if not all(
+            __import__("pathlib").Path(path).exists() for path in paths.values()
+        ):
+            self.skipTest(
+                "Real marketplace sample files are not available on this machine."
+            )
         summary = calculate_marketplace_summary(paths)
         combined = summary["combined"]
         flipkart = summary["platform_summary"]["Flipkart"]

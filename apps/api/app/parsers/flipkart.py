@@ -2,7 +2,6 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
-
 from app.parsers.base import (
     MarketplaceParser,
     ParseResult,
@@ -10,16 +9,13 @@ from app.parsers.base import (
     detect_header_row_frame,
     first_value,
     has_explicit_tax_split,
-    record_period_exclusion,
     raw_frames,
+    record_period_exclusion,
     should_skip_transaction,
+    text,
     unique_headers,
 )
-from app.services.pos_resolver import (
-    new_pos_debug,
-    observe_pos_debug,
-    resolve_pos,
-)
+from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
 from app.services.transaction_normalizer import finalize_transaction
 
 
@@ -140,10 +136,87 @@ class FlipkartParser(MarketplaceParser):
                 return "debit_note"
             return "credit_note"
 
+        raw_type = str(
+            first_value(row, ["type", "document type", "doc type", "transaction type"])
+            or ""
+        ).lower()
+        if "credit" in raw_type or "return" in raw_type or "cancellation" in raw_type:
+            return "credit_note"
+        if "debit" in raw_type:
+            return "debit_note"
+
         event_type = str(first_value(row, ["event type"]) or "").lower()
         if "return" in event_type or "cancellation" in event_type:
             return "credit_note"
         return "invoice"
+
+    def _is_invoice_metadata_row(self, row: dict) -> bool:
+        has_invoice = first_value(
+            row,
+            [
+                "invoice no",
+                "invoice number",
+                "tax invoice no",
+                "document number",
+                "doc no",
+            ],
+        )
+        has_suborder = first_value(
+            row,
+            [
+                "suborder no",
+                "sub order num",
+                "suborder number",
+                "sub order number",
+                "order id",
+            ],
+        )
+        has_type_field = first_value(
+            row,
+            ["type", "document type", "transaction type"],
+        )
+        has_financial_columns = any(
+            first_value(row, [field]) not in (None, "")
+            for field in {
+                "total taxable sale value",
+                "taxable value",
+                "tax amount",
+                "igst amount",
+                "cgst amount",
+                "sgst amount",
+                "total invoice value",
+                "invoice amount",
+                "gross amount",
+            }
+        )
+        return bool(
+            has_invoice
+            and has_suborder
+            and has_type_field
+            and not has_financial_columns
+        )
+
+    def _is_return_row(self, path: Path, sheet_name: str, row: dict) -> bool:
+        lower_path = path.name.lower()
+        if "return" in lower_path or "credit" in lower_path:
+            return True
+        sheet = sheet_name.lower()
+        if "return" in sheet or "credit" in sheet:
+            return True
+
+        transaction_type = str(
+            first_value(row, ["transaction type", "transaction_type", "type"]) or ""
+        ).lower()
+        if "return" in transaction_type or "cancellation" in transaction_type:
+            return True
+
+        cancel_date = first_value(
+            row, ["cancel_return_date", "cancel return date", "return date"]
+        )
+        if cancel_date not in (None, ""):
+            return True
+
+        return False
 
     def _debug_row(
         self,
@@ -197,6 +270,70 @@ class FlipkartParser(MarketplaceParser):
             "sgst": 0,
         }
 
+        invoice_metadata_by_suborder: dict[str, dict[str, str]] = {}
+
+        # First pass: collect invoice metadata from Tax_invoice_details or similar metadata rows.
+        for path in files:
+            try:
+                for sheet_name, frame in raw_frames(path):
+                    if frame.dropna(how="all").empty:
+                        continue
+
+                    header_index = detect_header_row_frame(
+                        frame,
+                        ["order", "invoice", "taxable", "igst", "cgst", "sgst"],
+                    )
+                    headers = unique_headers(
+                        [
+                            clean_column(value) or f"column {idx}"
+                            for idx, value in enumerate(
+                                frame.iloc[header_index].tolist()
+                            )
+                        ]
+                    )
+                    data = frame.iloc[header_index + 1 :].copy()
+                    data.columns = headers
+                    data = data.dropna(how="all")
+                    if data.empty:
+                        continue
+
+                    for _, series in data.iterrows():
+                        row = series.to_dict()
+                        if self._is_invoice_metadata_row(row):
+                            suborder = text(
+                                first_value(
+                                    row,
+                                    [
+                                        "suborder no",
+                                        "sub order num",
+                                        "suborder number",
+                                        "sub order number",
+                                        "order id",
+                                    ],
+                                )
+                            )
+                            invoice_no = text(
+                                first_value(
+                                    row,
+                                    [
+                                        "invoice no",
+                                        "invoice number",
+                                        "tax invoice no",
+                                        "document number",
+                                        "doc no",
+                                    ],
+                                )
+                            )
+                            if suborder and invoice_no:
+                                invoice_metadata_by_suborder[suborder] = {
+                                    "invoice_no": invoice_no,
+                                    "doc_type": self._classify_doc_type(
+                                        row, str(sheet_name)
+                                    ),
+                                }
+            except Exception:
+                continue
+
         for path in files:
             try:
                 for sheet_name, frame in raw_frames(path):
@@ -232,15 +369,41 @@ class FlipkartParser(MarketplaceParser):
                     for index, series in data.iterrows():
                         row = series.to_dict()
                         sheet_title = str(sheet_name)
+                        if self._is_invoice_metadata_row(row):
+                            continue
+
                         doc_type = self._classify_doc_type(row, sheet_title)
+
+                        if self._is_return_row(path, sheet_title, row):
+                            doc_type = "credit_note"
+
                         row_for_normalization = {**row, "doc_type": doc_type}
 
                         txn = self.normalize_row(
                             row_for_normalization,
                             f"{path.name}:{sheet_title}",
                         )
-                        txn["_preserve_source_sign"] = True
+                        if doc_type == "invoice":
+                            txn["_preserve_source_sign"] = True
                         txn["doc_type"] = doc_type
+
+                        if not txn.get("invoice_no") and txn.get("order_id"):
+                            metadata = invoice_metadata_by_suborder.get(
+                                txn.get("order_id")
+                            )
+                            if metadata:
+                                txn["invoice_no"] = metadata["invoice_no"]
+                                if txn.get("doc_type") == "invoice":
+                                    txn["doc_type"] = metadata["doc_type"]
+                        if not txn.get("invoice_no") and txn.get("order_item_id"):
+                            metadata = invoice_metadata_by_suborder.get(
+                                txn.get("order_item_id")
+                            )
+                            if metadata:
+                                txn["invoice_no"] = metadata["invoice_no"]
+                                if txn.get("doc_type") == "invoice":
+                                    txn["doc_type"] = metadata["doc_type"]
+
                         if has_explicit_tax_split(row):
                             txn["_preserve_source_tax_split"] = True
 
