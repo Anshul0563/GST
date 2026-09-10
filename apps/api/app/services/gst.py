@@ -245,7 +245,11 @@ def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool
         + money(row.get("sgst"))
         + money(row.get("cess"))
     )
-    if rate == Decimal("0.00"):
+    include_meesho_zero_rate = (
+        str(row.get("platform") or "").lower() == "meesho"
+        and taxable != Decimal("0.00")
+    )
+    if rate == Decimal("0.00") and not include_meesho_zero_rate:
         return False
     if (
         mode == GSTTOOL_COMPATIBLE
@@ -784,9 +788,11 @@ def validate_gstr1_schema(
         if set(item.keys()) != expected_keys:
             errors.append(f"B2CS key mismatch for POS {item.get('pos')}")
 
-        if money(item.get("rt")) not in SUPPORTED_RATES or money(
-            item.get("rt")
-        ) == Decimal("0.00"):
+        item_rate = money(item.get("rt"))
+        item_taxable = money(item.get("txval"))
+        if item_rate not in SUPPORTED_RATES or (
+            item_rate == Decimal("0.00") and item_taxable == Decimal("0.00")
+        ):
             errors.append(
                 f"Invalid/fake B2CS rate for POS {item.get('pos')}: {item.get('rt')}"
             )

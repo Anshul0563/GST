@@ -9,6 +9,7 @@ from app.parsers.snapdeal import (
     SHEET_7B,
     SHEET_12,
     SHEET_GSTR8,
+    GSTR8_HEADERS,
     SHEET_SERIES,
     SnapdealParser,
 )
@@ -32,6 +33,7 @@ def _workbook_rows() -> dict[str, pd.DataFrame]:
             "tcs gstin of snapdeal": SNAPDEAL,
             "gstin of seller": SELLER,
             "delivered state": "27",
+            "sub order no": "SUB-1001",
             "invoice number": "SD-1001",
             "order invoice date": "15/08/2026",
             "invoice amount": "118.99",
@@ -91,7 +93,7 @@ def _workbook_rows() -> dict[str, pd.DataFrame]:
                 "cess amount": "0.00",
             },
         ),
-        SHEET_GSTR8: pd.DataFrame([["ignored gstr-8 data"]]),
+        SHEET_GSTR8: pd.DataFrame([sorted(GSTR8_HEADERS)]),
         SHEET_SERIES: _frame(
             SHEET_SERIES,
             {
@@ -121,6 +123,8 @@ def test_snapdeal_parser_uses_sheet_specific_mapping_and_source_tax(monkeypatch)
     assert SHEET_GSTR8 in result.debug["ignored_sheets"]
     assert result.transactions[0]["taxable_value"] == Decimal("100.13")
     assert result.transactions[0]["igst"] == Decimal("18.99")
+    assert result.transactions[0]["order_id"] == "SUB-1001"
+    assert result.transactions[0]["order_item_id"] == "SUB-1001"
     assert result.transactions[1]["taxable_value"] == Decimal("190.00")
     assert result.transactions[1]["buyer_state_code"] == "07"
     assert result.transactions[2]["buyer_state_code"] == "29"

@@ -17,6 +17,7 @@ from app.parsers.base import (
 )
 from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
 from app.services.transaction_normalizer import finalize_transaction
+from app.services.validation import money
 
 
 class FlipkartParser(MarketplaceParser):
@@ -218,6 +219,19 @@ class FlipkartParser(MarketplaceParser):
 
         return False
 
+    def _set_source_gross_amount(self, txn: dict, row: dict) -> None:
+        """Use Flipkart's invoice total instead of its pre-discount price."""
+        raw_amount = first_value(
+            row,
+            [
+                "final invoice amount (price after discount+shipping charges)",
+                "invoice amount",
+                "buyer invoice amount",
+            ],
+        )
+        if raw_amount not in (None, ""):
+            txn["gross_amount"] = money(raw_amount)
+
     def _debug_row(
         self,
         result: ParseResult,
@@ -291,7 +305,7 @@ class FlipkartParser(MarketplaceParser):
                             )
                         ]
                     )
-                    data = frame.iloc[header_index + 1 :].copy()
+                    data: pd.DataFrame = frame.iloc[header_index + 1 :].copy()
                     data.columns = headers
                     data = data.dropna(how="all")
                     if data.empty:
@@ -360,7 +374,7 @@ class FlipkartParser(MarketplaceParser):
                             )
                         ]
                     )
-                    data = frame.iloc[header_index + 1 :].copy()
+                    data: pd.DataFrame = frame.iloc[header_index + 1 :].copy()
                     data.columns = headers
                     data = data.dropna(how="all")
                     if data.empty:
@@ -383,22 +397,21 @@ class FlipkartParser(MarketplaceParser):
                             row_for_normalization,
                             f"{path.name}:{sheet_title}",
                         )
+                        self._set_source_gross_amount(txn, row)
                         if doc_type == "invoice":
                             txn["_preserve_source_sign"] = True
                         txn["doc_type"] = doc_type
 
-                        if not txn.get("invoice_no") and txn.get("order_id"):
-                            metadata = invoice_metadata_by_suborder.get(
-                                txn.get("order_id")
-                            )
+                        order_id = text(txn.get("order_id"))
+                        if not txn.get("invoice_no") and order_id:
+                            metadata = invoice_metadata_by_suborder.get(order_id)
                             if metadata:
                                 txn["invoice_no"] = metadata["invoice_no"]
                                 if txn.get("doc_type") == "invoice":
                                     txn["doc_type"] = metadata["doc_type"]
-                        if not txn.get("invoice_no") and txn.get("order_item_id"):
-                            metadata = invoice_metadata_by_suborder.get(
-                                txn.get("order_item_id")
-                            )
+                        order_item_id = text(txn.get("order_item_id"))
+                        if not txn.get("invoice_no") and order_item_id:
+                            metadata = invoice_metadata_by_suborder.get(order_item_id)
                             if metadata:
                                 txn["invoice_no"] = metadata["invoice_no"]
                                 if txn.get("doc_type") == "invoice":

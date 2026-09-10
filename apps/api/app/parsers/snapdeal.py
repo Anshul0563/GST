@@ -27,11 +27,28 @@ SHEET_12 = "Section 12 in GSTR-1"
 SHEET_GSTR8 = "Section 3 in GSTR-8"
 SHEET_SERIES = "Invoice Series"
 
+GSTR8_HEADERS = {
+    "gstin of seller",
+    "seller code",
+    "tcs gstin of snapdeal",
+    "gross taxable value",
+    "taxable sales return value",
+    "net taxable value",
+    "tcs %",
+    "tcs igst amount",
+    "tcs cgst amount",
+    "tcs sgst amount",
+    "igst amount",
+    "cgst amount",
+    "sgst amount",
+}
+
 REQUIRED_HEADERS = {
     SHEET_5B: {
         "tcs gstin of snapdeal",
         "gstin of seller",
         "delivered state",
+        "sub order no",
         "invoice number",
         "order invoice date",
         "invoice amount",
@@ -92,8 +109,9 @@ REQUIRED_HEADERS = {
 def _decimal(value: Any, field: str, row_number: int) -> Decimal:
     if value is None or str(value).strip().lower() in {"", "nan", "none", "null"}:
         raise ValueError(f"Missing numeric value for '{field}' at row {row_number}")
+    cleaned = str(value).replace(",", "").replace("₹", "").replace("%", "").strip()
     try:
-        return money(value)
+        return money(Decimal(cleaned))
     except (InvalidOperation, ValueError) as exc:
         raise ValueError(
             f"Invalid numeric value for '{field}' at row {row_number}"
@@ -120,6 +138,15 @@ def _require_headers(sheet_name: str, headers: list[str]) -> None:
     if missing:
         raise ValueError(
             f"Unsupported Snapdeal GST report format: missing column(s) {', '.join(repr(item) for item in missing)} in {sheet_name}"
+        )
+
+
+def _require_header_set(sheet_name: str, headers: list[str], required: set[str]) -> None:
+    missing = sorted(required - set(headers))
+    if missing:
+        raise ValueError(
+            f"Unsupported Snapdeal GST report format: missing column(s) "
+            f"{', '.join(repr(item) for item in missing)} in {sheet_name}"
         )
 
 
@@ -185,6 +212,87 @@ class SnapdealParser(MarketplaceParser):
         for field in totals:
             totals[field] += money(txn.get(field))
 
+    def _record_aggregate_source(
+        self, result: ParseResult, sheet: str, row: dict[str, Any], row_number: int
+    ) -> None:
+        totals = result.debug.setdefault("source_reconciliation", {}).setdefault(
+            sheet,
+            {
+                "rows": 0,
+                "gross_taxable_value": Decimal("0.00"),
+                "taxable_sales_return_value": Decimal("0.00"),
+                "aggregate_taxable_value": Decimal("0.00"),
+                "igst": Decimal("0.00"),
+                "cgst": Decimal("0.00"),
+                "sgst": Decimal("0.00"),
+                "cess": Decimal("0.00"),
+            },
+        )
+        gross = _decimal(
+            first_value(row, ["gross taxable value"]),
+            "gross taxable value",
+            row_number,
+        )
+        returns = _decimal(
+            first_value(row, ["taxable sales return value"]),
+            "taxable sales return value",
+            row_number,
+        )
+        aggregate = _decimal(
+            first_value(row, ["aggregate taxable value"]),
+            "aggregate taxable value",
+            row_number,
+        )
+        totals["rows"] += 1
+        totals["gross_taxable_value"] += gross
+        totals["taxable_sales_return_value"] += returns
+        totals["aggregate_taxable_value"] += aggregate
+        for field, names in {
+            "igst": ["igst amount"],
+            "cgst": ["cgst amount"],
+            "sgst": ["sgst/ut amount"],
+            "cess": ["cess amount"],
+        }.items():
+            value = first_value(row, names)
+            if value not in (None, ""):
+                totals[field] += _decimal(value, names[0], row_number)
+
+        expected = gross - abs(returns)
+        if abs(aggregate - expected) > Decimal("0.02"):
+            result.debug.setdefault("warnings", []).append(
+                {
+                    "sheet": sheet,
+                    "row": row_number,
+                    "type": "aggregate_taxable_mismatch",
+                    "gross_minus_return": str(expected),
+                    "source_aggregate": str(aggregate),
+                }
+            )
+
+    def _validate_tax_amount(
+        self,
+        result: ParseResult,
+        *,
+        sheet: str,
+        row_number: int,
+        taxable: Decimal,
+        rate: Decimal,
+        actual: Decimal,
+        field: str,
+    ) -> None:
+        expected = money(taxable * rate / Decimal("100"))
+        if abs(expected - actual) > Decimal("0.02"):
+            result.debug.setdefault("warnings", []).append(
+                {
+                    "sheet": sheet,
+                    "row": row_number,
+                    "type": "source_tax_mismatch",
+                    "field": field,
+                    "expected_from_rate": str(expected),
+                    "source_amount": str(actual),
+                }
+            )
+
     def _source_key(self, sheet: str, txn: dict[str, Any]) -> tuple[Any, ...]:
         if sheet == SHEET_5B:
             return (sheet, txn.get("invoice_no"))
@@ -214,6 +322,7 @@ class SnapdealParser(MarketplaceParser):
                 f"Invalid delivered state in {SHEET_5B} at row {row_number}"
             )
         invoice_no = text(first_value(row, ["invoice number"]))
+        sub_order_no = text(first_value(row, ["sub order no", "suborder no"]))
         invoice_date = parse_date(first_value(row, ["order invoice date"]))
         if not invoice_no:
             raise ValueError(
@@ -237,6 +346,8 @@ class SnapdealParser(MarketplaceParser):
         txn.update(
             {
                 "invoice_no": invoice_no,
+                "order_id": sub_order_no,
+                "order_item_id": sub_order_no,
                 "invoice_date": invoice_date,
                 "document_date": invoice_date,
                 "doc_type": "invoice",
@@ -294,8 +405,19 @@ class SnapdealParser(MarketplaceParser):
                 "buyer_state_name": pos,
                 "qty": Decimal("0"),
                 "taxable_value": net,
-                "gst_rate": _rate(
-                    first_value(row, ["cgst %", "igst %"]), "tax rate", row_number
+                "gst_rate": (
+                    _rate(first_value(row, ["igst %"]), "igst %", row_number)
+                    if not intra
+                    else _rate(
+                        _decimal(first_value(row, ["cgst %"]), "cgst %", row_number)
+                        + _decimal(
+                            first_value(row, ["sgst/ut %"]),
+                            "sgst/ut %",
+                            row_number,
+                        ),
+                        "total tax rate",
+                        row_number,
+                    )
                 ),
                 "igst": (
                     _decimal(
@@ -337,19 +459,74 @@ class SnapdealParser(MarketplaceParser):
     ) -> None:
         seller = _gstin(row, ["gstin of seller"], SHEET_12, row_number)
         self._validate_seller(seller, SHEET_12, row_number)
-        result.debug.setdefault("hsn_summary", []).append(
+        hsn = text(first_value(row, ["hsn number"])) or ""
+        summary = result.debug.setdefault("hsn_summary", {})
+        item = summary.setdefault(
+            hsn,
             {
                 "gstin": seller,
-                "hsn": text(first_value(row, ["hsn number"])),
-                "qty": _decimal(
-                    first_value(row, ["total quantity"]), "total quantity", row_number
+                "hsn": hsn,
+                "qty": Decimal("0.00"),
+                "total_value": Decimal("0.00"),
+                "taxable_value": Decimal("0.00"),
+                "igst": Decimal("0.00"),
+                "cgst": Decimal("0.00"),
+                "sgst": Decimal("0.00"),
+                "cess": Decimal("0.00"),
+            },
+        )
+        for key, names in {
+            "qty": ["total quantity"],
+            "total_value": ["total value"],
+            "taxable_value": ["total taxable value"],
+            "igst": ["igst amount"],
+            "cgst": ["cgst amount"],
+            "sgst": ["sgst amount"],
+            "cess": ["cess amount"],
+        }.items():
+            item[key] += _decimal(first_value(row, names), names[0], row_number)
+
+    def _parse_gstr8(
+        self, row: dict[str, Any], row_number: int, result: ParseResult
+    ) -> None:
+        seller = _gstin(row, ["gstin of seller"], SHEET_GSTR8, row_number)
+        self._validate_seller(seller, SHEET_GSTR8, row_number)
+        etin = _gstin(row, ["tcs gstin of snapdeal"], SHEET_GSTR8, row_number)
+        summary = result.debug.setdefault("gstr8_summary", [])
+        summary.append(
+            {
+                "seller_gstin": seller,
+                "seller_code": text(first_value(row, ["seller code"])),
+                "etin": etin,
+                "gross_taxable_value": _decimal(
+                    first_value(row, ["gross taxable value"]),
+                    "gross taxable value",
+                    row_number,
                 ),
-                "total_value": _decimal(
-                    first_value(row, ["total value"]), "total value", row_number
+                "taxable_sales_return_value": _decimal(
+                    first_value(row, ["taxable sales return value"]),
+                    "taxable sales return value",
+                    row_number,
                 ),
-                "taxable_value": _decimal(
-                    first_value(row, ["total taxable value"]),
-                    "total taxable value",
+                "net_taxable_value": _decimal(
+                    first_value(row, ["net taxable value"]),
+                    "net taxable value",
+                    row_number,
+                ),
+                "tcs_rate": _rate(first_value(row, ["tcs %"]), "tcs %", row_number),
+                "tcs_igst": _decimal(
+                    first_value(row, ["tcs igst amount"]),
+                    "tcs igst amount",
+                    row_number,
+                ),
+                "tcs_cgst": _decimal(
+                    first_value(row, ["tcs cgst amount"]),
+                    "tcs cgst amount",
+                    row_number,
+                ),
+                "tcs_sgst": _decimal(
+                    first_value(row, ["tcs sgst amount"]),
+                    "tcs sgst amount",
                     row_number,
                 ),
                 "igst": _decimal(
@@ -360,9 +537,6 @@ class SnapdealParser(MarketplaceParser):
                 ),
                 "sgst": _decimal(
                     first_value(row, ["sgst amount"]), "sgst amount", row_number
-                ),
-                "cess": _decimal(
-                    first_value(row, ["cess amount"]), "cess amount", row_number
                 ),
             }
         )
@@ -402,28 +576,58 @@ class SnapdealParser(MarketplaceParser):
         for path in files:
             try:
                 sheets = {name: frame for name, frame in raw_frames(path)}
-                missing = sorted(set(REQUIRED_HEADERS) - set(sheets))
+                missing = sorted(
+                    (set(REQUIRED_HEADERS) | {SHEET_GSTR8}) - set(sheets)
+                )
                 if missing:
                     raise ValueError(
                         f"Unsupported Snapdeal GST report format: missing sheet(s) {', '.join(missing)}"
                     )
                 result.debug.setdefault("ignored_sheets", []).append(SHEET_GSTR8)
-                for sheet in (SHEET_5B, SHEET_7A, SHEET_7B, SHEET_12, SHEET_SERIES):
+                for sheet in (
+                    SHEET_5B,
+                    SHEET_7A,
+                    SHEET_7B,
+                    SHEET_12,
+                    SHEET_GSTR8,
+                    SHEET_SERIES,
+                ):
                     headers, data = _headers(sheets[sheet])
-                    _require_headers(sheet, headers)
+                    if sheet == SHEET_GSTR8:
+                        _require_header_set(sheet, headers, GSTR8_HEADERS)
+                    else:
+                        _require_headers(sheet, headers)
                     for index, series in data.iterrows():
+                        # The Snapdeal export always places headers in row 1.
+                        # Keep the Excel row number in errors/debug even when
+                        # pandas has retained blank rows in the frame.
                         row_number = int(index) + 2
                         row = series.to_dict()
                         if sheet == SHEET_5B:
                             txn = self._parse_5b(row, row_number, path.name)
+                            self._validate_tax_amount(
+                                result,
+                                sheet=sheet,
+                                row_number=row_number,
+                                taxable=txn["taxable_value"],
+                                rate=txn["gst_rate"],
+                                actual=txn["igst"],
+                                field="igst amount",
+                            )
                             finalized = finalize_transaction(txn)
                         elif sheet == SHEET_7A:
+                            self._record_aggregate_source(
+                                result, sheet, row, row_number
+                            )
                             finalized = finalize_transaction(
                                 self._parse_aggregate(
                                     row, row_number, sheet, True, path.name
                                 )
                             )
                         elif sheet == SHEET_7B:
+                            self._record_aggregate_source(
+                                result, sheet, row, row_number
+                            )
                             finalized = finalize_transaction(
                                 self._parse_aggregate(
                                     row, row_number, sheet, False, path.name
@@ -431,6 +635,9 @@ class SnapdealParser(MarketplaceParser):
                             )
                         elif sheet == SHEET_12:
                             self._parse_hsn(row, row_number, result)
+                            continue
+                        elif sheet == SHEET_GSTR8:
+                            self._parse_gstr8(row, row_number, result)
                             continue
                         else:
                             self._parse_series(row, row_number, result)
@@ -454,4 +661,7 @@ class SnapdealParser(MarketplaceParser):
                             )
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})
+        hsn_summary = result.debug.get("hsn_summary")
+        if isinstance(hsn_summary, dict):
+            result.debug["hsn_summary"] = list(hsn_summary.values())
         return result

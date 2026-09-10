@@ -52,7 +52,7 @@ def is_empty(value: object) -> bool:
 
 
 def report_period_date(row: dict) -> object | None:
-    return first_value(
+    report_date = first_value(
         row,
         [
             "manifest date",
@@ -60,6 +60,18 @@ def report_period_date(row: dict) -> object | None:
             "report date",
         ],
     )
+    if text(report_date):
+        return report_date
+
+    # Meesho can include a cancellation/adjustment in the monthly TCS
+    # report even when its order date belongs to the previous month. In
+    # that case the report's financial year/month fields are the period
+    # authority, not the order date.
+    year = text(first_value(row, ["financial year", "fy"]))
+    month = text(first_value(row, ["month number", "month"]))
+    if year and month and month.isdigit() and 1 <= int(month) <= 12:
+        return f"{int(year):04d}-{int(month):02d}-01"
+    return None
 
 
 def align_sale_date_to_report_period(row: dict, filing_period: str) -> None:
@@ -80,7 +92,7 @@ def metadata_doc_type(raw_type: str) -> str | None:
     normalized = raw_type.strip().lower().replace(" ", "_")
     if normalized == "invoice":
         return "invoice"
-    if normalized in {"credit_note", "credit_discount"}:
+    if normalized in {"credit_note", "credit_discount", "credit_conversion"}:
         return "credit_note"
     return None
 
@@ -215,10 +227,16 @@ class MeeshoParser(MarketplaceParser):
         loaded_frames: list[tuple[Path, str, object]] = []
         metadata_by_suborder: dict[str, dict[str, dict[str, object]]] = {}
         metadata_documents: list[dict[str, object]] = []
+        etin_by_suborder: dict[str, str] = {}
+        report_etins: set[str] = set()
         source_totals = {
             "taxable_value": Decimal("0"),
             "total_tax": Decimal("0"),
             "gross_amount": Decimal("0"),
+        }
+        source_breakdown = {
+            "sales": {key: Decimal("0") for key in source_totals},
+            "returns": {key: Decimal("0") for key in source_totals},
         }
 
         for path in files:
@@ -233,6 +251,21 @@ class MeeshoParser(MarketplaceParser):
                         suborder = suborder_key(row)
                         if not suborder:
                             continue
+
+                        raw_etin = text(
+                            first_value(
+                                row,
+                                [
+                                    "eco tcs gstin",
+                                    "ecommerce gstin",
+                                    "operator gstin",
+                                ],
+                            )
+                        )
+                        if raw_etin:
+                            etin = raw_etin.upper()
+                            etin_by_suborder[suborder] = etin
+                            report_etins.add(etin)
 
                         raw_type = str(
                             first_value(
@@ -261,6 +294,7 @@ class MeeshoParser(MarketplaceParser):
                                 {
                                     "doc_type": doc_type_for_issue,
                                     "invoice_no": text(invoice_no),
+                                    "suborder": suborder,
                                     "invoice_date": first_value(
                                         row,
                                         [
@@ -363,13 +397,13 @@ class MeeshoParser(MarketplaceParser):
 
                 suborder = suborder_key(row)
 
-                is_return = "return" in path.name.lower() or first_value(
+                is_return = "return" in path.name.lower() or text(first_value(
                     row,
                     [
                         "cancel return date",
                         "return date",
                     ],
-                ) not in (None, "")
+                )) is not None
 
                 metadata_type = "credit_note" if is_return else "invoice"
 
@@ -438,6 +472,18 @@ class MeeshoParser(MarketplaceParser):
                     align_sale_date_to_report_period(row, self.filing_period)
 
                 row["doc_type"] = "credit_note" if is_return else "invoice"
+                source_etin = text(
+                    first_value(
+                        row,
+                        [
+                            "eco tcs gstin",
+                            "ecommerce gstin",
+                            "operator gstin",
+                        ],
+                    )
+                )
+                if source_etin:
+                    row["etin"] = source_etin.upper()
 
                 txn = self.normalize_row(
                     row,
@@ -493,6 +539,10 @@ class MeeshoParser(MarketplaceParser):
                     "gross_amount",
                     is_return,
                 )
+                breakdown = source_breakdown["returns" if is_return else "sales"]
+                for field in source_totals:
+                    source_value = signed_source_amount(row, field, is_return)
+                    breakdown[field] += abs(source_value) if is_return else source_value
                 result.transactions.append(finalized)
 
         existing_documents = {
@@ -511,11 +561,14 @@ class MeeshoParser(MarketplaceParser):
             if not key[0] or not key[1] or key in existing_documents:
                 continue
             document_date = parse_date(document.get("invoice_date"))
+            document_etin = etin_by_suborder.get(str(document.get("suborder") or ""))
+            if document_etin is None and len(report_etins) == 1:
+                document_etin = next(iter(report_etins))
             result.transactions.append(
                 {
                     "platform": self.platform,
                     "gstin": self.gstin,
-                    "etin": "07AARCM9332R1CQ",
+                    "etin": document_etin,
                     "filing_period": self.filing_period,
                     "order_id": None,
                     "order_item_id": None,
@@ -552,10 +605,24 @@ class MeeshoParser(MarketplaceParser):
         reconcile_source_totals(result, source_totals)
 
         result.debug["meesho_metadata_rows"] = len(metadata_by_suborder)
-
-        result.debug["meesho_financial_rows"] = len(
-            [txn for txn in result.transactions if txn.get("gst_rate") != Decimal("0.00")]
-        )
+        financial_transactions = [
+            txn
+            for txn in result.transactions
+            if "tcs_sales" in str(txn.get("source_file") or "").lower()
+        ]
+        metadata_only_transactions = [
+            txn for txn in result.transactions if txn not in financial_transactions
+        ]
+        result.debug["meesho_financial_rows"] = len(financial_transactions)
+        result.debug["meesho_metadata_only_rows"] = len(metadata_only_transactions)
+        result.debug["meesho_total_result_rows"] = len(result.transactions)
+        result.debug["meesho_source_breakdown"] = {
+            category: {
+                field: str(round_money(value))
+                for field, value in totals.items()
+            }
+            for category, totals in source_breakdown.items()
+        }
         result.debug["meesho_document_issue_rows"] = len(result.transactions)
 
         return result

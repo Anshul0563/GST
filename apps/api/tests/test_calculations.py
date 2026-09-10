@@ -156,6 +156,7 @@ class GstCalculationTests(unittest.TestCase):
         )
 
     def test_strict_gsttool_parity_mode_aliases_are_recognized(self):
+        parser = FlipkartParser("07TCRPS8655B1ZK", "032026")
         self.assertTrue(is_strict_gsttool_parity_mode("strict_gsttool_parity"))
         self.assertTrue(is_strict_gsttool_parity_mode("strict_gsttool_parity_mode"))
         self.assertEqual(
