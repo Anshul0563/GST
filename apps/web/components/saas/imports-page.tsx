@@ -18,7 +18,6 @@ import {
   ArrowRight,
   CheckCircle2,
   FileSpreadsheet,
-  RotateCw,
   Trash2,
   UploadCloud,
   X,
@@ -203,7 +202,6 @@ export function ImportsPage() {
   const [activeBatch, setActiveBatch] = useState<BatchStatus | null>(null);
   const [errors, setErrors] = useState<ImportErrors | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [reprocessingId, setReprocessingId] = useState<number | null>(null);
   const [profileBatches, setProfileBatches] = useState<BatchStatus[]>([]);
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const activeProfileKey = workspace.profile
@@ -218,7 +216,6 @@ export function ImportsPage() {
     setActiveBatch(null);
     setErrors(null);
     setDeletingId(null);
-    setReprocessingId(null);
   };
 
   useEffect(() => {
@@ -280,11 +277,15 @@ export function ImportsPage() {
   const activePeriodHasBatches = timelineBatches.some(
     (batch) => batch.period === workspace.profile?.return_period,
   );
-  const successfulImportPlatformsFromBatches = useMemo(
+  const successfulBatchesByPlatform = useMemo(
     () =>
-      timelineBatches.reduce<Record<string, boolean>>((acc, batch) => {
-        if (batch.status === "completed" && batch.error_rows === 0) {
-          acc[batch.platform] = true;
+      timelineBatches.reduce<Record<string, BatchStatus>>((acc, batch) => {
+        if (
+          batch.status === "completed" &&
+          batch.error_rows === 0 &&
+          (!acc[batch.platform] || acc[batch.platform].id < batch.id)
+        ) {
+          acc[batch.platform] = batch;
         }
         return acc;
       }, {}),
@@ -416,38 +417,6 @@ export function ImportsPage() {
     }
   }
 
-  async function reprocessBatch(batch: BatchStatus) {
-    if (!workspace.token) return;
-    setReprocessingId(batch.id);
-    setErrors(null);
-    setProgress(
-      `Reprocessing ${batch.platform} batch #${batch.id} with current parser...`,
-    );
-    try {
-      const status = await reprocessImportBatch(workspace.token, batch.id);
-      setActiveBatch(status);
-      if (status.error_rows)
-        setErrors(await getImportErrors(workspace.token, batch.id));
-      else setErrors(null);
-      await workspace.refresh();
-      if (workspace.profile)
-        setProfileBatches(
-          await listProfileImportBatches(workspace.token, workspace.profile.id),
-        );
-      setProgress(
-        `Batch #${batch.id} reprocessed. Parsed ${status.parsed_rows}, errors ${status.error_rows}.`,
-      );
-    } catch (exc) {
-      setProgress(
-        exc instanceof Error
-          ? exc.message
-          : "Could not reprocess import batch.",
-      );
-    } finally {
-      setReprocessingId(null);
-    }
-  }
-
   return (
     <AppShell
       requiresSubscription
@@ -507,13 +476,12 @@ export function ImportsPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {platformCards.map((item) => {
                   const active = item.key === selected?.key;
+                  const successfulBatch = successfulBatchesByPlatform[item.key];
                   const uploadSuccess =
-                    successfulPlatforms[item.key] ||
-                    successfulImportPlatformsFromBatches[item.key];
+                    successfulPlatforms[item.key] || Boolean(successfulBatch);
                   return (
-                    <button
+                    <div
                       key={item.key}
-                      type="button"
                       onClick={() => {
                         if (uploadSuccess) {
                           return;
@@ -526,6 +494,14 @@ export function ImportsPage() {
                         setFileUploadStatus("idle");
                         setUploadDialogOpen(true);
                       }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.currentTarget.click();
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
                       className={`platform-card-shadow flex min-h-52 flex-col items-center justify-between rounded-lg border p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xl dark:bg-slate-950 ${
                         uploadSuccess
                           ? "border-emerald-400 bg-emerald-50/70 ring-2 ring-emerald-400/20 dark:border-emerald-500/50 dark:bg-emerald-950/20"
@@ -534,8 +510,23 @@ export function ImportsPage() {
                             : "border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950"
                       }`}
                     >
-                      <div className="grid justify-items-center">
+                      <div className="relative grid w-full justify-items-center">
                         <PlatformLogo platform={item.key} name={item.name} />
+                        {successfulBatch && (
+                          <button
+                            type="button"
+                            title={`Delete ${item.name} import`}
+                            aria-label={`Delete ${item.name} import`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void removeBatch(successfulBatch);
+                            }}
+                            className="absolute right-1 top-1 grid size-9 place-items-center rounded-full bg-white text-rose-600 shadow-md ring-1 ring-rose-100 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-900 dark:ring-rose-900/50"
+                            disabled={deletingId === successfulBatch.id}
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        )}
                         {uploadSuccess && (
                           <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
                             <CheckCircle2 className="size-4" />
@@ -557,7 +548,7 @@ export function ImportsPage() {
                       >
                         {uploadSuccess ? "✓ Import Successful" : "Import Data"}
                       </span>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -572,7 +563,7 @@ export function ImportsPage() {
         >
           <div
             onClick={(event) => event.stopPropagation()}
-            className="max-h-[92vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-950 sm:p-6"
+            className="max-h-[92vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-950 sm:p-6"
           >
             <div className="mb-5 flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -620,61 +611,52 @@ export function ImportsPage() {
                   body="Backend marketplace endpoint did not return parser data yet."
                 />
               )}
+              {selected && (
+                <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-center text-sm font-bold text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+                  {periodLabel(workspace.profile?.return_period)} Data
+                </div>
+              )}
+              {selected && (
+                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-white/10">
+                  <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">
+                    Download path
+                  </p>
+                  <p className="mt-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-slate-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-slate-200">
+                    {selected.guide}
+                  </p>
+                </div>
+              )}
               {selected && !canImport && (
                 <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm font-bold text-amber-800">
                   {selected.name} parser is not enabled by the backend yet.
                 </div>
               )}
-              <div className="mt-4 grid gap-3">
+              <div className="mt-5 grid gap-2">
                 {uploadFields.map((file, index) => {
                   const uploadedFile = files[index];
 
                   return (
                     <label
                       key={file}
-                      className={`flex min-h-20 flex-col gap-3 rounded-2xl border-2 border-dashed p-4 text-sm transition sm:flex-row sm:items-center ${
+                      className={`flex min-h-14 items-center gap-3 overflow-hidden rounded-xl border text-sm transition ${
                         uploadedFile
-                          ? "border-emerald-400 bg-emerald-50/70 dark:border-emerald-500/50 dark:bg-emerald-950/20"
-                          : "border-slate-300 bg-white dark:border-white/10 dark:bg-slate-900"
+                          ? "border-emerald-300 bg-emerald-50/70 dark:border-emerald-500/50 dark:bg-emerald-950/20"
+                          : "border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900"
                       } ${
                         canImport
                           ? "cursor-pointer hover:border-[#1746A2]"
                           : "cursor-not-allowed opacity-60"
                       }`}
                     >
-                      {uploadedFile ? (
-                        <CheckCircle2 className="size-6 shrink-0 text-emerald-600" />
-                      ) : (
-                        <FileSpreadsheet className="size-6 shrink-0 text-emerald-600" />
-                      )}
-
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold">
-                          {uploadedFile ? "File uploaded" : file}
-                        </p>
-
-                        {uploadedFile ? (
-                          <p className="mt-1 truncate text-xs font-semibold text-emerald-700">
-                            ✓ {uploadedFile.name}
-                          </p>
-                        ) : (
-                          <p className="mt-1 text-xs text-slate-400">
-                            Click to choose your file
-                          </p>
-                        )}
-                      </div>
-
-                      {!uploadedFile && (
-                        <span className="rounded-xl bg-[#10244d] px-4 py-2 text-xs font-bold text-white">
-                          Choose file
-                        </span>
-                      )}
-
-                      {uploadedFile && (
-                        <span className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white">
-                          Selected
-                        </span>
-                      )}
+                      <span className="flex min-h-14 w-44 shrink-0 items-center border-r border-slate-200 bg-slate-50 px-4 text-xs font-black text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                        {file}
+                      </span>
+                      <span className={`min-w-0 flex-1 truncate px-2 text-sm ${uploadedFile ? "font-semibold text-emerald-700" : "text-slate-500"}`}>
+                        {uploadedFile ? uploadedFile.name : "No file selected."}
+                      </span>
+                      <span className="mr-3 shrink-0 text-xs font-bold text-slate-400">
+                        {uploadedFile ? "Selected" : "Choose"}
+                      </span>
 
                       <input
                         type="file"
