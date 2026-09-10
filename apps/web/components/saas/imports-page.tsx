@@ -665,12 +665,14 @@ export function ImportsPage() {
               <div className="mt-5 grid gap-2">
                 {uploadFields.map((file, index) => {
                   const uploadedFile = files[index];
+                  const uploadedFileName =
+                    uploadedFile?.name || uploadedFileNames[index];
 
                   return (
                     <label
                       key={file}
                       className={`flex min-h-14 items-center gap-3 overflow-hidden rounded-xl border text-sm transition ${
-                        uploadedFile
+                        uploadedFileName
                           ? "border-emerald-300 bg-emerald-50/70 dark:border-emerald-500/50 dark:bg-emerald-950/20"
                           : "border-slate-200 bg-white dark:border-white/10 dark:bg-slate-900"
                       } ${
@@ -682,11 +684,11 @@ export function ImportsPage() {
                       <span className="flex min-h-14 w-44 shrink-0 items-center border-r border-slate-200 bg-slate-50 px-4 text-xs font-black text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                         {file}
                       </span>
-                      <span className={`min-w-0 flex-1 truncate px-2 text-sm ${uploadedFile ? "font-semibold text-emerald-700" : "text-slate-500"}`}>
-                        {uploadedFile ? uploadedFile.name : "No file selected."}
+                      <span className={`min-w-0 flex-1 truncate px-2 text-sm ${uploadedFileName ? "font-semibold text-emerald-700" : "text-slate-500"}`}>
+                        {uploadedFileName || "No file selected."}
                       </span>
                       <span className="mr-3 shrink-0 text-xs font-bold text-slate-400">
-                        {uploadedFile ? "Selected" : "Choose"}
+                        {uploadedFileName ? "Uploaded" : "Choose"}
                       </span>
 
                       <input
