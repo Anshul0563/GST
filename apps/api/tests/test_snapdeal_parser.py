@@ -124,6 +124,8 @@ def test_snapdeal_parser_uses_sheet_specific_mapping_and_source_tax(monkeypatch)
     assert result.transactions[1]["taxable_value"] == Decimal("190.00")
     assert result.transactions[1]["buyer_state_code"] == "07"
     assert result.transactions[2]["buyer_state_code"] == "29"
+    assert result.debug["source_totals"][SHEET_5B]["igst"] == Decimal("18.99")
+    assert result.debug["source_totals"][SHEET_7A]["taxable_value"] == Decimal("190.00")
     assert result.debug["hsn_summary"][0]["hsn"] == "9983"
     assert result.debug["invoice_series"][0]["net"] == Decimal("1.00")
 
@@ -161,6 +163,22 @@ def test_snapdeal_parser_rejects_missing_required_sheet(monkeypatch):
     result = SnapdealParser(SELLER, "082026").parse([Path("snapdeal.xlsx")])
 
     assert "missing sheet" in result.errors[0]["error"]
+
+
+def test_snapdeal_parser_deduplicates_repeated_invoice_rows(monkeypatch):
+    workbook = _workbook_rows()
+    workbook[SHEET_5B] = pd.concat(
+        [workbook[SHEET_5B], workbook[SHEET_5B].iloc[[1]]], ignore_index=True
+    )
+    monkeypatch.setattr(
+        "app.parsers.snapdeal.raw_frames",
+        lambda path: list(workbook.items()),
+    )
+
+    result = SnapdealParser(SELLER, "082026").parse([Path("snapdeal.xlsx")])
+
+    assert len(result.transactions) == 3
+    assert len(result.debug["duplicate_rows"]) == 1
 
 
 def test_real_snapdeal_report_has_expected_structure_when_available():

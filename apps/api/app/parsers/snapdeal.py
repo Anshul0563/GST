@@ -172,6 +172,33 @@ class SnapdealParser(MarketplaceParser):
                 f"report has {seller_gstin}, selected profile has {self.gstin}"
             )
 
+    def _record_source_totals(
+        self, result: ParseResult, sheet: str, txn: dict[str, Any]
+    ) -> None:
+        totals = result.debug.setdefault("source_totals", {}).setdefault(
+            sheet,
+            {
+                field: Decimal("0.00")
+                for field in ("taxable_value", "igst", "cgst", "sgst", "cess")
+            },
+        )
+        for field in totals:
+            totals[field] += money(txn.get(field))
+
+    def _source_key(self, sheet: str, txn: dict[str, Any]) -> tuple[Any, ...]:
+        if sheet == SHEET_5B:
+            return (sheet, txn.get("invoice_no"))
+        return (
+            sheet,
+            txn.get("buyer_state_code"),
+            txn.get("taxable_value"),
+            txn.get("gst_rate"),
+            txn.get("igst"),
+            txn.get("cgst"),
+            txn.get("sgst"),
+            txn.get("cess"),
+        )
+
     def _parse_5b(
         self,
         row: dict[str, Any],
@@ -371,6 +398,7 @@ class SnapdealParser(MarketplaceParser):
 
     def parse(self, files: list[Path]) -> ParseResult:
         result = ParseResult(debug=new_pos_debug(self.platform))
+        seen_keys: set[tuple[Any, ...]] = set()
         for path in files:
             try:
                 sheets = {name: frame for name, frame in raw_frames(path)}
@@ -388,27 +416,34 @@ class SnapdealParser(MarketplaceParser):
                         row = series.to_dict()
                         if sheet == SHEET_5B:
                             txn = self._parse_5b(row, row_number, path.name)
-                            result.transactions.append(finalize_transaction(txn))
+                            finalized = finalize_transaction(txn)
                         elif sheet == SHEET_7A:
-                            result.transactions.append(
-                                finalize_transaction(
-                                    self._parse_aggregate(
-                                        row, row_number, sheet, True, path.name
-                                    )
+                            finalized = finalize_transaction(
+                                self._parse_aggregate(
+                                    row, row_number, sheet, True, path.name
                                 )
                             )
                         elif sheet == SHEET_7B:
-                            result.transactions.append(
-                                finalize_transaction(
-                                    self._parse_aggregate(
-                                        row, row_number, sheet, False, path.name
-                                    )
+                            finalized = finalize_transaction(
+                                self._parse_aggregate(
+                                    row, row_number, sheet, False, path.name
                                 )
                             )
                         elif sheet == SHEET_12:
                             self._parse_hsn(row, row_number, result)
+                            continue
                         else:
                             self._parse_series(row, row_number, result)
+                            continue
+                        key = self._source_key(sheet, finalized)
+                        if key in seen_keys:
+                            result.debug.setdefault("duplicate_rows", []).append(
+                                {"file": path.name, "sheet": sheet, "row": row_number}
+                            )
+                            continue
+                        seen_keys.add(key)
+                        self._record_source_totals(result, sheet, finalized)
+                        result.transactions.append(finalized)
                         if sheet in (SHEET_5B, SHEET_7A, SHEET_7B):
                             txn = result.transactions[-1]
                             observe_pos_debug(
