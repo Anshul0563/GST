@@ -1,12 +1,16 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-from fastapi import HTTPException
-
-from app.api.routes import create_profile, delete_profile, enforce_gst_profile_registration_limits, list_profiles
+from app.api.routes import (
+    create_profile,
+    delete_profile,
+    enforce_gst_profile_registration_limits,
+    list_profiles,
+)
 from app.db.session import Base
 from app.models.entities import GSTProfile, User
 from app.schemas.dto import GSTProfileIn
+from fastapi import HTTPException
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 
 def session_factory():
@@ -302,7 +306,10 @@ def test_super_admin_create_profile_updates_existing_global_gstin_instead_of_dup
         assert saved.id == owner_profile.id
         assert saved.user_id == owner.id
         assert saved.legal_name == "Admin Updated Owner Profile"
-        assert db.query(GSTProfile).filter(GSTProfile.gstin == "07ABCDE1234F1Z5").count() == 1
+        assert (
+            db.query(GSTProfile).filter(GSTProfile.gstin == "07ABCDE1234F1Z5").count()
+            == 1
+        )
     finally:
         db.close()
 
@@ -351,7 +358,10 @@ def test_list_profiles_returns_all_profiles_for_super_admin():
 
         profiles = list_profiles(admin, db)
 
-        assert [profile.id for profile in profiles] == [owner_profile.id, admin_profile.id]
+        assert [profile.id for profile in profiles] == [
+            owner_profile.id,
+            admin_profile.id,
+        ]
     finally:
         db.close()
 
