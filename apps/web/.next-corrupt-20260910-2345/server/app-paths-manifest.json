@@ -1,0 +1,12 @@
+{
+  "/page": "app/page.js",
+  "/modules/online-seller/marketplaces/page": "app/modules/online-seller/marketplaces/page.js",
+  "/modules/online-seller/profile/page": "app/modules/online-seller/profile/page.js",
+  "/modules/online-seller/manage-data/page": "app/modules/online-seller/manage-data/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/modules/ai-auditor/page": "app/modules/ai-auditor/page.js",
+  "/billing/page": "app/billing/page.js",
+  "/modules/online-seller/gstr1/page": "app/modules/online-seller/gstr1/page.js",
+  "/modules/reconcile/page": "app/modules/reconcile/page.js"
+}
