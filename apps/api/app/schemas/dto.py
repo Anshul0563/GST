@@ -177,6 +177,7 @@ class BatchStatus(BaseModel):
     status: str
     parsed_rows: int
     error_rows: int
+    uploaded_files: list[str] = []
     errors: list[dict[str, Any]] = []
     debug: dict[str, Any] = {}
 

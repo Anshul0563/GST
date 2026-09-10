@@ -150,6 +150,7 @@ export type BatchStatus = {
   status: string;
   parsed_rows: number;
   error_rows: number;
+  uploaded_files: string[];
   errors?: Array<Record<string, unknown>>;
   debug?: Record<string, unknown>;
 };

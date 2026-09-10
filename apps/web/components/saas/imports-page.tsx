@@ -201,6 +201,7 @@ export function ImportsPage() {
   const [uploadedFilesByPlatform, setUploadedFilesByPlatform] = useState<
     Record<string, File[]>
   >({});
+  const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([]);
   const [activeBatch, setActiveBatch] = useState<BatchStatus | null>(null);
   const [errors, setErrors] = useState<ImportErrors | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -213,6 +214,7 @@ export function ImportsPage() {
 
   const resetUploadState = () => {
     setFiles([]);
+    setUploadedFileNames([]);
     setProgress("");
     setFileUploadStatus("idle");
     setActiveBatch(null);
@@ -358,6 +360,7 @@ export function ImportsPage() {
         setFileUploadStatus("error");
       } else {
         setFileUploadStatus("success");
+        setUploadedFileNames(files.map((file) => file.name));
         setUploadedFilesByPlatform((current) => ({
           ...current,
           [selected.key]: [...files],
@@ -417,6 +420,7 @@ export function ImportsPage() {
         delete next[batch.platform];
         return next;
       });
+      if (selected?.key === batch.platform) setUploadedFileNames([]);
       setErrors(null);
       await workspace.refresh();
       if (workspace.profile)
@@ -506,12 +510,19 @@ export function ImportsPage() {
                       key={item.key}
                       onClick={() => {
                         setPlatformKey(item.key);
-                        const previousFiles = uploadedFilesByPlatform[item.key] || [];
+                        const previousFiles =
+                          uploadedFilesByPlatform[item.key] || [];
+                        const previousFileNames =
+                          successfulBatch?.uploaded_files ||
+                          previousFiles.map((file) => file.name);
                         setFiles(previousFiles);
+                        setUploadedFileNames(previousFileNames);
                         setProgress("");
                         setActiveBatch(null);
                         setErrors(null);
-                        setFileUploadStatus(previousFiles.length ? "success" : "idle");
+                        setFileUploadStatus(
+                          previousFileNames.length ? "success" : "idle",
+                        );
                         setUploadDialogOpen(true);
                       }}
                       onKeyDown={(event) => {

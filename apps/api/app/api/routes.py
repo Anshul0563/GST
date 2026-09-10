@@ -656,8 +656,13 @@ def marketplaces():
     return {"marketplaces": items}
 
 
-def batch_status_response(batch: PlatformImportBatch) -> BatchStatus:
+def batch_status_response(batch: PlatformImportBatch, db: Session) -> BatchStatus:
     parser_errors, debug = read_import_report(batch)
+    uploaded_files = db.scalars(
+        select(UploadedFile.original_name)
+        .where(UploadedFile.batch_id == batch.id, UploadedFile.user_id == batch.user_id)
+        .order_by(UploadedFile.id.asc())
+    ).all()
     return BatchStatus(
         id=batch.id,
         platform=batch.platform,
@@ -665,6 +670,7 @@ def batch_status_response(batch: PlatformImportBatch) -> BatchStatus:
         status=batch.status,
         parsed_rows=batch.parsed_rows,
         error_rows=batch.error_rows,
+        uploaded_files=uploaded_files,
         errors=parser_errors,
         debug=debug,
     )
@@ -1365,6 +1371,7 @@ async def upload_import(
         status=batch.status,
         parsed_rows=0,
         error_rows=0,
+        uploaded_files=[upload.filename or "" for upload in files],
     )
 
 
@@ -1533,7 +1540,7 @@ def import_status(
     if not batch or batch.user_id != user.id:
         raise HTTPException(404, "Batch not found")
     settle_stale_import(batch, db)
-    return batch_status_response(batch)
+    return batch_status_response(batch, db)
 
 
 @router.post("/imports/{batch_id}/reprocess", response_model=BatchStatus)
@@ -1563,7 +1570,7 @@ def reprocess_import_batch(
         )
         db.commit()
         db.refresh(batch)
-        return batch_status_response(batch)
+        return batch_status_response(batch, db)
     except FileNotFoundError as exc:
         db.rollback()
         raise HTTPException(404, str(exc)) from exc
@@ -1602,7 +1609,7 @@ def list_imports(
     batches = db.scalars(stmt.limit(50)).all()
     for batch in batches:
         settle_stale_import(batch, db)
-    return [batch_status_response(batch) for batch in batches]
+    return [batch_status_response(batch, db) for batch in batches]
 
 
 @router.get("/imports/{batch_id}/errors")
