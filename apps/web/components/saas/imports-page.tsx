@@ -771,7 +771,9 @@ export function ImportsPage() {
                   <div className="grid grid-cols-2 border-t border-slate-200 px-3 py-3 text-sm dark:border-white/10">
                     <span>Net Sale</span>
                     <span className="font-semibold">
-                      {String((activeBatch || selectedSuccessfulBatch)?.debug?.net_sale ?? "--")}
+                      {Number(
+                        (activeBatch || selectedSuccessfulBatch)?.net_sale || 0,
+                      ).toFixed(2)}
                     </span>
                   </div>
                 </div>

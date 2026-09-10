@@ -663,6 +663,15 @@ def batch_status_response(batch: PlatformImportBatch, db: Session) -> BatchStatu
         .where(UploadedFile.batch_id == batch.id, UploadedFile.user_id == batch.user_id)
         .order_by(UploadedFile.id.asc())
     ).all()
+    net_sale = sum(
+        (value or Decimal("0.00") for value in db.scalars(
+            select(NormalizedTransaction.taxable_value).where(
+                NormalizedTransaction.batch_id == batch.id,
+                NormalizedTransaction.user_id == batch.user_id,
+            )
+        ).all()),
+        Decimal("0.00"),
+    )
     return BatchStatus(
         id=batch.id,
         platform=batch.platform,
@@ -671,6 +680,7 @@ def batch_status_response(batch: PlatformImportBatch, db: Session) -> BatchStatu
         parsed_rows=batch.parsed_rows,
         error_rows=batch.error_rows,
         uploaded_files=uploaded_files,
+        net_sale=net_sale,
         errors=parser_errors,
         debug=debug,
     )
@@ -1372,6 +1382,7 @@ async def upload_import(
         parsed_rows=0,
         error_rows=0,
         uploaded_files=[upload.filename or "" for upload in files],
+        net_sale=Decimal("0.00"),
     )
 
 

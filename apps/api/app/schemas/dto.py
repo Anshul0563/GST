@@ -178,6 +178,7 @@ class BatchStatus(BaseModel):
     parsed_rows: int
     error_rows: int
     uploaded_files: list[str] = []
+    net_sale: Decimal = Decimal("0.00")
     errors: list[dict[str, Any]] = []
     debug: dict[str, Any] = {}
 
