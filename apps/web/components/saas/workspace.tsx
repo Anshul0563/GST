@@ -16,7 +16,7 @@ import {
   getTransactions,
   listImportBatches,
   listProfiles,
-  listTallyCompanies
+  listTallyCompanies,
 } from "@/lib/api";
 import { clearAuthToken, getStoredAuthToken } from "@/lib/auth";
 import { usePathname } from "next/navigation";
@@ -58,7 +58,8 @@ function selectStoredProfile(user: WorkspaceUser, profiles: Profile[]) {
 
   const userKey = activeProfileKey(user);
   const storedProfileId = Number(window.localStorage.getItem(userKey) || "0");
-  const profile = profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
+  const profile =
+    profiles.find((item) => item.id === storedProfileId) ?? profiles[0] ?? null;
   rememberActiveProfile(user, profile);
   return profile;
 }
@@ -91,7 +92,9 @@ export function useWorkspace(): Workspace {
   const [batches, setBatches] = useState<BatchStatus[]>([]);
   const [preview, setPreview] = useState<Gstr1Payload | null>(null);
   const [companies, setCompanies] = useState<TallyCompany[]>([]);
-  const [marketplaces, setMarketplaces] = useState<MarketplaceCatalogItem[]>([]);
+  const [marketplaces, setMarketplaces] = useState<MarketplaceCatalogItem[]>(
+    [],
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const refreshSeq = useRef(0);
@@ -105,21 +108,41 @@ export function useWorkspace(): Workspace {
     setError("");
   }, []);
 
-  const selectProfile = useCallback((nextProfile: Profile) => {
+  const clearAuthenticatedWorkspace = useCallback(() => {
     refreshSeq.current += 1;
-    rememberActiveProfile(user, nextProfile);
-    setActiveProfile(nextProfile);
+    setToken("");
+    setUser(null);
+    setActiveProfile(null);
+    setProfiles([]);
     clearPeriodScopedState();
-    setLoading(true);
-  }, [clearPeriodScopedState, user]);
+  }, [clearPeriodScopedState]);
+
+  const selectProfile = useCallback(
+    (nextProfile: Profile) => {
+      refreshSeq.current += 1;
+      rememberActiveProfile(user, nextProfile);
+      setActiveProfile(nextProfile);
+      clearPeriodScopedState();
+      setLoading(true);
+    },
+    [clearPeriodScopedState, user],
+  );
 
   const needs = useMemo(() => {
     const path = pathname || "";
     const isDashboard = path === "/dashboard";
     const isOnlineSeller = path.startsWith("/modules/online-seller");
     const isTally = path.startsWith("/modules/tally");
-    const isImport = path.includes("/marketplaces") || path.includes("/import") || isDashboard || path === "/modules/online-seller" || path === "/modules/tally";
-    const isGstr = path.includes("/gstr1") || path === "/modules/online-seller" || isDashboard;
+    const isImport =
+      path.includes("/marketplaces") ||
+      path.includes("/import") ||
+      isDashboard ||
+      path === "/modules/online-seller" ||
+      path === "/modules/tally";
+    const isGstr =
+      path.includes("/gstr1") ||
+      path === "/modules/online-seller" ||
+      isDashboard;
     const isTransactions = isOnlineSeller || isTally || isDashboard;
     return {
       summary: isOnlineSeller || isTally || isDashboard,
@@ -130,79 +153,107 @@ export function useWorkspace(): Workspace {
     };
   }, [pathname]);
 
-  const refreshWorkspace = useCallback(async (activeToken: string, activeProfile: Profile | null | undefined, base?: { user: Workspace["user"]; profiles: Profile[] }) => {
-    if (!activeToken) return;
-    const requestId = ++refreshSeq.current;
-    const isCurrent = () => requestId === refreshSeq.current;
-    setLoading(true);
-    try {
-      if (!activeProfile) {
-        const [nextUser, nextProfiles] = await Promise.all([getCurrentUser(activeToken), listProfiles(activeToken)]);
+  const refreshWorkspace = useCallback(
+    async (
+      activeToken: string,
+      activeProfile: Profile | null | undefined,
+      base?: { user: Workspace["user"]; profiles: Profile[] },
+    ) => {
+      if (!activeToken) return;
+      const requestId = ++refreshSeq.current;
+      const isCurrent = () => requestId === refreshSeq.current;
+      setLoading(true);
+      try {
+        if (!activeProfile) {
+          const [nextUser, nextProfiles] = await Promise.all([
+            getCurrentUser(activeToken),
+            listProfiles(activeToken),
+          ]);
+          if (!isCurrent()) return;
+          const nextProfile = selectStoredProfile(nextUser, nextProfiles);
+          setUser(nextUser);
+          setProfiles(nextProfiles);
+          setActiveProfile(nextProfile);
+          clearPeriodScopedState();
+          setError("");
+          return;
+        }
+        const [nextUser, nextProfiles] = await Promise.all([
+          base ? Promise.resolve(base.user) : getCurrentUser(activeToken),
+          base ? Promise.resolve(base.profiles) : listProfiles(activeToken),
+        ]);
         if (!isCurrent()) return;
-        const nextProfile = selectStoredProfile(nextUser, nextProfiles);
+        const refreshedProfile =
+          nextProfiles.find((item) => item.id === activeProfile.id) ??
+          nextProfiles[0] ??
+          null;
+        if (!refreshedProfile) {
+          setUser(nextUser);
+          setProfiles(nextProfiles);
+          setActiveProfile(null);
+          rememberActiveProfile(nextUser, null);
+          clearPeriodScopedState();
+          setError("");
+          return;
+        }
+        const [nextSummary, nextRows, nextBatches, nextPreview, nextCompanies] =
+          await Promise.all([
+            needs.summary
+              ? getSummary(activeToken, refreshedProfile)
+              : Promise.resolve(null),
+            needs.transactions
+              ? getTransactions(activeToken, refreshedProfile)
+              : Promise.resolve([]),
+            needs.batches
+              ? listImportBatches(activeToken, refreshedProfile)
+              : Promise.resolve([]),
+            needs.preview
+              ? getGstrPreview(activeToken, refreshedProfile)
+              : Promise.resolve(null),
+            needs.companies
+              ? listTallyCompanies(activeToken, refreshedProfile.id)
+              : Promise.resolve([]),
+          ]);
+        if (!isCurrent()) return;
         setUser(nextUser);
         setProfiles(nextProfiles);
-        setActiveProfile(nextProfile);
-        clearPeriodScopedState();
+        setActiveProfile(refreshedProfile);
+        rememberActiveProfile(nextUser, refreshedProfile);
+        setSummary(nextSummary);
+        setTransactions(nextRows);
+        setBatches(nextBatches);
+        setPreview(nextPreview);
+        setCompanies(nextCompanies);
         setError("");
-        return;
+      } catch (exc) {
+        if (!isCurrent()) return;
+        if (exc instanceof ApiError && exc.status === 401) {
+          clearAuthToken();
+          clearAuthenticatedWorkspace();
+        }
+        setError(
+          exc instanceof Error ? exc.message : "Could not refresh workspace",
+        );
+      } finally {
+        if (isCurrent()) setLoading(false);
       }
-      const [nextUser, nextProfiles] = await Promise.all([
-        base ? Promise.resolve(base.user) : getCurrentUser(activeToken),
-        base ? Promise.resolve(base.profiles) : listProfiles(activeToken),
-      ]);
-      if (!isCurrent()) return;
-      const refreshedProfile = nextProfiles.find((item) => item.id === activeProfile.id) ?? nextProfiles[0] ?? null;
-      if (!refreshedProfile) {
-        setUser(nextUser);
-        setProfiles(nextProfiles);
-        setActiveProfile(null);
-        rememberActiveProfile(nextUser, null);
-        clearPeriodScopedState();
-        setError("");
-        return;
-      }
-      const [nextSummary, nextRows, nextBatches, nextPreview, nextCompanies] = await Promise.all([
-        needs.summary ? getSummary(activeToken, refreshedProfile) : Promise.resolve(null),
-        needs.transactions ? getTransactions(activeToken, refreshedProfile) : Promise.resolve([]),
-        needs.batches ? listImportBatches(activeToken, refreshedProfile) : Promise.resolve([]),
-        needs.preview ? getGstrPreview(activeToken, refreshedProfile) : Promise.resolve(null),
-        needs.companies ? listTallyCompanies(activeToken, refreshedProfile.id) : Promise.resolve([])
-      ]);
-      if (!isCurrent()) return;
-      setUser(nextUser);
-      setProfiles(nextProfiles);
-      setActiveProfile(refreshedProfile);
-      rememberActiveProfile(nextUser, refreshedProfile);
-      setSummary(nextSummary);
-      setTransactions(nextRows);
-      setBatches(nextBatches);
-      setPreview(nextPreview);
-      setCompanies(nextCompanies);
-      setError("");
-    } catch (exc) {
-      if (!isCurrent()) return;
-      if (exc instanceof ApiError && exc.status === 401) {
-        clearAuthToken();
-        setToken("");
-        setUser(null);
-        clearPeriodScopedState();
-      }
-      setError(exc instanceof Error ? exc.message : "Could not refresh workspace");
-    } finally {
-      if (isCurrent()) setLoading(false);
-    }
-  }, [clearPeriodScopedState, needs]);
+    },
+    [clearPeriodScopedState, needs],
+  );
 
-  const refresh = useCallback(async (profileOverride?: Profile) => {
-    const activeToken = token || getStoredAuthToken();
-    const activeProfile = profileOverride || profile;
-    await refreshWorkspace(activeToken, activeProfile);
-  }, [profile, refreshWorkspace, token]);
+  const refresh = useCallback(
+    async (profileOverride?: Profile) => {
+      const activeToken = token || getStoredAuthToken();
+      const activeProfile = profileOverride || profile;
+      await refreshWorkspace(activeToken, activeProfile);
+    },
+    [profile, refreshWorkspace, token],
+  );
 
   useEffect(() => {
     const storedToken = getStoredAuthToken();
     if (!storedToken) {
+      clearAuthenticatedWorkspace();
       getMarketplaces()
         .then((result) => setMarketplaces(result.marketplaces))
         .catch(() => setMarketplaces([]));
@@ -213,11 +264,13 @@ export function useWorkspace(): Workspace {
     getMarketplaces()
       .then((result) => setMarketplaces(result.marketplaces))
       .catch(() => setMarketplaces([]));
-    const initializer = Promise.all([getCurrentUser(storedToken), listProfiles(storedToken)])
-      .then(([user, profiles]) => {
-        const profile = selectStoredProfile(user, profiles);
-        return { token: storedToken, user, profiles, profile };
-      });
+    const initializer = Promise.all([
+      getCurrentUser(storedToken),
+      listProfiles(storedToken),
+    ]).then(([user, profiles]) => {
+      const profile = selectStoredProfile(user, profiles);
+      return { token: storedToken, user, profiles, profile };
+    });
     initializer
       .then(async ({ token, user, profiles, profile }) => {
         setToken(token);
@@ -233,32 +286,51 @@ export function useWorkspace(): Workspace {
       .catch((exc) => {
         if (exc instanceof ApiError && exc.status === 401) {
           clearAuthToken();
-          setToken("");
-          setUser(null);
+          clearAuthenticatedWorkspace();
         } else {
           setToken(storedToken);
         }
-        setError(exc instanceof Error ? exc.message : "Could not initialize workspace");
+        setError(
+          exc instanceof Error ? exc.message : "Could not initialize workspace",
+        );
         setLoading(false);
       });
-  }, [refreshWorkspace]);
+  }, [clearAuthenticatedWorkspace, refreshWorkspace]);
 
-  return useMemo(() => ({
-    token,
-    user,
-    profile,
-    profiles,
-    summary,
-    transactions,
-    batches,
-    preview,
-    companies,
-    marketplaces,
-    loading,
-    error,
-    setProfile: selectProfile,
-    refresh
-  }), [token, user, profile, profiles, summary, transactions, batches, preview, companies, marketplaces, loading, error, selectProfile, refresh]);
+  return useMemo(
+    () => ({
+      token,
+      user,
+      profile,
+      profiles,
+      summary,
+      transactions,
+      batches,
+      preview,
+      companies,
+      marketplaces,
+      loading,
+      error,
+      setProfile: selectProfile,
+      refresh,
+    }),
+    [
+      token,
+      user,
+      profile,
+      profiles,
+      summary,
+      transactions,
+      batches,
+      preview,
+      companies,
+      marketplaces,
+      loading,
+      error,
+      selectProfile,
+      refresh,
+    ],
+  );
 }
 
 export function money(value: number | string | null | undefined) {

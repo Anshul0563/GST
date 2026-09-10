@@ -1,16 +1,35 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import type { Route } from "next";
-import { useRouter, useSearchParams } from "next/navigation";
-import { CalendarDays, CheckCircle2, CreditCard, Database, RefreshCw, Settings, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard } from "@/components/saas/ui";
 import { useWorkspace } from "@/components/saas/workspace";
-import { BillingPlan, BillingStatus, createBillingOrder, createProfile, getBillingPlans, getBillingStatus, updateProfile, verifyBillingPayment } from "@/lib/api";
+import {
+  BillingPlan,
+  BillingStatus,
+  createBillingOrder,
+  createProfile,
+  deleteProfile,
+  getBillingPlans,
+  getBillingStatus,
+  updateProfile,
+  verifyBillingPayment,
+} from "@/lib/api";
 import { getStoredAuthToken } from "@/lib/auth";
 import { formatCurrency } from "@/lib/utils";
+import {
+  CalendarDays,
+  CheckCircle2,
+  CreditCard,
+  Database,
+  RefreshCw,
+  Settings,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
+import type { Route } from "next";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 const GST_STATE_NAMES: Record<string, string> = {
   "01": "Jammu & Kashmir",
@@ -62,7 +81,8 @@ function financialYearForPeriod(period: string): string {
   const { month, year } = periodParts(period);
   if (!month || !year) {
     const now = new Date();
-    const fallbackStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const fallbackStart =
+      now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
     return `${fallbackStart}-${String(fallbackStart + 1).slice(-2)}`;
   }
   const start = month >= 4 ? year : year - 1;
@@ -77,11 +97,16 @@ function suggestedReturnPeriod() {
 }
 
 function monthLabel(month: number) {
-  return new Intl.DateTimeFormat("en-IN", { month: "long" }).format(new Date(2026, month - 1, 1));
+  return new Intl.DateTimeFormat("en-IN", { month: "long" }).format(
+    new Date(2026, month - 1, 1),
+  );
 }
 
 function financialYearStart(financialYear: string) {
-  return Number(financialYear.slice(0, 4)) || Number(financialYearForPeriod(suggestedReturnPeriod()).slice(0, 4));
+  return (
+    Number(financialYear.slice(0, 4)) ||
+    Number(financialYearForPeriod(suggestedReturnPeriod()).slice(0, 4))
+  );
 }
 
 function returnPeriodForMonth(month: number, financialYear: string) {
@@ -106,7 +131,9 @@ function returnPeriodOptions() {
 }
 
 function financialYearOptions(anchorPeriod = suggestedReturnPeriod()) {
-  const anchorYear = Number(financialYearForPeriod(anchorPeriod).slice(0, 4)) || new Date().getFullYear();
+  const anchorYear =
+    Number(financialYearForPeriod(anchorPeriod).slice(0, 4)) ||
+    new Date().getFullYear();
   return Array.from({ length: 8 }, (_, index) => {
     const start = anchorYear + 2 - index;
     return `${start}-${String(start + 1).slice(-2)}`;
@@ -131,12 +158,13 @@ function currentProfileDefaults() {
     trade_name: "",
     filing_frequency: "Monthly",
     financial_year: financialYearForPeriod(returnPeriod),
-    return_period: returnPeriod
+    return_period: returnPeriod,
   };
 }
 
 function profileSaveErrorMessage(exc: unknown) {
-  const message = exc instanceof Error ? exc.message : "Could not save GST profile";
+  const message =
+    exc instanceof Error ? exc.message : "Could not save GST profile";
   if (message.includes("already registered with another account")) {
     return `${message} Login with the account that owns this GSTIN, or use a different GSTIN.`;
   }
@@ -153,18 +181,34 @@ export function ProfilePage() {
   const [submitError, setSubmitError] = useState("");
   const profileFetchTokenRef = useRef("");
   const dynamicDefaults = currentProfileDefaults();
-  const nextRoute = (searchParams.get("next") || "/modules/online-seller/marketplaces") as Route;
+  const nextRoute = (searchParams.get("next") ||
+    "/modules/online-seller/marketplaces") as Route;
   const activeToken = workspace.token || getStoredAuthToken();
   const detectedState = gstinStateName(form.gstin);
   const returnPeriods = returnPeriodOptions();
-  const financialYears = financialYearOptions(form.return_period || dynamicDefaults.return_period);
-  const selectedReturnMonth = String(periodParts(form.return_period).month || periodParts(dynamicDefaults.return_period).month || 4);
+  const financialYears = financialYearOptions(
+    form.return_period || dynamicDefaults.return_period,
+  );
+  const selectedReturnMonth = String(
+    periodParts(form.return_period).month ||
+      periodParts(dynamicDefaults.return_period).month ||
+      4,
+  );
   const refreshWorkspace = workspace.refresh;
   const profileLimitLabel = "1 active profile per GSTIN";
   const moduleUsage = [
-    { label: "GST Online Seller", value: `${workspace.transactions.length} rows` },
-    { label: "2A/2B Reconcile", value: `${returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} period` },
-    { label: "eCom to Tally", value: `${workspace.companies.length} companies` },
+    {
+      label: "GST Online Seller",
+      value: `${workspace.transactions.length} rows`,
+    },
+    {
+      label: "2A/2B Reconcile",
+      value: `${returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} period`,
+    },
+    {
+      label: "eCom to Tally",
+      value: `${workspace.companies.length} companies`,
+    },
   ];
 
   useEffect(() => {
@@ -189,7 +233,10 @@ export function ProfilePage() {
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (!activeToken) return;
-    const normalizedReturnPeriod = returnPeriodForMonth(Number(selectedReturnMonth), form.financial_year);
+    const normalizedReturnPeriod = returnPeriodForMonth(
+      Number(selectedReturnMonth),
+      form.financial_year,
+    );
     const normalizedForm = {
       ...form,
       return_period: normalizedReturnPeriod,
@@ -202,7 +249,14 @@ export function ProfilePage() {
       workspace.setProfile(savedProfile);
       await workspace.refresh(savedProfile);
       if (editingId) {
-        setForm({ gstin: savedProfile.gstin, legal_name: savedProfile.legal_name, trade_name: savedProfile.trade_name || "", filing_frequency: savedProfile.filing_frequency, financial_year: savedProfile.financial_year, return_period: savedProfile.return_period });
+        setForm({
+          gstin: savedProfile.gstin,
+          legal_name: savedProfile.legal_name,
+          trade_name: savedProfile.trade_name || "",
+          filing_frequency: savedProfile.filing_frequency,
+          financial_year: savedProfile.financial_year,
+          return_period: savedProfile.return_period,
+        });
       } else {
         setForm(currentProfileDefaults());
         setEditingId(savedProfile.id);
@@ -211,6 +265,22 @@ export function ProfilePage() {
       router.push(nextRoute);
     } catch (exc) {
       setSubmitError(profileSaveErrorMessage(exc));
+    }
+  }
+  async function removeProfile(profile: Profile) {
+    if (!activeToken || !window.confirm(`Delete GSTIN ${profile.gstin}?`))
+      return;
+    try {
+      setSubmitError("");
+      await deleteProfile(activeToken, profile.id);
+      setEditingId(null);
+      setForm(currentProfileDefaults());
+      setMessage("GST profile deleted.");
+      await workspace.refresh();
+    } catch (exc) {
+      setSubmitError(
+        exc instanceof Error ? exc.message : "Could not delete GST profile",
+      );
     }
   }
   function applySmartSetup() {
@@ -224,9 +294,13 @@ export function ProfilePage() {
       legal_name: form.legal_name.trim(),
       trade_name: form.trade_name.trim(),
     });
-    setMessage(detectedState ? `AI setup applied. GSTIN state detected: ${detectedState}.` : "AI setup applied. Return period and financial year are synced.");
+    setMessage(
+      detectedState
+        ? `AI setup applied. GSTIN state detected: ${detectedState}.`
+        : "AI setup applied. Return period and financial year are synced.",
+    );
   }
-  function editProfile(profile: typeof workspace.profiles[number]) {
+  function editProfile(profile: (typeof workspace.profiles)[number]) {
     workspace.setProfile(profile);
     workspace.refresh(profile);
     setEditingId(profile.id);
@@ -239,145 +313,385 @@ export function ProfilePage() {
       return_period: profile.return_period,
     });
   }
-  return <AppShell title="GST Profile & Filing Period" subtitle="Select the GSTIN, return period and Monthly/Quarterly filing mode before using any GST Bharat tool." profile={workspace.profile} profiles={workspace.profiles} token={workspace.token} user={workspace.user} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); setEditingId(profile.id); setForm({ gstin: profile.gstin, legal_name: profile.legal_name, trade_name: profile.trade_name || "", filing_frequency: profile.filing_frequency, financial_year: profile.financial_year, return_period: profile.return_period }); }}>
-    <div className="space-y-6">
-      {!activeToken ? <EmptyState title="Login required" body="Login to create or update GST profile details." /> : null}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Active GSTIN" value={workspace.profile?.gstin || "Not set"} />
-        <StatCard label="Return period" value={returnPeriodMonthLabel(workspace.profile?.return_period || dynamicDefaults.return_period)} />
-        <StatCard label="Filing mode" value={workspace.profile?.filing_frequency || dynamicDefaults.filing_frequency} />
-        <StatCard label="Financial year" value={workspace.profile?.financial_year || dynamicDefaults.financial_year} />
-      </div>
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Panel title="Workspace setup" subtitle="Save this once, then continue with upload, reconcile or Tally export.">
-          <form onSubmit={submit} className="space-y-4">
-            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <b>AI assisted setup</b>
-                  <p className="mt-1 leading-6">
-                    Suggested return period {returnPeriodMonthLabel(dynamicDefaults.return_period)}, FY {dynamicDefaults.financial_year}
-                    {detectedState ? `, GSTIN state ${detectedState}` : ""}.
-                  </p>
-                </div>
-                <button type="button" onClick={applySmartSetup} className="btn-secondary w-full bg-white dark:bg-slate-900 md:w-auto">Apply AI setup</button>
-              </div>
-            </div>
-            <label className="grid gap-2 text-sm font-bold">GST number
-              <input value={form.gstin} onChange={(event) => setForm({ ...form, gstin: event.target.value.toUpperCase() })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" placeholder="15 digit GSTIN" required maxLength={15} />
-              {detectedState ? <span className="text-xs font-semibold text-emerald-600">AI detected seller state: {detectedState}</span> : null}
-            </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-bold">Return period
-                <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">
-                  <CalendarDays className="size-4 text-[#1746A2]" />
-                  <select value={selectedReturnMonth} onChange={(event) => {
-                    const month = Number(event.target.value);
-                    const returnPeriod = returnPeriodForMonth(month, form.financial_year);
-                    setForm({ ...form, return_period: returnPeriod, financial_year: financialYearForPeriod(returnPeriod) });
-                  }} className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none" required>
-                    {!returnPeriods.some((item) => item.value === selectedReturnMonth) ? <option value={selectedReturnMonth}>{monthLabel(Number(selectedReturnMonth))}</option> : null}
-                    {returnPeriods.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                  </select>
-                </div>
-              </label>
-              <label className="grid gap-2 text-sm font-bold">Financial year
-                <select value={form.financial_year} onChange={(event) => {
-                  const financialYear = event.target.value;
-                  const { month } = periodParts(form.return_period);
-                  const returnPeriod = returnPeriodForMonth(month || 4, financialYear);
-                  setForm({ ...form, financial_year: financialYear, return_period: returnPeriod });
-                }} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" required>
-                  {!financialYears.includes(form.financial_year) ? <option value={form.financial_year}>{form.financial_year}</option> : null}
-                  {financialYears.map((item) => <option key={item} value={item}>{item}</option>)}
-                </select>
-              </label>
-            </div>
-            <div className="rounded-3xl bg-slate-50 p-4 dark:bg-white/5">
-              <p className="text-sm font-black">Filing frequency</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {["Monthly", "Quarterly"].map((item) => <button key={item} type="button" onClick={() => setForm({ ...form, filing_frequency: item })} className={`rounded-2xl border px-4 py-3 text-left text-sm font-bold transition ${form.filing_frequency === item ? "border-[#1746A2] bg-[#1746A2] text-white" : "border-slate-200 bg-white text-slate-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"}`}>
-                  <span className="flex items-center gap-2">{form.filing_frequency === item && <CheckCircle2 className="size-4" />}{item}</span>
-                </button>)}
-              </div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2 text-sm font-bold">Legal name
-                <input value={form.legal_name} onChange={(event) => setForm({ ...form, legal_name: event.target.value })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" placeholder="Business / legal name" required />
-              </label>
-              <label className="grid gap-2 text-sm font-bold">Trade name
-                <input value={form.trade_name} onChange={(event) => setForm({ ...form, trade_name: event.target.value })} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900" placeholder="Brand / trade name" />
-              </label>
-            </div>
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-              <button disabled={!activeToken} className="w-full rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">{editingId ? "Update & continue to upload" : "Create & continue to upload"}</button>
-              {workspace.profile ? <Link href={nextRoute} className="btn-secondary w-full sm:w-auto">Continue to marketplace upload</Link> : null}
-            </div>
-            {submitError && <div className="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{submitError}</div>}
-            {message && <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{message}</div>}
-          </form>
-        </Panel>
-
-        <Panel
-          title="Saved GSTINs"
-          subtitle={`Fetched from backend DB. Added ${workspace.profiles.length} / Limit ${profileLimitLabel}`}
-          action={
-            <button
-              type="button"
-              onClick={() => workspace.refresh()}
-              disabled={!activeToken || workspace.loading}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-[#1746A2]/40 hover:text-[#1746A2] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 sm:w-auto"
-            >
-              <RefreshCw className={`size-4 ${workspace.loading ? "animate-spin" : ""}`} />
-              Refresh DB
-            </button>
-          }
-        >
-          <div className="space-y-3">
-            {activeToken ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-                <Database className="size-4" />
-                {workspace.loading ? "Fetching GST profiles from DB..." : `${workspace.profiles.length} GST profile${workspace.profiles.length === 1 ? "" : "s"} loaded from DB`}
-              </div>
-            ) : null}
-            {workspace.profiles.map((profile) => {
-              const active = workspace.profile?.id === profile.id;
-              return <button key={profile.id} onClick={() => editProfile(profile)} className={`w-full rounded-3xl border p-4 text-left transition ${active ? "border-[#1746A2] bg-blue-50 dark:bg-blue-500/10" : "border-slate-200 bg-slate-50 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-slate-900"}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <b className="break-all">{profile.gstin}</b>
-                    <p className="mt-1 break-words text-sm text-slate-500">{profile.trade_name || profile.legal_name}</p>
-                    <p className="mt-1 text-xs font-bold text-slate-400">Profile ID #{profile.id} / State {profile.state_code}</p>
+  return (
+    <AppShell
+      title="GST Profile & Filing Period"
+      subtitle="Select the GSTIN, return period and Monthly/Quarterly filing mode before using any GST Bharat tool."
+      profile={workspace.profile}
+      profiles={workspace.profiles}
+      token={workspace.token}
+      user={workspace.user}
+      loading={workspace.loading}
+      error={workspace.error}
+      onRetry={() => workspace.refresh()}
+      onProfileChange={(profile) => {
+        workspace.setProfile(profile);
+        workspace.refresh(profile);
+        setEditingId(profile.id);
+        setForm({
+          gstin: profile.gstin,
+          legal_name: profile.legal_name,
+          trade_name: profile.trade_name || "",
+          filing_frequency: profile.filing_frequency,
+          financial_year: profile.financial_year,
+          return_period: profile.return_period,
+        });
+      }}
+    >
+      <div className="space-y-6">
+        {!activeToken ? (
+          <EmptyState
+            title="Login required"
+            body="Login to create or update GST profile details."
+          />
+        ) : null}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatCard
+            label="Active GSTIN"
+            value={workspace.profile?.gstin || "Not set"}
+          />
+          <StatCard
+            label="Return period"
+            value={returnPeriodMonthLabel(
+              workspace.profile?.return_period || dynamicDefaults.return_period,
+            )}
+          />
+          <StatCard
+            label="Filing mode"
+            value={
+              workspace.profile?.filing_frequency ||
+              dynamicDefaults.filing_frequency
+            }
+          />
+          <StatCard
+            label="Financial year"
+            value={
+              workspace.profile?.financial_year ||
+              dynamicDefaults.financial_year
+            }
+          />
+        </div>
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Panel
+            title="Workspace setup"
+            subtitle="Save this once, then continue with upload, reconcile or Tally export."
+          >
+            <form onSubmit={submit} className="space-y-4">
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <b>AI assisted setup</b>
+                    <p className="mt-1 leading-6">
+                      Suggested return period{" "}
+                      {returnPeriodMonthLabel(dynamicDefaults.return_period)},
+                      FY {dynamicDefaults.financial_year}
+                      {detectedState ? `, GSTIN state ${detectedState}` : ""}.
+                    </p>
                   </div>
-                  {active && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">Active</span>}
+                  <button
+                    type="button"
+                    onClick={applySmartSetup}
+                    className="btn-secondary w-full bg-white dark:bg-slate-900 md:w-auto"
+                  >
+                    Apply AI setup
+                  </button>
                 </div>
-                <div className="mt-4 grid gap-2 text-xs font-bold text-slate-500 sm:grid-cols-4">
-                  <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{returnPeriodMonthLabel(profile.return_period)}</span>
-                  <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.filing_frequency}</span>
-                  <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.financial_year}</span>
-                  <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">{profile.return_period}</span>
+              </div>
+              <label className="grid gap-2 text-sm font-bold">
+                GST number
+                <input
+                  value={form.gstin}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      gstin: event.target.value.toUpperCase(),
+                    })
+                  }
+                  className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900"
+                  placeholder="15 digit GSTIN"
+                  required
+                  maxLength={15}
+                />
+                {detectedState ? (
+                  <span className="text-xs font-semibold text-emerald-600">
+                    AI detected seller state: {detectedState}
+                  </span>
+                ) : null}
+              </label>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2 text-sm font-bold">
+                  Return period
+                  <div className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 dark:border-white/10 dark:bg-slate-900">
+                    <CalendarDays className="size-4 text-[#1746A2]" />
+                    <select
+                      value={selectedReturnMonth}
+                      onChange={(event) => {
+                        const month = Number(event.target.value);
+                        const returnPeriod = returnPeriodForMonth(
+                          month,
+                          form.financial_year,
+                        );
+                        setForm({
+                          ...form,
+                          return_period: returnPeriod,
+                          financial_year: financialYearForPeriod(returnPeriod),
+                        });
+                      }}
+                      className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none"
+                      required
+                    >
+                      {!returnPeriods.some(
+                        (item) => item.value === selectedReturnMonth,
+                      ) ? (
+                        <option value={selectedReturnMonth}>
+                          {monthLabel(Number(selectedReturnMonth))}
+                        </option>
+                      ) : null}
+                      {returnPeriods.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
+                <label className="grid gap-2 text-sm font-bold">
+                  Financial year
+                  <select
+                    value={form.financial_year}
+                    onChange={(event) => {
+                      const financialYear = event.target.value;
+                      const { month } = periodParts(form.return_period);
+                      const returnPeriod = returnPeriodForMonth(
+                        month || 4,
+                        financialYear,
+                      );
+                      setForm({
+                        ...form,
+                        financial_year: financialYear,
+                        return_period: returnPeriod,
+                      });
+                    }}
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900"
+                    required
+                  >
+                    {!financialYears.includes(form.financial_year) ? (
+                      <option value={form.financial_year}>
+                        {form.financial_year}
+                      </option>
+                    ) : null}
+                    {financialYears.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="rounded-3xl bg-slate-50 p-4 dark:bg-white/5">
+                <p className="text-sm font-black">Filing frequency</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  {["Monthly", "Quarterly"].map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() =>
+                        setForm({ ...form, filing_frequency: item })
+                      }
+                      className={`rounded-2xl border px-4 py-3 text-left text-sm font-bold transition ${form.filing_frequency === item ? "border-[#1746A2] bg-[#1746A2] text-white" : "border-slate-200 bg-white text-slate-600 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"}`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {form.filing_frequency === item && (
+                          <CheckCircle2 className="size-4" />
+                        )}
+                        {item}
+                      </span>
+                    </button>
+                  ))}
                 </div>
-              </button>;
-            })}
-            {!workspace.profiles.length && !workspace.loading && <EmptyState title="No GSTIN found in DB" body="No saved GST profile was returned by the backend for this login. Submit GST information to create the first backend profile." />}
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2 text-sm font-bold">
+                  Legal name
+                  <input
+                    value={form.legal_name}
+                    onChange={(event) =>
+                      setForm({ ...form, legal_name: event.target.value })
+                    }
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900"
+                    placeholder="Business / legal name"
+                    required
+                  />
+                </label>
+                <label className="grid gap-2 text-sm font-bold">
+                  Trade name
+                  <input
+                    value={form.trade_name}
+                    onChange={(event) =>
+                      setForm({ ...form, trade_name: event.target.value })
+                    }
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold outline-none dark:border-white/10 dark:bg-slate-900"
+                    placeholder="Brand / trade name"
+                  />
+                </label>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <button
+                  disabled={!activeToken}
+                  className="w-full rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                >
+                  {editingId
+                    ? "Update & continue to upload"
+                    : "Create & continue to upload"}
+                </button>
+                {workspace.profile ? (
+                  <Link
+                    href={nextRoute}
+                    className="btn-secondary w-full sm:w-auto"
+                  >
+                    Continue to marketplace upload
+                  </Link>
+                ) : null}
+              </div>
+              {submitError && (
+                <div className="rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">
+                  {submitError}
+                </div>
+              )}
+              {message && (
+                <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+                  {message}
+                </div>
+              )}
+            </form>
+          </Panel>
+
+          <Panel
+            title="Saved GSTINs"
+            subtitle={`Fetched from backend DB. Added ${workspace.profiles.length} / Limit ${profileLimitLabel}`}
+            action={
+              <button
+                type="button"
+                onClick={() => workspace.refresh()}
+                disabled={!activeToken || workspace.loading}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-[#1746A2]/40 hover:text-[#1746A2] disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-slate-900 dark:text-slate-200 sm:w-auto"
+              >
+                <RefreshCw
+                  className={`size-4 ${workspace.loading ? "animate-spin" : ""}`}
+                />
+                Refresh DB
+              </button>
+            }
+          >
+            <div className="space-y-3">
+              {activeToken ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+                  <Database className="size-4" />
+                  {workspace.loading
+                    ? "Fetching GST profiles from DB..."
+                    : `${workspace.profiles.length} GST profile${workspace.profiles.length === 1 ? "" : "s"} loaded from DB`}
+                </div>
+              ) : null}
+              {workspace.profiles.map((profile) => {
+                const active = workspace.profile?.id === profile.id;
+                return (
+                  <div
+                    key={profile.id}
+                    className={`w-full rounded-3xl border p-4 text-left transition ${active ? "border-[#1746A2] bg-blue-50 dark:bg-blue-500/10" : "border-slate-200 bg-slate-50 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-slate-900"}`}
+                  >
+                    <button
+                      onClick={() => editProfile(profile)}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <b className="break-all">{profile.gstin}</b>
+                          <p className="mt-1 break-words text-sm text-slate-500">
+                            {profile.trade_name || profile.legal_name}
+                          </p>
+                          <p className="mt-1 text-xs font-bold text-slate-400">
+                            Profile ID #{profile.id} / State{" "}
+                            {profile.state_code}
+                          </p>
+                        </div>
+                        {active && (
+                          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black text-emerald-700">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-4 grid gap-2 text-xs font-bold text-slate-500 sm:grid-cols-4">
+                        <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">
+                          {returnPeriodMonthLabel(profile.return_period)}
+                        </span>
+                        <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">
+                          {profile.filing_frequency}
+                        </span>
+                        <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">
+                          {profile.financial_year}
+                        </span>
+                        <span className="rounded-2xl bg-white px-3 py-2 dark:bg-slate-900">
+                          {profile.return_period}
+                        </span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeProfile(profile)}
+                      className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10"
+                    >
+                      <Trash2 className="size-4" /> Delete profile
+                    </button>
+                  </div>
+                );
+              })}
+              {!workspace.profiles.length && !workspace.loading && (
+                <EmptyState
+                  title="No GSTIN found in DB"
+                  body="No saved GST profile was returned by the backend for this login. Submit GST information to create the first backend profile."
+                />
+              )}
+            </div>
+          </Panel>
+        </div>
+        <Panel
+          title="Works across all modules"
+          subtitle="The same active GST profile controls Online Seller, 2A/2B Reconcile and eCom to Tally."
+        >
+          <div className="grid gap-3 text-sm md:grid-cols-3">
+            {moduleUsage.map((item) => (
+              <div
+                key={item.label}
+                className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5"
+              >
+                <span className="flex items-center gap-3">
+                  <ShieldCheck className="size-4 text-emerald-600" />{" "}
+                  {item.label}
+                </span>
+                <span className="text-xs text-slate-500">{item.value}</span>
+              </div>
+            ))}
           </div>
         </Panel>
       </div>
-      <Panel title="Works across all modules" subtitle="The same active GST profile controls Online Seller, 2A/2B Reconcile and eCom to Tally.">
-        <div className="grid gap-3 text-sm md:grid-cols-3">
-          {moduleUsage.map((item) => <div key={item.label} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5"><span className="flex items-center gap-3"><ShieldCheck className="size-4 text-emerald-600" /> {item.label}</span><span className="text-xs text-slate-500">{item.value}</span></div>)}
-        </div>
-      </Panel>
-    </div>
-  </AppShell>;
+    </AppShell>
+  );
 }
 
 export function SettingsPage() {
   const workspace = useWorkspace();
-  const [settings, setSettings] = useState({ export_format: "JSON + Excel", import_completed: true, validation_warning: true, filing_reminders: false });
+  const [settings, setSettings] = useState({
+    export_format: "JSON + Excel",
+    import_completed: true,
+    validation_warning: true,
+    filing_reminders: false,
+  });
   const [saved, setSaved] = useState("");
   useEffect(() => {
-    const raw = typeof window !== "undefined" ? window.localStorage.getItem("gst_bharat_workspace_settings") : null;
+    const raw =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("gst_bharat_workspace_settings")
+        : null;
     if (!raw) return;
     try {
       setSettings((current) => ({ ...current, ...JSON.parse(raw) }));
@@ -386,29 +700,135 @@ export function SettingsPage() {
     }
   }, []);
   function saveSettings() {
-    window.localStorage.setItem("gst_bharat_workspace_settings", JSON.stringify(settings));
+    window.localStorage.setItem(
+      "gst_bharat_workspace_settings",
+      JSON.stringify(settings),
+    );
     setSaved("Workspace preferences saved in this browser.");
   }
-  return <AppShell title="Settings" subtitle="Workspace preferences, account context and export defaults." profile={workspace.profile} profiles={workspace.profiles} token={workspace.token} user={workspace.user} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
-    <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-      <Panel title="Account context" subtitle="Loaded from authenticated backend session and active GST profile.">
-        <div className="grid gap-3 text-sm md:grid-cols-2">
-          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>Email</b><p>{workspace.user?.email || "Not logged in"}</p></div>
-          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>Role</b><p>{workspace.user?.role || "user"}</p></div>
-          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>Plan</b><p>{workspace.user?.plan || "free"}</p></div>
-          <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5"><b>GSTIN</b><p>{workspace.profile?.gstin || "No GST profile"}</p></div>
-        </div>
-      </Panel>
-      <Panel title="Workspace preferences" subtitle="Stored locally until a backend settings table is added.">
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5"><Settings className="mb-3 size-5 text-[#1746A2]" />Default export format<select value={settings.export_format} onChange={(event) => setSettings({ ...settings, export_format: event.target.value })} className="mt-3 w-full rounded-xl border px-3 py-2 dark:border-white/10 dark:bg-slate-900"><option>JSON + Excel</option><option>JSON only</option><option>Excel only</option></select></label>
-          <label className="rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5">Notifications<div className="mt-3 space-y-2 text-sm font-medium text-slate-500"><label className="flex gap-2"><input type="checkbox" checked={settings.import_completed} onChange={(event) => setSettings({ ...settings, import_completed: event.target.checked })} /> Import completed</label><label className="flex gap-2"><input type="checkbox" checked={settings.validation_warning} onChange={(event) => setSettings({ ...settings, validation_warning: event.target.checked })} /> Validation warning</label><label className="flex gap-2"><input type="checkbox" checked={settings.filing_reminders} onChange={(event) => setSettings({ ...settings, filing_reminders: event.target.checked })} /> Filing reminders</label></div></label>
-        </div>
-        <button onClick={saveSettings} className="mt-5 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white">Save settings</button>
-        {saved && <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{saved}</div>}
-      </Panel>
-    </div>
-  </AppShell>;
+  return (
+    <AppShell
+      title="Settings"
+      subtitle="Workspace preferences, account context and export defaults."
+      profile={workspace.profile}
+      profiles={workspace.profiles}
+      token={workspace.token}
+      user={workspace.user}
+      loading={workspace.loading}
+      error={workspace.error}
+      onRetry={() => workspace.refresh()}
+      onProfileChange={(profile) => {
+        workspace.setProfile(profile);
+        workspace.refresh(profile);
+      }}
+    >
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <Panel
+          title="Account context"
+          subtitle="Loaded from authenticated backend session and active GST profile."
+        >
+          <div className="grid gap-3 text-sm md:grid-cols-2">
+            <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
+              <b>Email</b>
+              <p>{workspace.user?.email || "Not logged in"}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
+              <b>Role</b>
+              <p>{workspace.user?.role || "user"}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
+              <b>Plan</b>
+              <p>{workspace.user?.plan || "free"}</p>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4 dark:bg-white/5">
+              <b>GSTIN</b>
+              <p>{workspace.profile?.gstin || "No GST profile"}</p>
+            </div>
+          </div>
+        </Panel>
+        <Panel
+          title="Workspace preferences"
+          subtitle="Stored locally until a backend settings table is added."
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5">
+              <Settings className="mb-3 size-5 text-[#1746A2]" />
+              Default export format
+              <select
+                value={settings.export_format}
+                onChange={(event) =>
+                  setSettings({
+                    ...settings,
+                    export_format: event.target.value,
+                  })
+                }
+                className="mt-3 w-full rounded-xl border px-3 py-2 dark:border-white/10 dark:bg-slate-900"
+              >
+                <option>JSON + Excel</option>
+                <option>JSON only</option>
+                <option>Excel only</option>
+              </select>
+            </label>
+            <label className="rounded-2xl bg-slate-50 p-4 font-bold dark:bg-white/5">
+              Notifications
+              <div className="mt-3 space-y-2 text-sm font-medium text-slate-500">
+                <label className="flex gap-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.import_completed}
+                    onChange={(event) =>
+                      setSettings({
+                        ...settings,
+                        import_completed: event.target.checked,
+                      })
+                    }
+                  />{" "}
+                  Import completed
+                </label>
+                <label className="flex gap-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.validation_warning}
+                    onChange={(event) =>
+                      setSettings({
+                        ...settings,
+                        validation_warning: event.target.checked,
+                      })
+                    }
+                  />{" "}
+                  Validation warning
+                </label>
+                <label className="flex gap-2">
+                  <input
+                    type="checkbox"
+                    checked={settings.filing_reminders}
+                    onChange={(event) =>
+                      setSettings({
+                        ...settings,
+                        filing_reminders: event.target.checked,
+                      })
+                    }
+                  />{" "}
+                  Filing reminders
+                </label>
+              </div>
+            </label>
+          </div>
+          <button
+            onClick={saveSettings}
+            className="mt-5 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"
+          >
+            Save settings
+          </button>
+          {saved && (
+            <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+              {saved}
+            </div>
+          )}
+        </Panel>
+      </div>
+    </AppShell>
+  );
 }
 
 export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
@@ -420,14 +840,20 @@ export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
 
   const loadBilling = useCallback(async () => {
     if (!workspace.token) return;
-    const [planResult, statusResult] = await Promise.all([getBillingPlans(workspace.token), getBillingStatus(workspace.token)]);
+    const [planResult, statusResult] = await Promise.all([
+      getBillingPlans(workspace.token),
+      getBillingStatus(workspace.token),
+    ]);
     setPlans(planResult.plans);
     setStatus(statusResult);
   }, [workspace.token]);
 
   async function startCheckout(planId: string) {
     if (!workspace.token) return;
-    const order = await createBillingOrder(workspace.token, { plan_id: planId, billing_cycle: cycle });
+    const order = await createBillingOrder(workspace.token, {
+      plan_id: planId,
+      billing_cycle: cycle,
+    });
     if (order.free_access) {
       setMessage(order.message || "Free access is active.");
       await loadBilling();
@@ -435,13 +861,23 @@ export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
       return;
     }
     if (!order.gateway_configured) {
-      setMessage(`Payment order #${order.id} created, but Razorpay keys are not configured in backend .env yet.`);
+      setMessage(
+        `Payment order #${order.id} created, but Razorpay keys are not configured in backend .env yet.`,
+      );
       await loadBilling();
       return;
     }
     const loaded = await loadRazorpay();
-    if (!loaded || !order.id || !order.provider_order_id || !order.gateway_key_id || !order.amount_paise) {
-      setMessage("Razorpay Checkout could not be loaded. Check internet access and gateway keys.");
+    if (
+      !loaded ||
+      !order.id ||
+      !order.provider_order_id ||
+      !order.gateway_key_id ||
+      !order.amount_paise
+    ) {
+      setMessage(
+        "Razorpay Checkout could not be loaded. Check internet access and gateway keys.",
+      );
       return;
     }
     const Razorpay = window.Razorpay;
@@ -461,7 +897,11 @@ export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
         email: workspace.user?.email || "",
       },
       theme: { color: "#10244d" },
-      handler: async (response: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+      handler: async (response: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+      }) => {
         await verifyBillingPayment(workspace.token, {
           order_id: order.id!,
           razorpay_order_id: response.razorpay_order_id,
@@ -479,46 +919,147 @@ export function BillingPage({ selectedPlanId }: { selectedPlanId?: string }) {
 
   useEffect(() => {
     if (!workspace.token) return;
-    loadBilling().catch((exc) => setMessage(exc instanceof Error ? exc.message : "Could not load billing"));
+    loadBilling().catch((exc) =>
+      setMessage(exc instanceof Error ? exc.message : "Could not load billing"),
+    );
   }, [workspace.token, loadBilling]);
 
-  return <AppShell title="Billing" subtitle="Manage your GST Bharat subscription and unlock paid product modules." profile={workspace.profile} profiles={workspace.profiles} token={workspace.token} user={workspace.user} loading={workspace.loading} error={workspace.error} onRetry={() => workspace.refresh()} onProfileChange={(profile) => { workspace.setProfile(profile); workspace.refresh(profile); }}>
-    <div className="space-y-6">
-      {!workspace.token ? <EmptyState title="Login required" body="Billing is connected to authenticated backend APIs." /> : null}
-      <Panel title="Account access" subtitle="Live billing status from backend.">
-        <div className="grid gap-4 md:grid-cols-4">
-          <StatCard label="Role" value={status?.role || workspace.user?.role || "user"} />
-          <StatCard label="Plan" value={status?.plan || workspace.user?.plan || "free"} tone={status?.free_access ? "green" : "blue"} />
-          <StatCard label="Status" value={status?.subscription_status || workspace.user?.subscription_status || "inactive"} tone={status?.subscription_status === "active" ? "green" : "saffron"} />
-          <StatCard label="Renews/Expires" value={status?.subscription_expires_at ? new Date(status.subscription_expires_at).toLocaleDateString() : "--"} />
-        </div>
-        {status?.free_access && <div className="mt-5 rounded-3xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">{status.free_access_reason || "This account has unrestricted free access."}</div>}
-        {message && <div className="mt-5 rounded-3xl bg-blue-50 p-4 text-sm font-bold text-blue-700">{message}</div>}
-      </Panel>
-      <Panel title="Choose a plan" subtitle="Pick monthly or yearly billing, then subscribe to the product module you want to unlock.">
-        <div className="mb-5 inline-flex rounded-2xl bg-slate-100 p-1 text-sm font-bold dark:bg-white/10">
-          {["monthly", "yearly"].map((item) => <button key={item} onClick={() => setCycle(item)} className={`rounded-xl px-4 py-2 capitalize ${cycle === item ? "bg-[#10244d] text-white" : "text-slate-600 dark:text-slate-300"}`}>{item}</button>)}
-        </div>
-        <div className="grid gap-4 lg:grid-cols-3">
-          {plans.map((plan) => {
-            const amount = cycle === "yearly" ? plan.yearly_amount : plan.monthly_amount;
-            const selected = selectedPlanId === plan.id;
-            return <div key={plan.id} className={`rounded-3xl border bg-white p-5 shadow-xl shadow-slate-200/60 dark:bg-slate-900 dark:shadow-none ${selected ? "border-[#1746A2] ring-2 ring-[#1746A2]/20" : "border-slate-200 dark:border-white/10"}`}>
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-xl font-black">{plan.name}</h3>
-                {selected ? <span className="rounded-full bg-[#1746A2]/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#1746A2]">Selected</span> : null}
-              </div>
-              <p className="mt-3 text-3xl font-black">{formatCurrency(amount)}</p>
-              <p className="text-sm text-slate-500">per {cycle === "yearly" ? "year" : "month"}</p>
-              <div className="mt-5 space-y-2 text-sm text-slate-600 dark:text-slate-300">{plan.features.map((feature) => <p key={feature}>- {feature}</p>)}</div>
-              <button onClick={() => startCheckout(plan.id)} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"><CreditCard className="size-4" /> {selected ? "Subscribe now" : "Create order"}</button>
-            </div>;
-          })}
-          {!plans.length && <EmptyState title="Plans not loaded" body="Login and retry billing status." />}
-        </div>
-      </Panel>
-    </div>
-  </AppShell>;
+  return (
+    <AppShell
+      title="Billing"
+      subtitle="Manage your GST Bharat subscription and unlock paid product modules."
+      profile={workspace.profile}
+      profiles={workspace.profiles}
+      token={workspace.token}
+      user={workspace.user}
+      loading={workspace.loading}
+      error={workspace.error}
+      onRetry={() => workspace.refresh()}
+      onProfileChange={(profile) => {
+        workspace.setProfile(profile);
+        workspace.refresh(profile);
+      }}
+    >
+      <div className="space-y-6">
+        {!workspace.token ? (
+          <EmptyState
+            title="Login required"
+            body="Billing is connected to authenticated backend APIs."
+          />
+        ) : null}
+        <Panel
+          title="Account access"
+          subtitle="Live billing status from backend."
+        >
+          <div className="grid gap-4 md:grid-cols-4">
+            <StatCard
+              label="Role"
+              value={status?.role || workspace.user?.role || "user"}
+            />
+            <StatCard
+              label="Plan"
+              value={status?.plan || workspace.user?.plan || "free"}
+              tone={status?.free_access ? "green" : "blue"}
+            />
+            <StatCard
+              label="Status"
+              value={
+                status?.subscription_status ||
+                workspace.user?.subscription_status ||
+                "inactive"
+              }
+              tone={
+                status?.subscription_status === "active" ? "green" : "saffron"
+              }
+            />
+            <StatCard
+              label="Renews/Expires"
+              value={
+                status?.subscription_expires_at
+                  ? new Date(
+                      status.subscription_expires_at,
+                    ).toLocaleDateString()
+                  : "--"
+              }
+            />
+          </div>
+          {status?.free_access && (
+            <div className="mt-5 rounded-3xl bg-emerald-50 p-4 text-sm font-bold text-emerald-700">
+              {status.free_access_reason ||
+                "This account has unrestricted free access."}
+            </div>
+          )}
+          {message && (
+            <div className="mt-5 rounded-3xl bg-blue-50 p-4 text-sm font-bold text-blue-700">
+              {message}
+            </div>
+          )}
+        </Panel>
+        <Panel
+          title="Choose a plan"
+          subtitle="Pick monthly or yearly billing, then subscribe to the product module you want to unlock."
+        >
+          <div className="mb-5 inline-flex rounded-2xl bg-slate-100 p-1 text-sm font-bold dark:bg-white/10">
+            {["monthly", "yearly"].map((item) => (
+              <button
+                key={item}
+                onClick={() => setCycle(item)}
+                className={`rounded-xl px-4 py-2 capitalize ${cycle === item ? "bg-[#10244d] text-white" : "text-slate-600 dark:text-slate-300"}`}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-4 lg:grid-cols-3">
+            {plans.map((plan) => {
+              const amount =
+                cycle === "yearly" ? plan.yearly_amount : plan.monthly_amount;
+              const selected = selectedPlanId === plan.id;
+              return (
+                <div
+                  key={plan.id}
+                  className={`rounded-3xl border bg-white p-5 shadow-xl shadow-slate-200/60 dark:bg-slate-900 dark:shadow-none ${selected ? "border-[#1746A2] ring-2 ring-[#1746A2]/20" : "border-slate-200 dark:border-white/10"}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-xl font-black">{plan.name}</h3>
+                    {selected ? (
+                      <span className="rounded-full bg-[#1746A2]/10 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#1746A2]">
+                        Selected
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-3 text-3xl font-black">
+                    {formatCurrency(amount)}
+                  </p>
+                  <p className="text-sm text-slate-500">
+                    per {cycle === "yearly" ? "year" : "month"}
+                  </p>
+                  <div className="mt-5 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+                    {plan.features.map((feature) => (
+                      <p key={feature}>- {feature}</p>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => startCheckout(plan.id)}
+                    className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white"
+                  >
+                    <CreditCard className="size-4" />{" "}
+                    {selected ? "Subscribe now" : "Create order"}
+                  </button>
+                </div>
+              );
+            })}
+            {!plans.length && (
+              <EmptyState
+                title="Plans not loaded"
+                body="Login and retry billing status."
+              />
+            )}
+          </div>
+        </Panel>
+      </div>
+    </AppShell>
+  );
 }
 
 declare global {
