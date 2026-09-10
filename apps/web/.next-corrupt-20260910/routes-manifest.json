@@ -1,0 +1,239 @@
+{
+  "version": 3,
+  "pages404": true,
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/:path*",
+      "headers": [
+        {
+          "key": "X-DNS-Prefetch-Control",
+          "value": "on"
+        }
+      ],
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+    },
+    {
+      "source": "/(favicon.ico|favicon.png|apple-touch-icon.png|logo.png|site.webmanifest)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ],
+      "regex": "^(?:/(favicon.ico|favicon.png|apple-touch-icon.png|logo.png|site.webmanifest))(?:/)?$"
+    }
+  ],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/modules/reconcile/results/[id]",
+      "regex": "^/modules/reconcile/results/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/modules/reconcile/results/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/billing",
+      "regex": "^/billing(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/billing(?:/)?$"
+    },
+    {
+      "page": "/dashboard",
+      "regex": "^/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
+      "page": "/login",
+      "regex": "^/login(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/login(?:/)?$"
+    },
+    {
+      "page": "/modules/ai-auditor",
+      "regex": "^/modules/ai\\-auditor(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/ai\\-auditor(?:/)?$"
+    },
+    {
+      "page": "/modules/online-seller",
+      "regex": "^/modules/online\\-seller(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/online\\-seller(?:/)?$"
+    },
+    {
+      "page": "/modules/online-seller/gstr1",
+      "regex": "^/modules/online\\-seller/gstr1(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/online\\-seller/gstr1(?:/)?$"
+    },
+    {
+      "page": "/modules/online-seller/manage-data",
+      "regex": "^/modules/online\\-seller/manage\\-data(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/online\\-seller/manage\\-data(?:/)?$"
+    },
+    {
+      "page": "/modules/online-seller/marketplaces",
+      "regex": "^/modules/online\\-seller/marketplaces(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/online\\-seller/marketplaces(?:/)?$"
+    },
+    {
+      "page": "/modules/online-seller/profile",
+      "regex": "^/modules/online\\-seller/profile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/online\\-seller/profile(?:/)?$"
+    },
+    {
+      "page": "/modules/online-seller/reports",
+      "regex": "^/modules/online\\-seller/reports(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/online\\-seller/reports(?:/)?$"
+    },
+    {
+      "page": "/modules/reconcile",
+      "regex": "^/modules/reconcile(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/reconcile(?:/)?$"
+    },
+    {
+      "page": "/modules/reconcile/reports",
+      "regex": "^/modules/reconcile/reports(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/reconcile/reports(?:/)?$"
+    },
+    {
+      "page": "/modules/reconcile/results",
+      "regex": "^/modules/reconcile/results(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/reconcile/results(?:/)?$"
+    },
+    {
+      "page": "/modules/reconcile/upload",
+      "regex": "^/modules/reconcile/upload(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/reconcile/upload(?:/)?$"
+    },
+    {
+      "page": "/modules/tally",
+      "regex": "^/modules/tally(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/tally(?:/)?$"
+    },
+    {
+      "page": "/modules/tally/company",
+      "regex": "^/modules/tally/company(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/tally/company(?:/)?$"
+    },
+    {
+      "page": "/modules/tally/export",
+      "regex": "^/modules/tally/export(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/tally/export(?:/)?$"
+    },
+    {
+      "page": "/modules/tally/history",
+      "regex": "^/modules/tally/history(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/tally/history(?:/)?$"
+    },
+    {
+      "page": "/modules/tally/import",
+      "regex": "^/modules/tally/import(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/tally/import(?:/)?$"
+    },
+    {
+      "page": "/modules/tally/mapping",
+      "regex": "^/modules/tally/mapping(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/modules/tally/mapping(?:/)?$"
+    },
+    {
+      "page": "/opengraph-image",
+      "regex": "^/opengraph\\-image(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/opengraph\\-image(?:/)?$"
+    },
+    {
+      "page": "/register",
+      "regex": "^/register(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/register(?:/)?$"
+    },
+    {
+      "page": "/robots.txt",
+      "regex": "^/robots\\.txt(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/robots\\.txt(?:/)?$"
+    },
+    {
+      "page": "/settings",
+      "regex": "^/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/settings(?:/)?$"
+    },
+    {
+      "page": "/sitemap.xml",
+      "regex": "^/sitemap\\.xml(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/sitemap\\.xml(?:/)?$"
+    },
+    {
+      "page": "/twitter-image",
+      "regex": "^/twitter\\-image(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/twitter\\-image(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSuffix": ".prefetch.rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments"
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

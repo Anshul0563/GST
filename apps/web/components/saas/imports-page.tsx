@@ -198,6 +198,9 @@ export function ImportsPage() {
   const [successfulPlatforms, setSuccessfulPlatforms] = useState<
     Record<string, boolean>
   >({});
+  const [uploadedFilesByPlatform, setUploadedFilesByPlatform] = useState<
+    Record<string, File[]>
+  >({});
   const [activeBatch, setActiveBatch] = useState<BatchStatus | null>(null);
   const [errors, setErrors] = useState<ImportErrors | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -355,6 +358,10 @@ export function ImportsPage() {
         setFileUploadStatus("error");
       } else {
         setFileUploadStatus("success");
+        setUploadedFilesByPlatform((current) => ({
+          ...current,
+          [selected.key]: [...files],
+        }));
 
         setSuccessfulPlatforms((current) => ({
           ...current,
@@ -401,6 +408,11 @@ export function ImportsPage() {
       await deleteImportBatch(workspace.token, batch.id);
       if (activeBatch?.id === batch.id) setActiveBatch(null);
       setSuccessfulPlatforms((current) => {
+        const next = { ...current };
+        delete next[batch.platform];
+        return next;
+      });
+      setUploadedFilesByPlatform((current) => {
         const next = { ...current };
         delete next[batch.platform];
         return next;
@@ -493,15 +505,13 @@ export function ImportsPage() {
                     <div
                       key={item.key}
                       onClick={() => {
-                        if (uploadSuccess) {
-                          return;
-                        }
                         setPlatformKey(item.key);
-                        setFiles([]);
+                        const previousFiles = uploadedFilesByPlatform[item.key] || [];
+                        setFiles(previousFiles);
                         setProgress("");
                         setActiveBatch(null);
                         setErrors(null);
-                        setFileUploadStatus("idle");
+                        setFileUploadStatus(previousFiles.length ? "success" : "idle");
                         setUploadDialogOpen(true);
                       }}
                       onKeyDown={(event) => {
