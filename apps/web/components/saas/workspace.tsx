@@ -238,7 +238,7 @@ export function useWorkspace(): Workspace {
         if (isCurrent()) setLoading(false);
       }
     },
-    [clearPeriodScopedState, needs],
+    [clearAuthenticatedWorkspace, clearPeriodScopedState, needs],
   );
 
   const refresh = useCallback(

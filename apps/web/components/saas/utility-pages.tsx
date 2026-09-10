@@ -6,6 +6,7 @@ import { useWorkspace } from "@/components/saas/workspace";
 import {
   BillingPlan,
   BillingStatus,
+  Profile,
   createBillingOrder,
   createProfile,
   deleteProfile,
