@@ -10,7 +10,6 @@ import {
   getImportErrors,
   getImportStatus,
   listProfileImportBatches,
-  reprocessImportBatch,
   uploadMarketplaceFiles,
 } from "@/lib/api";
 import {
@@ -401,6 +400,11 @@ export function ImportsPage() {
     try {
       await deleteImportBatch(workspace.token, batch.id);
       if (activeBatch?.id === batch.id) setActiveBatch(null);
+      setSuccessfulPlatforms((current) => {
+        const next = { ...current };
+        delete next[batch.platform];
+        return next;
+      });
       setErrors(null);
       await workspace.refresh();
       if (workspace.profile)
@@ -476,7 +480,13 @@ export function ImportsPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {platformCards.map((item) => {
                   const active = item.key === selected?.key;
-                  const successfulBatch = successfulBatchesByPlatform[item.key];
+                  const successfulBatch =
+                    successfulBatchesByPlatform[item.key] ||
+                    (activeBatch?.platform === item.key &&
+                    activeBatch.status === "completed" &&
+                    activeBatch.error_rows === 0
+                      ? activeBatch
+                      : undefined);
                   const uploadSuccess =
                     successfulPlatforms[item.key] || Boolean(successfulBatch);
                   return (
@@ -780,12 +790,10 @@ export function ImportsPage() {
           {timelineBatches.length ? (
             <div className="space-y-3">
               {timelineBatches.map((batch) => {
-                const busy = deletingId === batch.id;
-                const locked = ["queued", "processing"].includes(batch.status);
                 return (
                   <div
                     key={batch.id}
-                    className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto] xl:grid-cols-[1fr_auto_auto_auto_auto_auto_auto]"
+                    className="flex flex-wrap items-center gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5"
                   >
                     <b className="capitalize">{batch.platform}</b>
                     <span>
@@ -806,26 +814,6 @@ export function ImportsPage() {
                     ) : (
                       <span />
                     )}
-                    <button
-                      onClick={() => reprocessBatch(batch)}
-                      disabled={reprocessingId === batch.id || locked}
-                      className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-bold text-blue-700 shadow-sm ring-1 ring-blue-100 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-slate-900 dark:ring-white/10"
-                    >
-                      <RotateCw
-                        className={`size-3 ${reprocessingId === batch.id ? "animate-spin" : ""}`}
-                      />{" "}
-                      {reprocessingId === batch.id
-                        ? "Reprocessing"
-                        : "Reprocess"}
-                    </button>
-                    <button
-                      onClick={() => removeBatch(batch)}
-                      disabled={busy || locked}
-                      className="inline-flex items-center gap-1 rounded-xl bg-white px-3 py-2 text-xs font-bold text-rose-700 shadow-sm ring-1 ring-rose-100 disabled:cursor-not-allowed disabled:opacity-45 dark:bg-slate-900 dark:ring-white/10"
-                    >
-                      <Trash2 className="size-3" />{" "}
-                      {busy ? "Deleting" : "Delete"}
-                    </button>
                   </div>
                 );
               })}
