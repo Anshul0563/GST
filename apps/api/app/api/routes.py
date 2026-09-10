@@ -1,16 +1,10 @@
-from datetime import datetime, timedelta
-from collections import Counter
-from decimal import Decimal
-from pathlib import Path
 import json
 import shutil
+from collections import Counter
+from datetime import datetime, timedelta
+from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
-
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-from app.services.gstr1_validator import validate_gstr1_export
 
 from app.api.deps import get_current_user
 from app.core.config import get_settings
@@ -19,6 +13,7 @@ from app.models.entities import (
     AuditLog,
     GSTProfile,
     GSTR1JsonExport,
+    IssueLog,
     NormalizedTransaction,
     PaymentOrder,
     PlatformImportBatch,
@@ -31,7 +26,6 @@ from app.models.entities import (
     TallyVoucher,
     UploadedFile,
     User,
-    IssueLog,
 )
 from app.parsers.factory import PARSERS, get_parser
 from app.schemas.dto import (
@@ -41,15 +35,15 @@ from app.schemas.dto import (
     BatchStatus,
     CreatePaymentOrderIn,
     DashboardSummary,
+    GenerateGSTR1In,
     GSTProfileIn,
     GSTProfileOut,
-    GenerateGSTR1In,
-    LoginIn,
     IssueLogOut,
+    LoginIn,
     MarketplaceDetectIn,
     MarketplaceDetectResponse,
-    RegisterIn,
     ReconcileSettingsIn,
+    RegisterIn,
     TallyCompanyIn,
     TallyGenerateIn,
     Token,
@@ -80,6 +74,7 @@ from app.services.gst import (
     normalize_export_mode,
     row_belongs_to_period,
 )
+from app.services.gstr1_validator import validate_gstr1_export
 from app.services.gsttool_parity_validator import compare_against_reference
 from app.services.reconciliation import (
     ReconSettings,
@@ -94,8 +89,26 @@ from app.services.tally import (
     write_voucher_excel,
 )
 from app.services.transaction_normalizer import finalize_transaction
-from app.services.validation import money, validate_gstin, validate_period, validate_transaction
+from app.services.validation import (
+    money,
+    validate_gstin,
+    validate_period,
+    validate_transaction,
+)
 from app.utils.security import create_access_token, hash_password, verify_password
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, JSONResponse
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 ALLOWED_EXTENSIONS = {".xlsx", ".xlsm", ".xls", ".csv"}
@@ -242,7 +255,9 @@ def get_editable_profile(profile_id: int, user: User, db: Session) -> GSTProfile
 
 
 def visible_profiles_for_user(user: User, db: Session) -> list[GSTProfile]:
-    stmt = current_user_profile_query(user).order_by(GSTProfile.user_id.asc(), GSTProfile.id.asc())
+    stmt = current_user_profile_query(user).order_by(
+        GSTProfile.user_id.asc(), GSTProfile.id.asc()
+    )
     return dedupe_profiles_by_gstin(db.scalars(stmt).all())
 
 
@@ -263,8 +278,9 @@ def dedupe_profiles_by_gstin(profiles: list[GSTProfile]) -> list[GSTProfile]:
     return out
 
 
-
-def apply_profile_payload(profile: GSTProfile, payload: GSTProfileIn, gstin: str, return_period: str) -> GSTProfile:
+def apply_profile_payload(
+    profile: GSTProfile, payload: GSTProfileIn, gstin: str, return_period: str
+) -> GSTProfile:
     profile.gstin = gstin
     profile.legal_name = payload.legal_name.strip()
     profile.trade_name = payload.trade_name.strip() if payload.trade_name else None
@@ -275,7 +291,9 @@ def apply_profile_payload(profile: GSTProfile, payload: GSTProfileIn, gstin: str
     return profile
 
 
-def audit_gst_profile(user: User, action: str, profile: GSTProfile, db: Session) -> None:
+def audit_gst_profile(
+    user: User, action: str, profile: GSTProfile, db: Session
+) -> None:
     db.add(
         AuditLog(
             user_id=user.id,
@@ -472,7 +490,9 @@ def enforce_upload_limits(files: list[UploadFile], max_upload_mb: int) -> None:
                 f"{upload.filename or 'Upload'} exceeds the {max_upload_mb} MB file limit",
             )
     if total > max_bytes:
-        raise HTTPException(413, f"Combined upload exceeds the {max_upload_mb} MB limit")
+        raise HTTPException(
+            413, f"Combined upload exceeds the {max_upload_mb} MB limit"
+        )
 
 
 def settle_stale_import(batch: PlatformImportBatch, db: Session) -> None:
@@ -559,7 +579,9 @@ def refresh_transaction_validation(txn: dict) -> dict:
         error in {"Zero amount row", "Zero rate and zero taxable row"}
         for error in errors
     )
-    txn["validation_status"] = "skipped" if zero_only else "invalid" if errors else "valid"
+    txn["validation_status"] = (
+        "skipped" if zero_only else "invalid" if errors else "valid"
+    )
     txn["validation_errors"] = "; ".join(errors) if errors else None
     return txn
 
@@ -621,7 +643,11 @@ def marketplaces():
                 "key": key,
                 "name": metadata.get("name", key.replace("-", " ").title()),
                 "category": metadata.get("category", "Accounting"),
-                "status": "Active" if parser_name != "CustomExcelParser" or key == "custom" else "Beta",
+                "status": (
+                    "Active"
+                    if parser_name != "CustomExcelParser" or key == "custom"
+                    else "Beta"
+                ),
                 "required_files": metadata.get("required_files", ["Sales report"]),
                 "guide": metadata.get("guide", "Upload marketplace report"),
                 "parser": parser_name,
@@ -1001,7 +1027,9 @@ async def razorpay_webhook(
         return {"status": "ignored", "event": event_name}
 
     order = db.scalar(
-        select(PaymentOrder).where(PaymentOrder.provider_order_id == str(provider_order_id))
+        select(PaymentOrder).where(
+            PaymentOrder.provider_order_id == str(provider_order_id)
+        )
     )
     if not order:
         return {"status": "ignored", "reason": "unknown_order"}
@@ -1574,10 +1602,7 @@ def list_imports(
     batches = db.scalars(stmt.limit(50)).all()
     for batch in batches:
         settle_stale_import(batch, db)
-    return [
-        batch_status_response(batch)
-        for batch in batches
-    ]
+    return [batch_status_response(batch) for batch in batches]
 
 
 @router.get("/imports/{batch_id}/errors")
@@ -1804,8 +1829,12 @@ def dashboard_summary(
         json_generation_status=(
             latest_export.status if latest_export else "not_generated"
         ),
-        auditor_health_score=audit_summary["auditor_health_score"] if audit_summary else None,
-        auditor_risk_score=audit_summary["auditor_risk_score"] if audit_summary else None,
+        auditor_health_score=(
+            audit_summary["auditor_health_score"] if audit_summary else None
+        ),
+        auditor_risk_score=(
+            audit_summary["auditor_risk_score"] if audit_summary else None
+        ),
         readiness_status=audit_summary["readiness_status"] if audit_summary else None,
         auditor_warnings=audit_summary["warnings"] if audit_summary else None,
         auditor_issue_counts=audit_summary["issue_counts"] if audit_summary else None,
@@ -1827,7 +1856,11 @@ def auditor_summary(
         rows = [row for row in rows if transaction_matches_period(row, period)]
     if not rows:
         raise HTTPException(404, "No transactions found for audit summary")
-    profile = db.get(GSTProfile, profile_id) if profile_id else db.get(GSTProfile, rows[0].profile_id)
+    profile = (
+        db.get(GSTProfile, profile_id)
+        if profile_id
+        else db.get(GSTProfile, rows[0].profile_id)
+    )
     if not profile:
         raise HTTPException(404, "GST profile not found for audit summary")
     summary = build_audit_summary(rows, profile)
@@ -1858,7 +1891,11 @@ def auditor_issues(
         rows = [row for row in rows if transaction_matches_period(row, period)]
     if not rows:
         return []
-    profile = db.get(GSTProfile, profile_id) if profile_id else db.get(GSTProfile, rows[0].profile_id)
+    profile = (
+        db.get(GSTProfile, profile_id)
+        if profile_id
+        else db.get(GSTProfile, rows[0].profile_id)
+    )
     if not profile:
         return []
     summary = build_audit_summary(rows, profile)
@@ -1881,7 +1918,11 @@ def auditor_fix(
         rows = [row for row in rows if transaction_matches_period(row, period)]
     if not rows:
         raise HTTPException(404, "No transactions found to fix")
-    profile = db.get(GSTProfile, profile_id) if profile_id else db.get(GSTProfile, rows[0].profile_id)
+    profile = (
+        db.get(GSTProfile, profile_id)
+        if profile_id
+        else db.get(GSTProfile, rows[0].profile_id)
+    )
     if not profile:
         raise HTTPException(404, "GST profile not found for fixes")
     logs = fix_detected_issues(rows, profile, user.id, db)
@@ -2136,7 +2177,9 @@ def generate_gstr1(
             user_id=user.id,
             action="gstr1.generate",
             entity_type="gstr1_json_exports",
-            metadata_json=json.dumps({"uploaded_files_deleted": uploaded_files_deleted}),
+            metadata_json=json.dumps(
+                {"uploaded_files_deleted": uploaded_files_deleted}
+            ),
         )
     )
     db.commit()
@@ -2208,7 +2251,9 @@ def gstr1_export_download(
                     action="gstr1.download.cleanup_uploads",
                     entity_type="gstr1_json_exports",
                     entity_id=str(export.id),
-                    metadata_json=json.dumps({"uploaded_files_deleted": uploaded_files_deleted}),
+                    metadata_json=json.dumps(
+                        {"uploaded_files_deleted": uploaded_files_deleted}
+                    ),
                 )
             )
         db.commit()
@@ -2229,7 +2274,9 @@ def gstr1_export_download(
                 action="gstr1.download.cleanup_uploads",
                 entity_type="gstr1_json_exports",
                 entity_id=str(export.id),
-                metadata_json=json.dumps({"uploaded_files_deleted": uploaded_files_deleted}),
+                metadata_json=json.dumps(
+                    {"uploaded_files_deleted": uploaded_files_deleted}
+                ),
             )
         )
     db.commit()
@@ -2293,7 +2340,10 @@ def preview_gstr1(
 
     return {
         "can_generate": blockers == 0
-        and (not strict_mode or (parity_report is not None and parity_report.get("exact_match", False))),
+        and (
+            not strict_mode
+            or (parity_report is not None and parity_report.get("exact_match", False))
+        ),
         "validation_blockers": blockers,
         "export_mode": export_mode,
         "parity_report": parity_report,
@@ -2513,10 +2563,14 @@ def tally_xml(
         user.id, payload.profile_id, payload.period, db, valid_only=True
     )
     if not rows:
-        raise HTTPException(422, "No valid transactions found for this GST profile and period")
+        raise HTTPException(
+            422, "No valid transactions found for this GST profile and period"
+        )
     vouchers = build_vouchers(rows, payload.ledger_mapping)
     if not vouchers:
-        raise HTTPException(422, "No Tally vouchers could be built from the selected transactions")
+        raise HTTPException(
+            422, "No Tally vouchers could be built from the selected transactions"
+        )
     xml = build_tally_xml(
         company.company_name, rows, payload.ledger_mapping, payload.auto_create_ledgers
     )

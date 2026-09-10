@@ -1,32 +1,31 @@
 from __future__ import annotations
 
-from sqlalchemy import inspect, text
-from sqlalchemy.orm import Session
-
 from app.core.config import get_settings
 from app.models.entities import User
 from app.utils.security import hash_password
+from sqlalchemy import inspect, text
+from sqlalchemy.orm import Session
 
 
 def run_lightweight_migrations(engine) -> None:
     inspector = inspect(engine)
     if "gst_profiles" in inspector.get_table_names():
-        profile_columns = {column["name"] for column in inspector.get_columns("gst_profiles")}
+        profile_columns = {
+            column["name"] for column in inspector.get_columns("gst_profiles")
+        }
         with engine.begin() as connection:
             if "deleted_at" not in profile_columns:
-                connection.execute(text("ALTER TABLE gst_profiles ADD COLUMN deleted_at DATETIME"))
+                connection.execute(
+                    text("ALTER TABLE gst_profiles ADD COLUMN deleted_at DATETIME")
+                )
         with engine.connect() as connection:
-            duplicate_rows = connection.execute(
-                text(
-                    """
+            duplicate_rows = connection.execute(text("""
                     SELECT user_id, gstin, COUNT(*) AS row_count
                     FROM gst_profiles
                     WHERE deleted_at IS NULL
                     GROUP BY user_id, gstin
                     HAVING COUNT(*) > 1
-                    """
-                )
-            ).all()
+                    """)).all()
         if not duplicate_rows:
             with engine.begin() as connection:
                 connection.execute(
@@ -46,9 +45,13 @@ def run_lightweight_migrations(engine) -> None:
         with engine.begin() as connection:
             for column, definition in additions.items():
                 if column not in user_columns:
-                    connection.execute(text(f"ALTER TABLE users ADD COLUMN {column} {definition}"))
+                    connection.execute(
+                        text(f"ALTER TABLE users ADD COLUMN {column} {definition}")
+                    )
     if "tally_companies" in inspector.get_table_names():
-        tally_columns = {column["name"] for column in inspector.get_columns("tally_companies")}
+        tally_columns = {
+            column["name"] for column in inspector.get_columns("tally_companies")
+        }
         additions = {
             "gstin": "VARCHAR(15)",
             "financial_year": "VARCHAR(9)",
@@ -58,9 +61,15 @@ def run_lightweight_migrations(engine) -> None:
         with engine.begin() as connection:
             for column, definition in additions.items():
                 if column not in tally_columns:
-                    connection.execute(text(f"ALTER TABLE tally_companies ADD COLUMN {column} {definition}"))
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE tally_companies ADD COLUMN {column} {definition}"
+                        )
+                    )
     if "reconciliation_batches" in inspector.get_table_names():
-        batch_columns = {column["name"] for column in inspector.get_columns("reconciliation_batches")}
+        batch_columns = {
+            column["name"] for column in inspector.get_columns("reconciliation_batches")
+        }
         additions = {
             "portal_rows": "INTEGER DEFAULT 0",
             "book_rows": "INTEGER DEFAULT 0",
@@ -73,9 +82,15 @@ def run_lightweight_migrations(engine) -> None:
         with engine.begin() as connection:
             for column, definition in additions.items():
                 if column not in batch_columns:
-                    connection.execute(text(f"ALTER TABLE reconciliation_batches ADD COLUMN {column} {definition}"))
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE reconciliation_batches ADD COLUMN {column} {definition}"
+                        )
+                    )
     if "reconciliation_rows" in inspector.get_table_names():
-        row_columns = {column["name"] for column in inspector.get_columns("reconciliation_rows")}
+        row_columns = {
+            column["name"] for column in inspector.get_columns("reconciliation_rows")
+        }
         additions = {
             "taxable_value": "NUMERIC(14, 2) DEFAULT 0",
             "igst": "NUMERIC(14, 2) DEFAULT 0",
@@ -89,15 +104,24 @@ def run_lightweight_migrations(engine) -> None:
         with engine.begin() as connection:
             for column, definition in additions.items():
                 if column not in row_columns:
-                    connection.execute(text(f"ALTER TABLE reconciliation_rows ADD COLUMN {column} {definition}"))
+                    connection.execute(
+                        text(
+                            f"ALTER TABLE reconciliation_rows ADD COLUMN {column} {definition}"
+                        )
+                    )
     if "platform_import_batches" in inspector.get_table_names():
-        import_columns = {column["name"] for column in inspector.get_columns("platform_import_batches")}
+        import_columns = {
+            column["name"]
+            for column in inspector.get_columns("platform_import_batches")
+        }
         with engine.begin() as connection:
             if "period" not in import_columns:
-                connection.execute(text("ALTER TABLE platform_import_batches ADD COLUMN period VARCHAR(6)"))
                 connection.execute(
                     text(
-                        """
+                        "ALTER TABLE platform_import_batches ADD COLUMN period VARCHAR(6)"
+                    )
+                )
+                connection.execute(text("""
                         UPDATE platform_import_batches
                         SET period = (
                             SELECT return_period
@@ -105,47 +129,51 @@ def run_lightweight_migrations(engine) -> None:
                             WHERE gst_profiles.id = platform_import_batches.profile_id
                         )
                         WHERE period IS NULL OR period = ''
-                        """
-                    )
-                )
+                        """))
     if "normalized_transactions" in inspector.get_table_names():
-        transaction_columns = {column["name"] for column in inspector.get_columns("normalized_transactions")}
+        transaction_columns = {
+            column["name"]
+            for column in inspector.get_columns("normalized_transactions")
+        }
         with engine.begin() as connection:
             if "document_date" not in transaction_columns:
-                connection.execute(text("ALTER TABLE normalized_transactions ADD COLUMN document_date DATE"))
                 connection.execute(
                     text(
-                        """
+                        "ALTER TABLE normalized_transactions ADD COLUMN document_date DATE"
+                    )
+                )
+                connection.execute(text("""
                         UPDATE normalized_transactions
                         SET document_date = invoice_date
                         WHERE document_date IS NULL
-                        """
-                    )
-                )
-        transaction_constraints = inspector.get_unique_constraints("normalized_transactions")
+                        """))
+        transaction_constraints = inspector.get_unique_constraints(
+            "normalized_transactions"
+        )
         has_period_aware_constraint = any(
             constraint.get("column_names")
-            == ["profile_id", "filing_period", "platform", "doc_type", "invoice_no", "order_item_id"]
+            == [
+                "profile_id",
+                "filing_period",
+                "platform",
+                "doc_type",
+                "invoice_no",
+                "order_item_id",
+            ]
             for constraint in transaction_constraints
         )
         if not has_period_aware_constraint and engine.dialect.name == "sqlite":
             with engine.begin() as connection:
-                table_sql = connection.execute(
-                    text(
-                        """
+                table_sql = connection.execute(text("""
                         SELECT sql
                         FROM sqlite_master
                         WHERE type = 'table' AND name = 'normalized_transactions'
-                        """
-                    )
-                ).scalar() or ""
+                        """)).scalar() or ""
             has_period_aware_constraint = "uq_txn_doc_item_period" in table_sql
         if not has_period_aware_constraint and engine.dialect.name == "sqlite":
             with engine.begin() as connection:
                 connection.execute(text("PRAGMA foreign_keys=OFF"))
-                connection.execute(
-                    text(
-                        """
+                connection.execute(text("""
                         CREATE TABLE normalized_transactions_new (
                             id INTEGER NOT NULL,
                             user_id INTEGER NOT NULL,
@@ -197,12 +225,8 @@ def run_lightweight_migrations(engine) -> None:
                             FOREIGN KEY(profile_id) REFERENCES gst_profiles (id),
                             FOREIGN KEY(batch_id) REFERENCES platform_import_batches (id)
                         )
-                        """
-                    )
-                )
-                connection.execute(
-                    text(
-                        """
+                        """))
+                connection.execute(text("""
                         INSERT INTO normalized_transactions_new (
                             id, user_id, profile_id, batch_id, platform, gstin, etin,
                             filing_period, order_id, order_item_id, invoice_no,
@@ -223,11 +247,13 @@ def run_lightweight_migrations(engine) -> None:
                             settlement_amount, source_file, raw_row_json,
                             validation_status, validation_errors, created_at
                         FROM normalized_transactions
-                        """
+                        """))
+                connection.execute(text("DROP TABLE normalized_transactions"))
+                connection.execute(
+                    text(
+                        "ALTER TABLE normalized_transactions_new RENAME TO normalized_transactions"
                     )
                 )
-                connection.execute(text("DROP TABLE normalized_transactions"))
-                connection.execute(text("ALTER TABLE normalized_transactions_new RENAME TO normalized_transactions"))
                 for column in (
                     "batch_id",
                     "buyer_state_code",
