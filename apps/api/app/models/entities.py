@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
@@ -25,6 +25,16 @@ class User(Base):
 
 class GSTProfile(Base):
     __tablename__ = "gst_profiles"
+    __table_args__ = (
+        Index(
+            "uq_active_gst_profile_user_gstin",
+            "user_id",
+            "gstin",
+            unique=True,
+            sqlite_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
@@ -36,6 +46,7 @@ class GSTProfile(Base):
     financial_year: Mapped[str] = mapped_column(String(9))
     return_period: Mapped[str] = mapped_column(String(6))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     user: Mapped[User] = relationship(back_populates="profiles")
 

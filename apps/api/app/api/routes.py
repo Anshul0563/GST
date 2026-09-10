@@ -227,6 +227,7 @@ def normalize_profile_payload(payload: GSTProfileIn) -> tuple[str, str]:
 
 def current_user_profile_query(user: User):
     stmt = select(GSTProfile)
+    stmt = stmt.where(GSTProfile.deleted_at.is_(None))
     if not is_super_admin(user):
         stmt = stmt.where(GSTProfile.user_id == user.id)
     return stmt
@@ -323,7 +324,10 @@ def save_profile_for_user(
         )
         action = "gst_profile.update"
     else:
-        same_gstin_stmt = select(GSTProfile).where(GSTProfile.gstin == gstin)
+        same_gstin_stmt = select(GSTProfile).where(
+            GSTProfile.gstin == gstin,
+            GSTProfile.deleted_at.is_(None),
+        )
         if not is_super_admin(user):
             same_gstin_stmt = same_gstin_stmt.where(GSTProfile.user_id == user.id)
         profile = db.scalar(same_gstin_stmt.order_by(GSTProfile.id.asc()))
@@ -351,19 +355,10 @@ def enforce_gst_profile_registration_limits(
     gstin: str,
     current_profile_id: int | None = None,
 ) -> None:
-    if current_profile_id is None and not is_super_admin(user):
-        existing_profile = db.scalar(
-            select(GSTProfile.id)
-            .where(GSTProfile.user_id == user.id)
-            .order_by(GSTProfile.id.asc())
-        )
-        if existing_profile is not None:
-            raise HTTPException(
-                409,
-                "Only one GSTIN can be registered per user account.",
-            )
-
-    duplicate_stmt = select(GSTProfile.id).where(GSTProfile.gstin == gstin)
+    duplicate_stmt = select(GSTProfile.id).where(
+        GSTProfile.gstin == gstin,
+        GSTProfile.deleted_at.is_(None),
+    )
     if current_profile_id is not None:
         duplicate_stmt = duplicate_stmt.where(GSTProfile.id != current_profile_id)
     duplicate_profile = db.scalar(duplicate_stmt.order_by(GSTProfile.id.asc()))
@@ -1054,6 +1049,18 @@ def update_profile(
     db.commit()
     db.refresh(profile)
     return profile
+
+
+@router.delete("/gst-profile/{profile_id}", status_code=204)
+def delete_profile(
+    profile_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    profile = get_editable_profile(profile_id, user, db)
+    profile.deleted_at = datetime.utcnow()
+    audit_gst_profile(user, "gst_profile.delete", profile, db)
+    db.commit()
 
 
 @router.post("/demo/seed")

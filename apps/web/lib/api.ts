@@ -444,6 +444,10 @@ export function updateProfile(token: string, profileId: number, payload: Omit<Pr
   return request<Profile>(`/gst-profile/${profileId}`, { method: "PUT", body: JSON.stringify(payload) }, token);
 }
 
+export function deleteProfile(token: string, profileId: number) {
+  return request<void>(`/gst-profile/${profileId}`, { method: "DELETE" }, token);
+}
+
 export function uploadMarketplaceFiles(token: string, profile: Profile, platform: string, files: FileList | File[]) {
   const form = new FormData();
   Array.from(files).forEach((file) => form.append("files", file));

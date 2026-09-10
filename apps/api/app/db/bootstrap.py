@@ -10,6 +10,31 @@ from app.utils.security import hash_password
 
 def run_lightweight_migrations(engine) -> None:
     inspector = inspect(engine)
+    if "gst_profiles" in inspector.get_table_names():
+        profile_columns = {column["name"] for column in inspector.get_columns("gst_profiles")}
+        with engine.begin() as connection:
+            if "deleted_at" not in profile_columns:
+                connection.execute(text("ALTER TABLE gst_profiles ADD COLUMN deleted_at DATETIME"))
+        with engine.connect() as connection:
+            duplicate_rows = connection.execute(
+                text(
+                    """
+                    SELECT user_id, gstin, COUNT(*) AS row_count
+                    FROM gst_profiles
+                    WHERE deleted_at IS NULL
+                    GROUP BY user_id, gstin
+                    HAVING COUNT(*) > 1
+                    """
+                )
+            ).all()
+        if not duplicate_rows:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS uq_active_gst_profile_user_gstin "
+                        "ON gst_profiles (user_id, gstin) WHERE deleted_at IS NULL"
+                    )
+                )
     if "users" in inspector.get_table_names():
         user_columns = {column["name"] for column in inspector.get_columns("users")}
         additions = {
