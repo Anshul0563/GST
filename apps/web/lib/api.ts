@@ -127,7 +127,7 @@ export type Gstr1Payload = {
   doc_issue: { doc_det: Array<Record<string, unknown>> };
 };
 
-export type Gstr1ExportMode = "gsttool_compatible" | "clean_portal";
+export type Gstr1ExportMode = "gsttool_compatible" | "clean_portal" | "strict_gsttool_parity";
 
 export type Gstr1ParityReport = {
   match_score: number;

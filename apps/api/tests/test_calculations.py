@@ -15,6 +15,8 @@ from app.services.gst import (
     GSTTOOL_COMPATIBLE,
     build_gstr1_json,
     gstr1_generation_report,
+    is_strict_gsttool_parity_mode,
+    normalize_export_mode,
     row_belongs_to_period,
 )
 from app.services.gsttool_parity_validator import compare_against_reference
@@ -145,6 +147,21 @@ class GstCalculationTests(unittest.TestCase):
 
     def test_flipkart_cashback_document_number_and_tcs_are_parsed(self):
         parser = FlipkartParser("07TCRPS8655B1ZK", "032026")
+
+    def test_strict_gsttool_parity_mode_normalizes_to_gsttool_compatible(self):
+        self.assertTrue(is_strict_gsttool_parity_mode("strict_gsttool_parity"))
+        self.assertEqual(
+            normalize_export_mode("strict_gsttool_parity"),
+            GSTTOOL_COMPATIBLE,
+        )
+
+    def test_strict_gsttool_parity_mode_aliases_are_recognized(self):
+        self.assertTrue(is_strict_gsttool_parity_mode("strict_gsttool_parity"))
+        self.assertTrue(is_strict_gsttool_parity_mode("strict_gsttool_parity_mode"))
+        self.assertEqual(
+            normalize_export_mode("strict_gsttool_parity_mode"),
+            GSTTOOL_COMPATIBLE,
+        )
         txn = parser.normalize_row(
             {
                 "Seller GSTIN": "07TCRPS8655B1ZK",

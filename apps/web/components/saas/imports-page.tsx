@@ -280,6 +280,16 @@ export function ImportsPage() {
   const activePeriodHasBatches = timelineBatches.some(
     (batch) => batch.period === workspace.profile?.return_period,
   );
+  const successfulImportPlatformsFromBatches = useMemo(
+    () =>
+      timelineBatches.reduce<Record<string, boolean>>((acc, batch) => {
+        if (batch.status === "completed" && batch.error_rows === 0) {
+          acc[batch.platform] = true;
+        }
+        return acc;
+      }, {}),
+    [timelineBatches],
+  );
   const uploadFields = requiredFilesForPlatform(
     selected?.key,
     selected?.required_files || [],
@@ -497,13 +507,15 @@ export function ImportsPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {platformCards.map((item) => {
                   const active = item.key === selected?.key;
-                  const uploadSuccess = successfulPlatforms[item.key];
+                  const uploadSuccess =
+                    successfulPlatforms[item.key] ||
+                    successfulImportPlatformsFromBatches[item.key];
                   return (
                     <button
                       key={item.key}
                       type="button"
                       onClick={() => {
-                        if (successfulPlatforms[item.key]) {
+                        if (uploadSuccess) {
                           return;
                         }
                         setPlatformKey(item.key);

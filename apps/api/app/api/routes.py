@@ -76,6 +76,7 @@ from app.services.gst import (
     build_gstr1_json,
     document_period,
     gstr1_generation_report,
+    is_strict_gsttool_parity_mode,
     normalize_export_mode,
     row_belongs_to_period,
 )
@@ -2050,6 +2051,7 @@ def generate_gstr1(
             422,
             f"Resolve {blockers} validation error rows before generating GSTR-1 JSON",
         )
+    strict_mode = is_strict_gsttool_parity_mode(payload.export_mode)
     export_mode = normalize_export_mode(payload.export_mode)
     rows = transaction_dicts(
         user.id,
@@ -2079,6 +2081,28 @@ def generate_gstr1(
                 "errors": generation_report["errors"],
             },
         )
+
+    reference = load_reference_gstr1(profile.gstin, payload.period)
+    parity_report = None
+    if export_mode == GSTTOOL_COMPATIBLE and reference is not None:
+        parity_report = compare_against_reference(reference, gstr)
+    if strict_mode:
+        if reference is None:
+            raise HTTPException(
+                422,
+                {
+                    "message": "Strict GSTTool parity requested but no reference JSON is available.",
+                },
+            )
+        if parity_report is not None and not parity_report.get("exact_match", False):
+            raise HTTPException(
+                422,
+                {
+                    "message": "Strict GSTTool parity check failed",
+                    "parity_report": parity_report,
+                },
+            )
+
     export_rows = [row for row in rows if row.get("validation_status") == "valid"]
     settings = get_settings()
     base = settings.export_dir / str(user.id) / profile.gstin / payload.period
@@ -2113,14 +2137,9 @@ def generate_gstr1(
     return {
         "status": "generated",
         "json": gstr,
-        "export_mode": export_mode,
+        "export_mode": payload.export_mode or export_mode,
         "report": generation_report,
-        "parity_report": (
-            compare_against_reference(reference, gstr)
-            if export_mode == GSTTOOL_COMPATIBLE
-            and (reference := load_reference_gstr1(profile.gstin, payload.period))
-            else None
-        ),
+        "parity_report": parity_report,
         "download_json": f"/gstr1/export/{export.id}",
         "download_excel": f"/gstr1/export/{export.id}?format=xlsx",
     }
@@ -2225,6 +2244,7 @@ def preview_gstr1(
         raise HTTPException(404, "Profile not found")
     require_valid_period(period)
 
+    strict_mode = is_strict_gsttool_parity_mode(export_mode)
     mode = normalize_export_mode(export_mode)
     rows = transaction_dicts(
         user.id,
@@ -2248,16 +2268,28 @@ def preview_gstr1(
         mode,
     )
     reference = load_reference_gstr1(profile.gstin, period)
+    parity_report = None
+    if mode == GSTTOOL_COMPATIBLE and reference is not None:
+        parity_report = compare_against_reference(reference, preview)
+    elif strict_mode:
+        parity_report = {
+            "match_score": 0.0,
+            "exact_match": False,
+            "differences": [
+                {
+                    "path": "reference_missing",
+                    "type": "reference_missing",
+                    "message": "Reference GSTTool JSON not available for strict parity mode",
+                }
+            ],
+        }
 
     return {
-        "can_generate": blockers == 0,
+        "can_generate": blockers == 0
+        and (not strict_mode or (parity_report is not None and parity_report.get("exact_match", False))),
         "validation_blockers": blockers,
-        "export_mode": mode,
-        "parity_report": (
-            compare_against_reference(reference, preview)
-            if mode == GSTTOOL_COMPATIBLE and reference
-            else None
-        ),
+        "export_mode": export_mode,
+        "parity_report": parity_report,
         "preview": preview,
     }
 

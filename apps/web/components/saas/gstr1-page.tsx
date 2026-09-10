@@ -165,7 +165,8 @@ export function Gstr1Page() {
     ["B2CS preview generated", Boolean(activePreview?.b2cs.length)],
     ["SUPECO preview generated", Boolean(supecoRows.length)]
   ];
-  const compatible = exportMode === "gsttool_compatible";
+  const compatible = exportMode === "gsttool_compatible" || exportMode === "strict_gsttool_parity";
+  const strictParity = exportMode === "strict_gsttool_parity";
   const matchScore = parityReport?.match_score;
   const rowsByPeriod = profileRows.reduce<Record<string, number>>((acc, row) => {
     const period = row.filing_period || "";
@@ -195,6 +196,7 @@ export function Gstr1Page() {
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             {([
               ["gsttool_compatible", "GSTTool Compatible"],
+              ["strict_gsttool_parity", "Strict GSTTool Parity"],
               ["clean_portal", "Clean Portal Optimized"],
             ] as const).map(([value, label]) => (
               <button key={value} onClick={() => setExportMode(value)} className={`rounded-2xl px-4 py-3 text-sm font-black transition ${exportMode === value ? "bg-[#10244d] text-white shadow-lg shadow-blue-950/20" : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-200"}`}>
@@ -202,7 +204,7 @@ export function Gstr1Page() {
               </button>
             ))}
             <div className="flex flex-wrap gap-2 sm:ml-auto">
-              <StatusPill status={compatible ? "GSTTool Compatible" : "Clean Export"} />
+              <StatusPill status={strictParity ? "Strict GSTTool Parity" : compatible ? "GSTTool Compatible" : "Clean Export"} />
               <StatusPill status={compatible ? "Original GSTTool parity" : "Portal Safe"} />
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
                 Match Score {matchScore == null ? "--" : `${matchScore}%`}
@@ -212,7 +214,7 @@ export function Gstr1Page() {
           </div>
           {compatible ? (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-800">
-              May differ for Flipkart due to report-cycle logic.
+              {strictParity ? "Strict parity mode requires reference GSTTool JSON and will block generation if mismatch is detected." : "May differ for Flipkart due to report-cycle logic."}
             </div>
           ) : null}
         </Panel>

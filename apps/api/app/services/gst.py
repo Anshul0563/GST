@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
-import re
 from typing import Any
 
 from app.services.validation import (
@@ -15,6 +15,7 @@ from app.services.validation import (
 
 GST_VERSION = "GST3.1.6"
 GSTTOOL_COMPATIBLE = "gsttool_compatible"
+STRICT_GSTTOOL_PARITY = "strict_gsttool_parity"
 CLEAN_PORTAL = "clean_portal"
 DOC_NUM = {"invoice": 1, "debit_note": 4, "credit_note": 5}
 DOC_TYP = {
@@ -97,9 +98,7 @@ def json_amount(value: Any) -> float:
 
 def single_period(rows: list[dict[str, Any]]) -> str | None:
     periods = {
-        str(row.get("filing_period") or "")
-        for row in rows
-        if row.get("filing_period")
+        str(row.get("filing_period") or "") for row in rows if row.get("filing_period")
     }
     return next(iter(periods)) if len(periods) == 1 else None
 
@@ -224,6 +223,11 @@ def normalize_export_mode(export_mode: str | None) -> str:
         "clean_portal_mode": CLEAN_PORTAL,
     }
     return aliases.get(normalized, CLEAN_PORTAL)
+
+
+def is_strict_gsttool_parity_mode(export_mode: str | None) -> bool:
+    normalized = str(export_mode or "").strip().lower()
+    return normalized in {STRICT_GSTTOOL_PARITY, "strict_gsttool_parity_mode"}
 
 
 def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool:
@@ -594,7 +598,12 @@ def build_supeco(
             order = {"07AACCF0683K1CU": 0, "07AAICA3918J1CV": 1, "07AARCM9332R1CQ": 2}
         else:
             order = GSTTOOL_SUPECO_ORDER
-        output.sort(key=lambda row: (order.get(str(row.get("etin")), len(order)), str(row.get("etin"))))
+        output.sort(
+            key=lambda row: (
+                order.get(str(row.get("etin")), len(order)),
+                str(row.get("etin")),
+            )
+        )
     return output
 
 
@@ -789,13 +798,12 @@ def validate_gstr1_schema(
 
         if mode != CLEAN_PORTAL:
             pass
-        elif (
-            money(item.get("txval")) == Decimal("0.00")
-            and tax_total != Decimal("0.00")
+        elif money(item.get("txval")) == Decimal("0.00") and tax_total != Decimal(
+            "0.00"
         ):
             errors.append(
                 f"B2CS taxable value is zero but tax is non-zero for POS {item.get('pos')}"
-        )
+            )
 
         if item.get("sply_ty") == "INTRA" and abs(
             money(item.get("camt")) - money(item.get("samt"))
