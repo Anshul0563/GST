@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -15,14 +16,9 @@ from app.parsers.base import (
     text,
     unique_headers,
 )
-from app.services.pos_resolver import (
-    apply_pos_resolution,
-    new_pos_debug,
-    observe_pos_debug,
-    resolve_pos,
-)
+from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
 from app.services.transaction_normalizer import finalize_transaction
-from app.services.validation import money, round_money, validate_gstin
+from app.services.validation import money, validate_gstin
 
 SHEET_5B = "Section 5B in GSTR-1"
 SHEET_7A = "Section 7(A)(2) in GSTR-1"
@@ -147,15 +143,20 @@ class SnapdealParser(MarketplaceParser):
     platform = "snapdeal"
 
     def _base_transaction(
-        self, *, seller_gstin: str, etin: str, row_number: int, sheet: str
+        self,
+        *,
+        seller_gstin: str,
+        etin: str,
+        row_number: int,
+        sheet: str,
+        source_file: str,
     ) -> dict[str, Any]:
         return {
             "platform": self.platform,
             "gstin": self.gstin,
             "etin": etin,
             "filing_period": self.filing_period,
-            "source_file": sheet,
-            "raw_row_json": "{}",
+            "source_file": source_file,
             "_snapdeal_source_sheet": sheet,
             "_snapdeal_source_row": row_number,
             "_preserve_source_tax_split": True,
@@ -172,7 +173,10 @@ class SnapdealParser(MarketplaceParser):
             )
 
     def _parse_5b(
-        self, row: dict[str, Any], row_number: int, result: ParseResult
+        self,
+        row: dict[str, Any],
+        row_number: int,
+        source_file: str,
     ) -> dict[str, Any]:
         seller = _gstin(row, ["gstin of seller"], SHEET_5B, row_number)
         self._validate_seller(seller, SHEET_5B, row_number)
@@ -196,8 +200,13 @@ class SnapdealParser(MarketplaceParser):
         igst = _decimal(first_value(row, ["igst amount"]), "igst amount", row_number)
         cess = _decimal(first_value(row, ["cess amount"]), "cess amount", row_number)
         txn = self._base_transaction(
-            seller_gstin=seller, etin=etin, row_number=row_number, sheet=SHEET_5B
+            seller_gstin=seller,
+            etin=etin,
+            row_number=row_number,
+            sheet=SHEET_5B,
+            source_file=source_file,
         )
+        txn["raw_row_json"] = json.dumps(row, default=str)
         txn.update(
             {
                 "invoice_no": invoice_no,
@@ -221,7 +230,12 @@ class SnapdealParser(MarketplaceParser):
         return txn
 
     def _parse_aggregate(
-        self, row: dict[str, Any], row_number: int, sheet: str, intra: bool
+        self,
+        row: dict[str, Any],
+        row_number: int,
+        sheet: str,
+        intra: bool,
+        source_file: str,
     ) -> dict[str, Any]:
         seller = _gstin(row, ["gstin of seller"], sheet, row_number)
         self._validate_seller(seller, sheet, row_number)
@@ -236,8 +250,13 @@ class SnapdealParser(MarketplaceParser):
         )
         invoice_date = date(int(self.filing_period[2:]), int(self.filing_period[:2]), 1)
         txn = self._base_transaction(
-            seller_gstin=seller, etin=etin, row_number=row_number, sheet=sheet
+            seller_gstin=seller,
+            etin=etin,
+            row_number=row_number,
+            sheet=sheet,
+            source_file=source_file,
         )
+        txn["raw_row_json"] = json.dumps(row, default=str)
         txn.update(
             {
                 "invoice_no": f"SNAPDEAL-{sheet.split()[1]}-{row_number}",
@@ -368,18 +387,22 @@ class SnapdealParser(MarketplaceParser):
                         row_number = int(index) + 2
                         row = series.to_dict()
                         if sheet == SHEET_5B:
-                            txn = self._parse_5b(row, row_number, result)
+                            txn = self._parse_5b(row, row_number, path.name)
                             result.transactions.append(finalize_transaction(txn))
                         elif sheet == SHEET_7A:
                             result.transactions.append(
                                 finalize_transaction(
-                                    self._parse_aggregate(row, row_number, sheet, True)
+                                    self._parse_aggregate(
+                                        row, row_number, sheet, True, path.name
+                                    )
                                 )
                             )
                         elif sheet == SHEET_7B:
                             result.transactions.append(
                                 finalize_transaction(
-                                    self._parse_aggregate(row, row_number, sheet, False)
+                                    self._parse_aggregate(
+                                        row, row_number, sheet, False, path.name
+                                    )
                                 )
                             )
                         elif sheet == SHEET_12:

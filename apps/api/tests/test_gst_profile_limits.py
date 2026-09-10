@@ -182,6 +182,7 @@ def test_create_profile_preserves_existing_normal_user_gstin():
                 return_period="082026",
             ),
             user,
+            db,
         )
 
         db.refresh(profile)
