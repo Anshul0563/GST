@@ -6,13 +6,11 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
-    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -35,16 +33,6 @@ class User(Base):
 
 class GSTProfile(Base):
     __tablename__ = "gst_profiles"
-    __table_args__ = (
-        Index(
-            "uq_active_gst_profile_user_gstin",
-            "user_id",
-            "gstin",
-            unique=True,
-            sqlite_where=text("deleted_at IS NULL"),
-            postgresql_where=text("deleted_at IS NULL"),
-        ),
-    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)

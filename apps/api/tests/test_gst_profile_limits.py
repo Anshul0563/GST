@@ -3,7 +3,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from fastapi import HTTPException
 
-from app.api.routes import create_profile, enforce_gst_profile_registration_limits, list_profiles
+from app.api.routes import create_profile, delete_profile, enforce_gst_profile_registration_limits, list_profiles
 from app.db.session import Base
 from app.models.entities import GSTProfile, User
 from app.schemas.dto import GSTProfileIn
@@ -59,21 +59,26 @@ def assert_limit_error(func, message: str) -> None:
         raise AssertionError("Expected profile limit HTTPException")
 
 
-def test_normal_user_can_register_only_one_gstin_on_same_account():
+def test_normal_user_can_register_multiple_distinct_gstins_on_same_account():
     Session = session_factory()
     db = Session()
     try:
         user = add_user(db, "seller@example.com")
         add_profile(db, user)
 
-        assert_limit_error(
-            lambda: enforce_gst_profile_registration_limits(
-                user,
-                db,
+        enforce_gst_profile_registration_limits(user, db, gstin="27ABCDE1234F1Z5")
+        saved = create_profile(
+            GSTProfileIn(
                 gstin="27ABCDE1234F1Z5",
+                legal_name="Second Seller",
+                financial_year="2026-27",
+                return_period="052026",
             ),
-            "Only one GSTIN can be registered per user account.",
+            user,
+            db,
         )
+        assert saved.user_id == user.id
+        assert db.query(GSTProfile).filter(GSTProfile.user_id == user.id).count() == 2
     finally:
         db.close()
 
@@ -156,27 +161,23 @@ def test_super_admin_cannot_create_duplicate_gstin_rows():
         db.close()
 
 
-def test_create_profile_does_not_replace_existing_normal_user_gstin():
+def test_create_profile_preserves_existing_normal_user_gstin():
     Session = session_factory()
     db = Session()
     try:
         user = add_user(db, "seller@example.com")
         profile = add_profile(db, user, "07ABCDE1234F1Z5")
 
-        assert_limit_error(
-            lambda: create_profile(
-                GSTProfileIn(
-                    gstin="27ABCDE1234F1Z5",
-                    legal_name="Updated Seller",
-                    trade_name="Updated",
-                    filing_frequency="Monthly",
-                    financial_year="2026-27",
-                    return_period="082026",
-                ),
-                user,
-                db,
+        saved = create_profile(
+            GSTProfileIn(
+                gstin="27ABCDE1234F1Z5",
+                legal_name="Updated Seller",
+                trade_name="Updated",
+                filing_frequency="Monthly",
+                financial_year="2026-27",
+                return_period="082026",
             ),
-            "Only one GSTIN can be registered per user account.",
+            user,
         )
 
         db.refresh(profile)
@@ -184,7 +185,8 @@ def test_create_profile_does_not_replace_existing_normal_user_gstin():
         assert profile.state_code == "07"
         assert profile.legal_name == "Demo Seller"
         assert profile.return_period == "042026"
-        assert db.query(GSTProfile).filter(GSTProfile.user_id == user.id).count() == 1
+        assert saved.gstin == "27ABCDE1234F1Z5"
+        assert db.query(GSTProfile).filter(GSTProfile.user_id == user.id).count() == 2
     finally:
         db.close()
 
@@ -350,5 +352,20 @@ def test_list_profiles_returns_all_profiles_for_super_admin():
         profiles = list_profiles(admin, db)
 
         assert [profile.id for profile in profiles] == [owner_profile.id, admin_profile.id]
+    finally:
+        db.close()
+
+
+def test_deleted_profile_is_hidden_but_existing_row_is_preserved():
+    Session = session_factory()
+    db = Session()
+    try:
+        user = add_user(db, "seller@example.com")
+        profile = add_profile(db, user)
+
+        delete_profile(profile.id, user, db)
+
+        assert db.get(GSTProfile, profile.id).deleted_at is not None
+        assert list_profiles(user, db) == []
     finally:
         db.close()
