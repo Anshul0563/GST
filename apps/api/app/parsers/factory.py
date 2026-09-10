@@ -2,7 +2,7 @@ from app.parsers.amazon import AmazonParser
 from app.parsers.custom import CustomExcelParser
 from app.parsers.flipkart import FlipkartParser
 from app.parsers.meesho import MeeshoParser
-
+from app.parsers.snapdeal import SnapdealParser
 
 PARSERS = {
     "amazon": AmazonParser,
@@ -10,7 +10,7 @@ PARSERS = {
     "meesho": MeeshoParser,
     "myntra": CustomExcelParser,
     "jiomart": CustomExcelParser,
-    "snapdeal": CustomExcelParser,
+    "snapdeal": SnapdealParser,
     "blinkit": CustomExcelParser,
     "ajio": CustomExcelParser,
     "tatacliq": CustomExcelParser,

@@ -274,6 +274,8 @@ def valid_for_supeco(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bo
 
 
 def valid_for_doc_issue(row: dict[str, Any]) -> bool:
+    if row.get("_exclude_doc_issue"):
+        return False
     if row.get("validation_status") not in {"valid", "skipped"}:
         return False
     if not row.get("invoice_no"):
