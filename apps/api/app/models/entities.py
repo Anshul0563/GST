@@ -123,6 +123,7 @@ class NormalizedTransaction(Base):
     buyer_state_code: Mapped[str | None] = mapped_column(String(2), index=True)
     buyer_state_name: Mapped[str | None] = mapped_column(String(80))
     hsn: Mapped[str | None] = mapped_column(String(20))
+    uqc: Mapped[str | None] = mapped_column(String(20))
     product_name: Mapped[str | None] = mapped_column(String(255))
     sku: Mapped[str | None] = mapped_column(String(120))
     qty: Mapped[Decimal] = mapped_column(Numeric(14, 3), default=0)

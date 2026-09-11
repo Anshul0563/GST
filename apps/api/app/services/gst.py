@@ -680,8 +680,13 @@ def validate_gstr1_schema(
         "doc_issue",
     ]
 
-    if list(payload.keys()) != expected_top_keys:
-        errors.append("GSTR-1 top-level JSON keys drifted from accepted contract")
+    allowed_top_keys = {*expected_top_keys, "nil", "hsn"}
+    if list(payload.keys()) != [key for key in expected_top_keys if key in payload] + [
+        key for key in ("nil", "hsn") if key in payload
+    ]:
+        errors.append("GSTR-1 top-level JSON key order drifted from accepted contract")
+    if set(payload) - allowed_top_keys:
+        errors.append("GSTR-1 contains unsupported top-level sections")
 
     if not validate_gstin(str(payload.get("gstin") or "")):
         errors.append("Invalid GSTIN in export payload")
@@ -793,6 +798,10 @@ def validate_gstr1_schema(
                     )
 
     b2cs_total = sum(money(x.get("txval")) for x in payload.get("b2cs", []))
+    b2cs_total += sum(
+        money(x.get("nil_amt"))
+        for x in payload.get("nil", {}).get("inv", [])
+    )
 
     supeco_total = sum(
         money(x.get("suppval")) for x in payload.get("supeco", {}).get("clttx", [])
@@ -941,9 +950,13 @@ def build_gstr1_json(
     valid_rows = [row for row in rows if row_belongs_to_period(row, period)]
 
     b2cs = build_b2cs(gstin, valid_rows, mode)
+    nil_rows = build_nil(valid_rows)
+    hsn_rows = build_hsn(valid_rows)
     supeco_rows = build_supeco(valid_rows, mode)
 
-    b2cs_txval = sum(money(x.get("txval")) for x in b2cs)
+    b2cs_txval = sum(money(x.get("txval")) for x in b2cs) + sum(
+        money(x.get("nil_amt")) for x in nil_rows
+    )
     eco_txval = sum(money(x.get("suppval")) for x in supeco_rows)
 
     if mode == CLEAN_PORTAL and abs(b2cs_txval - eco_txval) > Decimal("0.01"):
@@ -951,7 +964,7 @@ def build_gstr1_json(
             f"B2CS taxable {b2cs_txval} does not match SUPECO taxable {eco_txval}"
         )
 
-    return {
+    payload = {
         "gstin": gstin,
         "fp": period,
         "version": GST_VERSION,
@@ -960,3 +973,8 @@ def build_gstr1_json(
         "supeco": {"clttx": supeco_rows},
         "doc_issue": build_doc_issue(valid_rows, mode),
     }
+    if nil_rows:
+        payload["nil"] = {"inv": nil_rows}
+    if hsn_rows:
+        payload["hsn"] = hsn_rows
+    return payload

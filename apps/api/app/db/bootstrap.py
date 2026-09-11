@@ -144,6 +144,11 @@ def run_lightweight_migrations(engine) -> None:
             column["name"]
             for column in inspector.get_columns("normalized_transactions")
         }
+        if "uqc" not in transaction_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE normalized_transactions ADD COLUMN uqc VARCHAR(20)")
+                )
         with engine.begin() as connection:
             if "document_date" not in transaction_columns:
                 connection.execute(
