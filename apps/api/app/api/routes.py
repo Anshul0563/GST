@@ -691,9 +691,19 @@ def batch_status_response(batch: PlatformImportBatch, db: Session) -> BatchStatu
         if visible_source_names:
             uploaded_files = visible_source_names
         elif batch.status in USABLE_IMPORT_STATUSES and batch.parsed_rows > 0:
-            uploaded_files = list(
-                MARKETPLACE_CATALOG.get(batch.platform, {}).get("required_files", [])
+            # Legacy rows only retain generated storage names. Preserve the number
+            # of detected files without marking optional inputs as uploaded.
+            required_files = MARKETPLACE_CATALOG.get(batch.platform, {}).get(
+                "required_files", []
             )
+            generated_count = len(
+                {
+                    str(source_name or "").split(":", 1)[0]
+                    for source_name in source_names
+                    if source_name
+                }
+            )
+            uploaded_files = list(required_files[:generated_count])
     net_sale = sum(
         (value or Decimal("0.00") for value in db.scalars(
             select(NormalizedTransaction.taxable_value).where(
