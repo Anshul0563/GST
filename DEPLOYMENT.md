@@ -21,8 +21,8 @@ CORS_ORIGINS=https://<your-vercel-domain>,https://<your-custom-domain>
 In the Vercel project settings, add these environment variables for the Production environment before redeploying:
 
 ```text
-NEXT_PUBLIC_API_BASE=https://<your-render-api>.onrender.com
-NEXT_PUBLIC_SITE_URL=https://<your-vercel-domain>
+NEXT_PUBLIC_API_BASE=https://gst-txbs.onrender.com
+NEXT_PUBLIC_SITE_URL=https://gst-kappa-five.vercel.app
 ```
 
 These values are embedded during the Next.js build, so changing them requires a new deployment.

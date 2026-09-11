@@ -1,6 +1,10 @@
+const DEFAULT_PRODUCTION_API_BASE = "https://gst-txbs.onrender.com";
+
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ||
-  (process.env.NODE_ENV === "development" ? "http://127.0.0.1:8000" : "");
+  (process.env.NODE_ENV === "development"
+    ? "http://127.0.0.1:8000"
+    : DEFAULT_PRODUCTION_API_BASE);
 const API_TIMEOUT_MS = 30000;
 const DOWNLOAD_TIMEOUT_MS = 120000;
 
