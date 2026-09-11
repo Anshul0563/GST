@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    app_env: str = "development"
     app_name: str = "GST Bharat API"
     secret_key: str = "dev-secret-change-in-production"
     algorithm: str = "HS256"
@@ -41,6 +42,12 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
+    if settings.app_env.lower() in {"production", "prod"} and settings.database_url.startswith(
+        "sqlite:"
+    ):
+        raise RuntimeError(
+            "Production requires a PostgreSQL DATABASE_URL; refusing to start with SQLite."
+        )
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.export_dir.mkdir(parents=True, exist_ok=True)
     return settings
