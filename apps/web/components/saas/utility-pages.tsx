@@ -588,9 +588,15 @@ export function ProfilePage() {
               {activeToken ? (
                 <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
                   <Database className="size-4" />
-                  {workspace.loading
-                    ? "Fetching GST profiles from DB..."
-                    : `${workspace.profiles.length} GST profile${workspace.profiles.length === 1 ? "" : "s"} loaded from DB`}
+                  {workspace.error ? (
+                    <span className="text-rose-700 dark:text-rose-300">
+                      Could not load GST profiles: {workspace.error}
+                    </span>
+                  ) : workspace.loading ? (
+                    "Fetching GST profiles from DB..."
+                  ) : (
+                    `${workspace.profiles.length} GST profile${workspace.profiles.length === 1 ? "" : "s"} loaded from DB`
+                  )}
                 </div>
               ) : null}
               {workspace.profiles.map((profile) => {
