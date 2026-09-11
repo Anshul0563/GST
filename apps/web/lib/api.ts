@@ -455,9 +455,16 @@ export function deleteProfile(token: string, profileId: number) {
   return request<void>(`/gst-profile/${profileId}`, { method: "DELETE" }, token);
 }
 
-export function uploadMarketplaceFiles(token: string, profile: Profile, platform: string, files: FileList | File[]) {
+export function uploadMarketplaceFiles(
+  token: string,
+  profile: Profile,
+  platform: string,
+  files: FileList | Array<File | null>,
+) {
   const form = new FormData();
-  Array.from(files).forEach((file) => form.append("files", file));
+  Array.from(files).forEach((file) => {
+    if (file) form.append("files", file);
+  });
   return request<BatchStatus>(
     `/imports/${encodeURIComponent(platform)}/upload${queryString({ profile_id: profile.id, period: profile.return_period })}`,
     { method: "POST", body: form },

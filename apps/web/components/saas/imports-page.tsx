@@ -190,7 +190,7 @@ export function ImportsPage() {
   const workspace = useWorkspace();
   const initial = params.get("platform") || "meesho";
   const [platformKey, setPlatformKey] = useState(initial);
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<Array<File | null>>([]);
   const [progress, setProgress] = useState("");
   const [fileUploadStatus, setFileUploadStatus] = useState<
     "idle" | "selected" | "uploading" | "success" | "error"
@@ -199,7 +199,7 @@ export function ImportsPage() {
     Record<string, boolean>
   >({});
   const [uploadedFilesByPlatform, setUploadedFilesByPlatform] = useState<
-    Record<string, File[]>
+    Record<string, Array<File | null>>
   >({});
   const [uploadedFileNames, setUploadedFileNames] = useState<string[]>([]);
   const [activeBatch, setActiveBatch] = useState<BatchStatus | null>(null);
@@ -272,7 +272,7 @@ export function ImportsPage() {
   const canStartImport =
     canImport &&
     Boolean(workspace.profile) &&
-    files.length > 0 &&
+    files.some(Boolean) &&
     fileUploadStatus !== "uploading" &&
     fileUploadStatus !== "success";
   const timelineBatches = workspace.batches.length
@@ -326,8 +326,9 @@ export function ImportsPage() {
     if (!selectedFiles.length) return;
     setFiles((current) => {
       const next = [...current];
-      next.splice(index, 1, ...selectedFiles);
-      return next.filter(Boolean);
+      while (next.length < index) next.push(null);
+      next.splice(index, selectedFiles.length, ...selectedFiles);
+      return next;
     });
     setFileUploadStatus("selected");
   }
@@ -341,7 +342,12 @@ export function ImportsPage() {
       );
       return;
     }
-    if (!selected || !workspace.token || !workspace.profile || !files.length) {
+    if (
+      !selected ||
+      !workspace.token ||
+      !workspace.profile ||
+      !files.some(Boolean)
+    ) {
       setProgress("Choose files before starting import.");
       return;
     }
@@ -374,7 +380,7 @@ export function ImportsPage() {
         setFileUploadStatus("error");
       } else {
         setFileUploadStatus("success");
-        setUploadedFileNames(files.map((file) => file.name));
+        setUploadedFileNames(files.map((file) => file?.name || ""));
         setUploadedFilesByPlatform((current) => ({
           ...current,
           [selected.key]: [...files],
@@ -529,7 +535,7 @@ export function ImportsPage() {
                           uploadedFilesByPlatform[item.key] || [];
                         const previousFileNames =
                           latestBatch?.uploaded_files ||
-                          previousFiles.map((file) => file.name);
+                          previousFiles.map((file) => file?.name || "");
                         setFiles(previousFiles);
                         setUploadedFileNames(previousFileNames);
                         setProgress("");
