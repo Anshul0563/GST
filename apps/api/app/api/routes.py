@@ -101,6 +101,7 @@ from fastapi import (
     BackgroundTasks,
     Depends,
     File,
+    Form,
     Header,
     HTTPException,
     Request,
@@ -661,10 +662,23 @@ def marketplaces():
 def batch_status_response(batch: PlatformImportBatch, db: Session) -> BatchStatus:
     parser_errors, debug = read_import_report(batch)
     uploaded_files = db.scalars(
-        select(UploadedFile.original_name)
+        select(UploadedFile)
         .where(UploadedFile.batch_id == batch.id, UploadedFile.user_id == batch.user_id)
-        .order_by(UploadedFile.id.asc())
+        .order_by(UploadedFile.file_index.asc().nullslast(), UploadedFile.id.asc())
     ).all()
+    if uploaded_files:
+        indexed_files = [upload.original_name for upload in uploaded_files]
+        if any(upload.file_index is not None for upload in uploaded_files):
+            max_index = max(
+                upload.file_index
+                for upload in uploaded_files
+                if upload.file_index is not None
+            )
+            indexed_files = [""] * (max_index + 1)
+            for upload in uploaded_files:
+                if upload.file_index is not None:
+                    indexed_files[upload.file_index] = upload.original_name
+        uploaded_files = indexed_files
     if not uploaded_files:
         # Older batches may have normalized rows but no UploadedFile records because
         # file metadata persistence was added after those imports were created.
@@ -690,20 +704,6 @@ def batch_status_response(batch: PlatformImportBatch, db: Session) -> BatchStatu
                 visible_source_names.append(name)
         if visible_source_names:
             uploaded_files = visible_source_names
-        elif batch.status in USABLE_IMPORT_STATUSES and batch.parsed_rows > 0:
-            # Legacy rows only retain generated storage names. Preserve the number
-            # of detected files without marking optional inputs as uploaded.
-            required_files = MARKETPLACE_CATALOG.get(batch.platform, {}).get(
-                "required_files", []
-            )
-            generated_count = len(
-                {
-                    str(source_name or "").split(":", 1)[0]
-                    for source_name in source_names
-                    if source_name
-                }
-            )
-            uploaded_files = list(required_files[:generated_count])
     net_sale = sum(
         (value or Decimal("0.00") for value in db.scalars(
             select(NormalizedTransaction.taxable_value).where(
@@ -1349,6 +1349,7 @@ async def upload_import(
     background_tasks: BackgroundTasks,
     profile_id: int,
     files: list[UploadFile] = File(...),
+    file_slots: str | None = Form(None),
     period: str | None = None,
     required_plan: str | None = "online_seller",
     user: User = Depends(get_current_user),
@@ -1380,7 +1381,13 @@ async def upload_import(
     db.add(batch)
     db.flush()
     stored_paths: list[Path] = []
-    for upload in files:
+    try:
+        requested_slots = json.loads(file_slots) if file_slots else []
+        if not isinstance(requested_slots, list):
+            requested_slots = []
+    except (TypeError, ValueError):
+        requested_slots = []
+    for upload_index, upload in enumerate(files):
         suffix = Path(upload.filename or "").suffix.lower()
         stored = (
             settings.upload_dir
@@ -1396,6 +1403,12 @@ async def upload_import(
             UploadedFile(
                 batch_id=batch.id,
                 user_id=user.id,
+                file_index=(
+                    int(requested_slots[upload_index])
+                    if upload_index < len(requested_slots)
+                    and requested_slots[upload_index] is not None
+                    else upload_index
+                ),
                 original_name=upload.filename or stored.name,
                 stored_path=str(stored),
                 content_type=upload.content_type,

@@ -130,6 +130,15 @@ def run_lightweight_migrations(engine) -> None:
                         )
                         WHERE period IS NULL OR period = ''
                         """))
+    if "uploaded_files" in inspector.get_table_names():
+        uploaded_file_columns = {
+            column["name"] for column in inspector.get_columns("uploaded_files")
+        }
+        if "file_index" not in uploaded_file_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text("ALTER TABLE uploaded_files ADD COLUMN file_index INTEGER")
+                )
     if "normalized_transactions" in inspector.get_table_names():
         transaction_columns = {
             column["name"]

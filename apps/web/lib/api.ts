@@ -465,6 +465,12 @@ export function uploadMarketplaceFiles(
   Array.from(files).forEach((file) => {
     if (file) form.append("files", file);
   });
+  form.append(
+    "file_slots",
+    JSON.stringify(
+      Array.from(files).flatMap((file, index) => (file ? [index] : [])),
+    ),
+  );
   return request<BatchStatus>(
     `/imports/${encodeURIComponent(platform)}/upload${queryString({ profile_id: profile.id, period: profile.return_period })}`,
     { method: "POST", body: form },

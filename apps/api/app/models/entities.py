@@ -82,6 +82,7 @@ class UploadedFile(Base):
         ForeignKey("platform_import_batches.id"), index=True
     )
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    file_index: Mapped[int | None] = mapped_column(Integer)
     original_name: Mapped[str] = mapped_column(String(255))
     stored_path: Mapped[str] = mapped_column(String(500))
     content_type: Mapped[str | None] = mapped_column(String(120))
