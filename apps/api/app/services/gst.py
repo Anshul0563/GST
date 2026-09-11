@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from collections import defaultdict
 from datetime import date, datetime
 from decimal import Decimal
@@ -33,6 +34,65 @@ def classify_supply(seller_gstin: str, pos: str | None) -> str:
 def json_amount(value: Any) -> float:
     rounded = money(value)
     return int(rounded) if rounded == rounded.to_integral_value() else float(rounded)
+
+
+def source_amount(row: dict[str, Any], field: str, precise: bool = False) -> Decimal:
+    """Read source precision when it is available, falling back to normalized data."""
+    if not precise:
+        return money(row.get(field))
+    raw_value = row.get("raw_row_json")
+    if not raw_value:
+        return money(row.get(field))
+    try:
+        raw = json.loads(str(raw_value))
+    except (TypeError, json.JSONDecodeError):
+        return money(row.get(field))
+    if not isinstance(raw, dict):
+        return money(row.get(field))
+
+    platform = str(row.get("platform") or "").lower()
+    fields = {
+        "amazon": {
+            "taxable_value": "tax exclusive gross",
+            "igst": "igst tax",
+            "cgst": "cgst tax",
+            "sgst": "sgst tax",
+            "cess": "compensatory cess tax",
+        },
+        "flipkart": {
+            "taxable_value": "taxable value (final invoice amount -taxes)",
+            "igst": "igst amount",
+            "cgst": "cgst amount",
+            "sgst": "sgst amount (or utgst as applicable)",
+            "cess": "luxury cess amount",
+        },
+        "meesho": {"taxable_value": "total taxable sale value", "gst": "tax amount"},
+    }
+    source_key = fields.get(platform, {}).get(field)
+    if source_key is None and platform == "meesho" and field in {"igst", "cgst", "sgst"}:
+        source_key = "tax amount"
+    if source_key is None:
+        return money(row.get(field))
+    value = raw.get(source_key)
+    if value in (None, "", "nan"):
+        return money(row.get(field))
+    try:
+        amount = Decimal(str(value).replace(",", "").strip())
+    except Exception:
+        return money(row.get(field))
+    if platform == "meesho" and field in {"igst", "cgst", "sgst"}:
+        supply_type = classify_supply(str(row.get("gstin") or ""), row.get("buyer_state_code"))
+        if supply_type == "INTER":
+            amount = amount if field == "igst" else Decimal("0")
+        elif field == "igst":
+            amount = Decimal("0")
+        else:
+            half = money(amount / Decimal("2"))
+            amount = half if field == "cgst" else amount - half
+    doc_type = str(row.get("doc_type") or "").lower()
+    if doc_type in {"credit_note", "debit_note"}:
+        amount = -abs(amount) if doc_type == "credit_note" else abs(amount)
+    return amount
 
 
 def single_period(rows: list[dict[str, Any]]) -> str | None:
@@ -401,11 +461,12 @@ def build_b2cs(
             pos,
             "OE",
         )
-        groups[key]["txval"] += money(row.get("taxable_value"))
-        groups[key]["iamt"] += money(row.get("igst"))
-        groups[key]["camt"] += money(row.get("cgst"))
-        groups[key]["samt"] += money(row.get("sgst"))
-        groups[key]["csamt"] += money(row.get("cess"))
+        precise = mode == GSTTOOL_COMPATIBLE
+        groups[key]["txval"] += source_amount(row, "taxable_value", precise)
+        groups[key]["iamt"] += source_amount(row, "igst", precise)
+        groups[key]["camt"] += source_amount(row, "cgst", precise)
+        groups[key]["samt"] += source_amount(row, "sgst", precise)
+        groups[key]["csamt"] += source_amount(row, "cess", precise)
 
     output: list[dict[str, Any]] = []
     for (sply_ty, rate, pos, typ), amounts in sorted(
@@ -476,11 +537,12 @@ def build_supeco(
         if not valid_for_supeco(row, export_mode):
             continue
         etin = str(row.get("etin"))
-        groups[etin]["suppval"] += money(row.get("taxable_value"))
-        groups[etin]["igst"] += money(row.get("igst"))
-        groups[etin]["cgst"] += money(row.get("cgst"))
-        groups[etin]["sgst"] += money(row.get("sgst"))
-        groups[etin]["cess"] += money(row.get("cess"))
+        precise = normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE
+        groups[etin]["suppval"] += source_amount(row, "taxable_value", precise)
+        groups[etin]["igst"] += source_amount(row, "igst", precise)
+        groups[etin]["cgst"] += source_amount(row, "cgst", precise)
+        groups[etin]["sgst"] += source_amount(row, "sgst", precise)
+        groups[etin]["cess"] += source_amount(row, "cess", precise)
 
     output = []
     for etin, amounts in sorted(groups.items()):
