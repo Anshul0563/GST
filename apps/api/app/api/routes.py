@@ -665,6 +665,35 @@ def batch_status_response(batch: PlatformImportBatch, db: Session) -> BatchStatu
         .where(UploadedFile.batch_id == batch.id, UploadedFile.user_id == batch.user_id)
         .order_by(UploadedFile.id.asc())
     ).all()
+    if not uploaded_files:
+        # Older batches may have normalized rows but no UploadedFile records because
+        # file metadata persistence was added after those imports were created.
+        source_names = db.scalars(
+            select(NormalizedTransaction.source_file)
+            .where(
+                NormalizedTransaction.batch_id == batch.id,
+                NormalizedTransaction.user_id == batch.user_id,
+            )
+            .distinct()
+        ).all()
+        visible_source_names: list[str] = []
+        for source_name in source_names:
+            source = str(source_name or "").split(":", 1)[0]
+            name = Path(source).name
+            # Parser rows from legacy imports contain the generated storage UUID,
+            # which is not useful as a filename in the upload form.
+            is_generated_name = all(
+                character in "0123456789abcdef"
+                for character in name.split(".", 1)[0].lower()
+            )
+            if name and name not in visible_source_names and not is_generated_name:
+                visible_source_names.append(name)
+        if visible_source_names:
+            uploaded_files = visible_source_names
+        elif batch.status in USABLE_IMPORT_STATUSES and batch.parsed_rows > 0:
+            uploaded_files = list(
+                MARKETPLACE_CATALOG.get(batch.platform, {}).get("required_files", [])
+            )
     net_sale = sum(
         (value or Decimal("0.00") for value in db.scalars(
             select(NormalizedTransaction.taxable_value).where(
