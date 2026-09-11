@@ -245,11 +245,7 @@ def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool
         + money(row.get("sgst"))
         + money(row.get("cess"))
     )
-    include_meesho_zero_rate = (
-        str(row.get("platform") or "").lower() == "meesho"
-        and taxable != Decimal("0.00")
-    )
-    if rate == Decimal("0.00") and not include_meesho_zero_rate:
+    if rate == Decimal("0.00"):
         return False
     if (
         mode == GSTTOOL_COMPATIBLE
@@ -263,7 +259,7 @@ def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool
 
 
 def valid_for_supeco(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool:
-    if not valid_for_b2cs(row, export_mode) or not bool(row.get("etin")):
+    if not valid_for_export(row, export_mode) or not bool(row.get("etin")):
         return False
     if normalize_export_mode(export_mode) == GSTTOOL_COMPATIBLE:
         total = (
@@ -275,6 +271,64 @@ def valid_for_supeco(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bo
         )
         return total != Decimal("0.00")
     return True
+
+
+def valid_for_export(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool:
+    status = row.get("validation_status")
+    if status not in {"valid", "skipped"}:
+        return False
+    if not row.get("invoice_no") or not row.get("buyer_state_code"):
+        return False
+    amounts = tuple(
+        money(row.get(field))
+        for field in ("taxable_value", "igst", "cgst", "sgst", "cess")
+    )
+    return any(amount != Decimal("0.00") for amount in amounts)
+
+
+def is_nil_supply(row: dict[str, Any]) -> bool:
+    rate = money(row.get("gst_rate"))
+    total_tax = sum(
+        (money(row.get(field)) for field in ("igst", "cgst", "sgst", "cess")),
+        Decimal("0.00"),
+    )
+    return rate == Decimal("0.00") and money(row.get("taxable_value")) != 0 and total_tax == 0
+
+
+def build_nil(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
+    for row in rows:
+        if valid_for_export(row) and is_nil_supply(row):
+            supply_type = classify_supply(str(row.get("gstin") or ""), row.get("buyer_state_code"))
+            groups[supply_type] += money(row.get("taxable_value"))
+    return [
+        {
+            "sply_ty": supply_type,
+            "nil_amt": json_amount(value),
+            "expt_amt": 0,
+            "ngsup_amt": 0,
+        }
+        for supply_type, value in sorted(groups.items())
+        if value != 0
+    ]
+
+
+def build_hsn(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    groups: dict[tuple[str, str, Decimal], dict[str, Decimal | str]] = defaultdict(
+        lambda: {"qty": Decimal("0.00"), "val": Decimal("0.00"), "txval": Decimal("0.00"), "iamt": Decimal("0.00"), "camt": Decimal("0.00"), "samt": Decimal("0.00"), "csamt": Decimal("0.00")}
+    )
+    for row in rows:
+        if not valid_for_export(row) or is_nil_supply(row) or not row.get("hsn"):
+            continue
+        key = (str(row.get("hsn")).strip(), str(row.get("uqc") or "OTH").strip(), money(row.get("gst_rate")))
+        group = groups[key]
+        for field in ("qty", "gross_amount", "taxable_value", "igst", "cgst", "sgst", "cess"):
+            target = "val" if field == "gross_amount" else field.replace("gross_amount", "val")
+            group[target] = money(group[target]) + money(row.get(field))
+    records = []
+    for (hsn, uqc, rate), group in sorted(groups.items()):
+        records.append({"num": len(records) + 1, "hsn_sc": hsn, "desc": "", "uqc": uqc, "qty": json_amount(group["qty"]), "val": json_amount(group["val"]), "rt": json_amount(rate), "txval": json_amount(group["taxable_value"]), "iamt": json_amount(group["igst"]), "camt": json_amount(group["cgst"]), "samt": json_amount(group["sgst"]), "csamt": json_amount(group["cess"])})
+    return {"hsn_b2c": records, "hsn_b2b": []} if records else {}
 
 
 def valid_for_doc_issue(row: dict[str, Any]) -> bool:
@@ -387,63 +441,27 @@ def build_b2cs(
             "gsttool_pos04_remap": Decimal("0.00"),
         }
     )
-    remapped_zero_keys: set[tuple[str, Decimal, str, str]] = set()
     for row in rows:
         if not valid_for_b2cs(row, mode):
             continue
         sply_ty = classify_supply(gstin, row.get("buyer_state_code"))
         pos = str(row.get("buyer_state_code"))
-        if (
-            mode == GSTTOOL_COMPATIBLE
-            and pos == "04"
-            and money(row.get("taxable_value")) > Decimal("0.00")
-        ):
-            remapped_zero_keys.add((sply_ty, money(row.get("gst_rate")), "04", "OE"))
-            pos = "03"
         key = (
             sply_ty,
             money(row.get("gst_rate")),
             pos,
             "OE",
         )
-        if (
-            mode == GSTTOOL_COMPATIBLE
-            and row.get("buyer_state_code") == "04"
-            and pos == "03"
-        ):
-            groups[key]["gsttool_pos04_remap"] = Decimal("1.00")
-        if (
-            mode == GSTTOOL_COMPATIBLE
-            and str(row.get("etin") or "") == "07AARCM9332R1CQ"
-            and sply_ty == "INTER"
-        ):
-            # GSTTool calculates Meesho INTER B2CS from the rounded gross group,
-            # while SUPECO keeps the source taxable/tax split. Keep that quirk
-            # localized to the parity export path.
-            groups[key]["gsttool_meesho_inter_gross"] += money(row.get("gross_amount"))
-        else:
-            groups[key]["txval"] += money(row.get("taxable_value"))
-            groups[key]["iamt"] += money(row.get("igst"))
-            groups[key]["camt"] += money(row.get("cgst"))
-            groups[key]["samt"] += money(row.get("sgst"))
+        groups[key]["txval"] += money(row.get("taxable_value"))
+        groups[key]["iamt"] += money(row.get("igst"))
+        groups[key]["camt"] += money(row.get("cgst"))
+        groups[key]["samt"] += money(row.get("sgst"))
         groups[key]["csamt"] += money(row.get("cess"))
-        if (
-            mode == GSTTOOL_COMPATIBLE
-            and str(row.get("etin") or "") == "07AARCM9332R1CQ"
-        ):
-            groups[key]["gsttool_equal_split"] = Decimal("1.00")
 
     output: list[dict[str, Any]] = []
     for (sply_ty, rate, pos, typ), amounts in sorted(
         groups.items(), key=lambda item: (item[0][0], item[0][2], item[0][1])
     ):
-        meesho_gross = amounts["gsttool_meesho_inter_gross"]
-        if mode == GSTTOOL_COMPATIBLE and meesho_gross != Decimal("0.00"):
-            meesho_txval = money(
-                meesho_gross * Decimal("100") / (Decimal("100") + rate)
-            )
-            amounts["txval"] += meesho_txval
-            amounts["iamt"] += money(meesho_gross - meesho_txval)
         total_tax = (
             amounts["iamt"] + amounts["camt"] + amounts["samt"] + amounts["csamt"]
         )
@@ -471,74 +489,28 @@ def build_b2cs(
             base["iamt"] = json_amount(amounts["iamt"])
             base["csamt"] = json_amount(amounts["csamt"])
         else:
-            if mode == GSTTOOL_COMPATIBLE:
-                if amounts["gsttool_equal_split"]:
-                    camt, samt = split_tax_gsttool(amounts["camt"] + amounts["samt"])
-                else:
-                    camt, samt = money(amounts["camt"]), money(amounts["samt"])
+            if amounts["camt"] or amounts["samt"]:
+                camt, samt = money(amounts["camt"]), money(amounts["samt"])
             else:
                 intra_tax = amounts["camt"] + amounts["samt"]
                 camt, samt = split_tax_evenly(intra_tax)
             base["camt"] = json_amount(camt)
             base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
-        if mode == GSTTOOL_COMPATIBLE:
-            for field in ("txval", "iamt", "camt", "samt"):
-                delta = GSTTOOL_B2CS_FIELD_ADJUSTMENTS.get(
-                    (sply_ty, rate, pos, field), Decimal("0.00")
-                )
-                delta += GSTTOOL_B2CS_PERIOD_FIELD_ADJUSTMENTS.get(
-                    period or "", {}
-                ).get((sply_ty, rate, pos, field), Decimal("0.00"))
-                if (
-                    field == "iamt"
-                    and pos == "03"
-                    and not amounts["gsttool_pos04_remap"]
-                ):
-                    delta = Decimal("0.00")
-                if delta != Decimal("0.00") and field in base:
-                    base[field] = json_amount(money(base[field]) + delta)
         output.append(base)
-    if mode == GSTTOOL_COMPATIBLE:
-        existing_keys = {
-            (row.get("sply_ty"), money(row.get("rt")), row.get("pos"), row.get("typ"))
-            for row in output
-        }
-        for sply_ty, rate, pos, typ in sorted(
-            remapped_zero_keys, key=lambda item: item[2]
-        ):
-            if (sply_ty, rate, pos, typ) in existing_keys:
-                continue
-            row = {
-                "sply_ty": sply_ty,
-                "rt": int(rate) if rate == rate.to_integral_value() else float(rate),
-                "typ": typ,
-                "pos": pos,
-                "txval": 0,
-            }
-            if sply_ty == "INTER":
-                row["iamt"] = 0
-            else:
-                row["camt"] = 0
-                row["samt"] = 0
-            row["csamt"] = 0
-            output.append(row)
-        pos_order = {pos: index for index, pos in enumerate(GSTTOOL_B2CS_POS_ORDER)}
-        output.sort(
-            key=lambda row: (
-                pos_order.get(str(row.get("pos")), len(pos_order)),
-                str(row.get("sply_ty")),
-                money(row.get("rt")),
-            )
+    output.sort(
+        key=lambda row: (
+            str(row.get("sply_ty")),
+            str(row.get("pos")),
+            money(row.get("rt")),
         )
+    )
     return output
 
 
 def build_supeco(
     rows: list[dict[str, Any]], export_mode: str = CLEAN_PORTAL
 ) -> list[dict[str, Any]]:
-    mode = normalize_export_mode(export_mode)
-    period = single_period(rows)
     groups: dict[str, dict[str, Decimal]] = defaultdict(
         lambda: {
             "suppval": Decimal("0.00"),
@@ -558,58 +530,18 @@ def build_supeco(
         groups[etin]["sgst"] += money(row.get("sgst"))
         groups[etin]["cess"] += money(row.get("cess"))
 
-    def gsttool_operator_cgst_sgst(
-        etin: str, amounts: dict[str, Decimal]
-    ) -> tuple[Decimal, Decimal]:
-        if mode != GSTTOOL_COMPATIBLE:
-            return amounts["cgst"], amounts["sgst"]
-        if etin == "07AARCM9332R1CQ":
-            return split_tax_gsttool(amounts["cgst"] + amounts["sgst"])
-        if (
-            etin == "07AACCF0683K1CU"
-            and amounts["cgst"] > Decimal("0.00")
-            and amounts["sgst"] > Decimal("0.00")
-            and abs(amounts["cgst"] - amounts["sgst"]) <= Decimal("0.01")
-        ):
-            # GSTTool's Flipkart SUPECO uses the operator/report-level rounded
-            # tax bucket. When row-rounded sums differ by a paise, it keeps the
-            # lower operator-level pair instead of balancing to the row sum.
-            operator_tax = min(amounts["cgst"], amounts["sgst"])
-            return operator_tax, operator_tax
-        return amounts["cgst"], amounts["sgst"]
-
     output = []
     for etin, amounts in sorted(groups.items()):
-        cgst, sgst = gsttool_operator_cgst_sgst(etin, amounts)
         row = {
             "etin": etin,
             "suppval": json_amount(amounts["suppval"]),
             "igst": json_amount(amounts["igst"]),
-            "cgst": json_amount(cgst),
-            "sgst": json_amount(sgst),
+            "cgst": json_amount(amounts["cgst"]),
+            "sgst": json_amount(amounts["sgst"]),
             "cess": json_amount(amounts["cess"]),
             "flag": "N",
         }
         output.append(row)
-    if mode == GSTTOOL_COMPATIBLE:
-        adjustments = GSTTOOL_SUPECO_PERIOD_FIELD_ADJUSTMENTS.get(period or "", {})
-        for row in output:
-            etin = str(row.get("etin"))
-            for field in ("suppval", "igst", "cgst", "sgst"):
-                delta = adjustments.get((etin, field), Decimal("0.00"))
-                if delta != Decimal("0.00"):
-                    row[field] = json_amount(money(row.get(field)) + delta)
-    if mode == GSTTOOL_COMPATIBLE:
-        if period == "052026":
-            order = {"07AACCF0683K1CU": 0, "07AAICA3918J1CV": 1, "07AARCM9332R1CQ": 2}
-        else:
-            order = GSTTOOL_SUPECO_ORDER
-        output.sort(
-            key=lambda row: (
-                order.get(str(row.get("etin")), len(order)),
-                str(row.get("etin")),
-            )
-        )
     return output
 
 

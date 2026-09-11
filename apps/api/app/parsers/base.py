@@ -167,6 +167,7 @@ class MarketplaceParser:
                 first_value(row, ["buyer_state_name", "state name", "gst state"])
             ),
             "hsn": text(first_value(row, ["hsn", "hsn code", "hsn/sac"])),
+            "uqc": text(first_value(row, ["uqc", "unit", "unit of measure"])),
             "product_name": text(
                 first_value(
                     row,
