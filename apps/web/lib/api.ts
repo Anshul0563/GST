@@ -324,7 +324,8 @@ async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}
     if (exc instanceof DOMException && exc.name === "AbortError") {
       throw new Error("Backend response timed out. Please retry.");
     }
-    throw exc;
+    if (exc instanceof Error) throw exc;
+    throw new Error("Could not connect to the backend. Please retry.");
   } finally {
     globalThis.clearTimeout(timeoutId);
     init.signal?.removeEventListener("abort", abortFromCaller);
