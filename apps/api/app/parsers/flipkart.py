@@ -1,4 +1,5 @@
 from datetime import date
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
@@ -285,6 +286,7 @@ class FlipkartParser(MarketplaceParser):
         }
 
         invoice_metadata_by_suborder: dict[str, dict[str, str]] = {}
+        source_period_counts: Counter[str] = Counter()
 
         # First pass: collect invoice metadata from Tax_invoice_details or similar metadata rows.
         for path in files:
@@ -444,6 +446,11 @@ class FlipkartParser(MarketplaceParser):
                             continue
 
                         finalized = finalize_transaction(txn)
+                        document_date = finalized.get("document_date")
+                        if document_date is not None:
+                            source_period_counts[
+                                f"{document_date.month:02d}{document_date.year}"
+                            ] += 1
                         candidates.append(
                             {
                                 "txn": finalized,
@@ -489,4 +496,7 @@ class FlipkartParser(MarketplaceParser):
                 running_total=running_total,
             )
 
+        if source_period_counts:
+            result.debug["source_periods"] = dict(source_period_counts)
+            result.debug["source_dominant_period"] = source_period_counts.most_common(1)[0][0]
         return result

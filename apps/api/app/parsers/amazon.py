@@ -1,4 +1,5 @@
 from pathlib import Path
+from collections import Counter
 
 from app.parsers.base import (
     MarketplaceParser,
@@ -37,6 +38,7 @@ class AmazonParser(MarketplaceParser):
     def parse(self, files: list[Path]) -> ParseResult:
         result = ParseResult()
         result.debug = new_pos_debug(self.platform)
+        source_period_counts: Counter[str] = Counter()
 
         for path in files:
             try:
@@ -64,6 +66,11 @@ class AmazonParser(MarketplaceParser):
                         row["doc_type"] = doc_type
 
                     txn = self.normalize_row(row, path.name)
+                    document_date = txn.get("document_date")
+                    if document_date is not None:
+                        source_period_counts[
+                            f"{document_date.month:02d}{document_date.year}"
+                        ] += 1
 
                     if has_explicit_tax_split(row):
                         txn["_preserve_source_tax_split"] = True
@@ -91,5 +98,9 @@ class AmazonParser(MarketplaceParser):
 
             except Exception as exc:
                 result.errors.append({"file": path.name, "error": str(exc)})
+
+        if source_period_counts:
+            result.debug["source_periods"] = dict(source_period_counts)
+            result.debug["source_dominant_period"] = source_period_counts.most_common(1)[0][0]
 
         return result

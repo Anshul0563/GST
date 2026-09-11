@@ -1,9 +1,13 @@
 from pathlib import Path
 from decimal import Decimal, InvalidOperation
+from datetime import datetime
+import re
+from collections import Counter
 
 from app.parsers.base import (
     MarketplaceParser,
     ParseResult,
+    clean_column,
     excel_frames,
     finalize_period_transaction,
     first_value,
@@ -13,6 +17,59 @@ from app.parsers.base import (
     should_skip_transaction,
     text,
 )
+
+
+RETURN_DATE_ALIASES = [
+    "cancel return date",
+    "return date",
+    "credit note date",
+]
+RETURN_TYPE_ALIASES = ["transaction type", "type", "document type", "doc_type"]
+METADATA_TYPE_ALIASES = ["type", "document type", "doc_type"]
+METADATA_INVOICE_ALIASES = [
+    "invoice no.",
+    "invoice no",
+    "invoice number",
+    "tax invoice no",
+]
+
+
+def source_kind(path: Path, frames: list[tuple[str, object]]) -> str:
+    """Identify Meesho exports from their columns, with a generic filename fallback."""
+    columns = {
+        clean_column(column)
+        for _, frame in frames
+        for column in getattr(frame, "columns", [])
+    }
+    has_financial_columns = any(
+        clean_column(alias) in columns
+        for aliases in SOURCE_TOTAL_FIELDS.values()
+        for alias in aliases
+    )
+    has_invoice_metadata = (
+        any(clean_column(alias) in columns for alias in METADATA_TYPE_ALIASES)
+        and any(clean_column(alias) in columns for alias in SUBORDER_ALIASES)
+        and any(clean_column(alias) in columns for alias in METADATA_INVOICE_ALIASES)
+        and not has_financial_columns
+    )
+    if has_invoice_metadata:
+        return "metadata"
+    if any(clean_column(alias) in columns for alias in RETURN_DATE_ALIASES):
+        return "returns"
+    stem = clean_column(path.stem)
+    if any(marker in stem for marker in ("return", "refund", "credit")):
+        return "returns"
+    return "sales"
+
+
+def row_is_return(row: dict) -> bool:
+    if first_value(row, RETURN_DATE_ALIASES) not in (None, ""):
+        return True
+    raw_type = text(first_value(row, RETURN_TYPE_ALIASES))
+    if raw_type:
+        normalized = raw_type.lower()
+        return any(marker in normalized for marker in ("return", "refund", "credit"))
+    return False
 from app.services.validation import round_money, validate_transaction
 from app.services.pos_resolver import (
     new_pos_debug,
@@ -67,11 +124,36 @@ def report_period_date(row: dict) -> object | None:
     # report even when its order date belongs to the previous month. In
     # that case the report's financial year/month fields are the period
     # authority, not the order date.
-    year = text(first_value(row, ["financial year", "fy"]))
-    month = text(first_value(row, ["month number", "month"]))
-    if year and month and month.isdigit() and 1 <= int(month) <= 12:
-        return f"{int(year):04d}-{int(month):02d}-01"
-    return None
+    raw_year = text(first_value(row, ["financial year", "fy", "financial year name"]))
+    raw_month = text(first_value(row, ["month number", "month", "report month"]))
+    if not raw_year or not raw_month:
+        return None
+
+    year_matches = re.findall(r"\d{4}", raw_year)
+    if not year_matches:
+        return None
+    financial_year = int(year_matches[0])
+
+    month_number: int | None = None
+    if raw_month.isdigit():
+        month_number = int(raw_month)
+    else:
+        for pattern in ("%B", "%b"):
+            try:
+                month_number = datetime.strptime(raw_month.strip(), pattern).month
+                break
+            except ValueError:
+                continue
+    if month_number is None or not 1 <= month_number <= 12:
+        return None
+
+    # Meesho's financial year is April to March. For labels such as
+    # 2026-27, January to March belongs to the second calendar year.
+    if len(year_matches) > 1 and month_number <= 3:
+        financial_year = int(year_matches[1])
+    elif len(year_matches) == 1 and month_number <= 3 and raw_year != str(financial_year):
+        financial_year += 1
+    return f"{financial_year:04d}-{month_number:02d}-01"
 
 
 def align_sale_date_to_report_period(row: dict, filing_period: str) -> None:
@@ -224,7 +306,8 @@ class MeeshoParser(MarketplaceParser):
         result = ParseResult()
         result.debug = new_pos_debug(self.platform)
 
-        loaded_frames: list[tuple[Path, str, object]] = []
+        loaded_frames: list[tuple[Path, str, object, str]] = []
+        financial_source_files: set[str] = set()
         metadata_by_suborder: dict[str, dict[str, dict[str, object]]] = {}
         metadata_documents: list[dict[str, object]] = []
         etin_by_suborder: dict[str, str] = {}
@@ -238,10 +321,14 @@ class MeeshoParser(MarketplaceParser):
             "sales": {key: Decimal("0") for key in source_totals},
             "returns": {key: Decimal("0") for key in source_totals},
         }
+        source_period_counts: Counter[str] = Counter()
 
         for path in files:
             try:
                 frames = excel_frames(path)
+                kind = source_kind(path, frames)
+                if kind != "metadata":
+                    financial_source_files.add(path.name)
 
                 # First pass → metadata collect
                 for _, frame in frames:
@@ -295,6 +382,7 @@ class MeeshoParser(MarketplaceParser):
                                     "doc_type": doc_type_for_issue,
                                     "invoice_no": text(invoice_no),
                                     "suborder": suborder,
+                                    "source_file": f"{path.name}:{sheet_name}",
                                     "invoice_date": first_value(
                                         row,
                                         [
@@ -377,7 +465,7 @@ class MeeshoParser(MarketplaceParser):
 
                 # Store all frames for second pass
                 for sheet_name, frame in frames:
-                    loaded_frames.append((path, sheet_name, frame))
+                    loaded_frames.append((path, sheet_name, frame, kind))
 
             except Exception as exc:
                 result.errors.append(
@@ -388,7 +476,7 @@ class MeeshoParser(MarketplaceParser):
                 )
 
         # Second pass → transaction creation
-        for path, sheet_name, frame in loaded_frames:
+        for path, sheet_name, frame, kind in loaded_frames:
             for index, series in frame.iterrows():
                 row = series.to_dict()
 
@@ -397,13 +485,13 @@ class MeeshoParser(MarketplaceParser):
 
                 suborder = suborder_key(row)
 
-                is_return = "return" in path.name.lower() or text(first_value(
-                    row,
-                    [
-                        "cancel return date",
-                        "return date",
-                    ],
-                )) is not None
+                report_date = parse_date(report_period_date(row))
+                if report_date:
+                    source_period_counts[
+                        f"{report_date.month:02d}{report_date.year}"
+                    ] += 1
+
+                is_return = kind == "returns" or row_is_return(row)
 
                 metadata_type = "credit_note" if is_return else "invoice"
 
@@ -594,7 +682,7 @@ class MeeshoParser(MarketplaceParser):
                     "discount_seller": Decimal("0.00"),
                     "discount_platform": Decimal("0.00"),
                     "settlement_amount": Decimal("0.00"),
-                    "source_file": "Tax_invoice_details.xlsx:Invoice_Info",
+                    "source_file": document.get("source_file") or "metadata",
                     "raw_row_json": None,
                     "validation_status": "skipped",
                     "validation_errors": "Document issue metadata row",
@@ -608,7 +696,8 @@ class MeeshoParser(MarketplaceParser):
         financial_transactions = [
             txn
             for txn in result.transactions
-            if "tcs_sales" in str(txn.get("source_file") or "").lower()
+            if str(txn.get("source_file") or "").split(":", 1)[0]
+            in financial_source_files
         ]
         metadata_only_transactions = [
             txn for txn in result.transactions if txn not in financial_transactions
@@ -624,5 +713,10 @@ class MeeshoParser(MarketplaceParser):
             for category, totals in source_breakdown.items()
         }
         result.debug["meesho_document_issue_rows"] = len(result.transactions)
+        result.debug["meesho_source_periods"] = dict(source_period_counts)
+        if source_period_counts:
+            result.debug["meesho_dominant_period"] = source_period_counts.most_common(1)[0][0]
+            result.debug["source_periods"] = dict(source_period_counts)
+            result.debug["source_dominant_period"] = source_period_counts.most_common(1)[0][0]
 
         return result

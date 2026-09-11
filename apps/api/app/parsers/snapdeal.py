@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -573,6 +574,7 @@ class SnapdealParser(MarketplaceParser):
     def parse(self, files: list[Path]) -> ParseResult:
         result = ParseResult(debug=new_pos_debug(self.platform))
         seen_keys: set[tuple[Any, ...]] = set()
+        source_period_counts: Counter[str] = Counter()
         for path in files:
             try:
                 sheets = {name: frame for name, frame in raw_frames(path)}
@@ -642,6 +644,11 @@ class SnapdealParser(MarketplaceParser):
                         else:
                             self._parse_series(row, row_number, result)
                             continue
+                        document_date = finalized.get("document_date")
+                        if document_date is not None:
+                            source_period_counts[
+                                f"{document_date.month:02d}{document_date.year}"
+                            ] += 1
                         key = self._source_key(sheet, finalized)
                         if key in seen_keys:
                             result.debug.setdefault("duplicate_rows", []).append(
@@ -664,4 +671,7 @@ class SnapdealParser(MarketplaceParser):
         hsn_summary = result.debug.get("hsn_summary")
         if isinstance(hsn_summary, dict):
             result.debug["hsn_summary"] = list(hsn_summary.values())
+        if source_period_counts:
+            result.debug["source_periods"] = dict(source_period_counts)
+            result.debug["source_dominant_period"] = source_period_counts.most_common(1)[0][0]
         return result

@@ -483,6 +483,8 @@ def enforce_upload_limits(files: list[UploadFile], max_upload_mb: int) -> None:
     total = 0
     for upload in files:
         size = upload_size_bytes(upload)
+        if size <= 0:
+            raise HTTPException(422, f"{upload.filename or 'Upload'} is empty")
         total += size
         if size > max_bytes:
             raise HTTPException(
@@ -1410,13 +1412,27 @@ def run_import_parser(
         batch.period or profile.return_period,
     )
     result = parser.parse([Path(path) for path in file_paths])
+    selected_period = batch.period or profile.return_period
+    source_period = result.debug.get("source_dominant_period")
     detected_period = dominant_excluded_period(result)
-    if (
+    if source_period and source_period != selected_period:
+        original_period = selected_period
+        batch.period = source_period
+        profile.return_period = source_period
+        parser = get_parser(batch.platform)(profile.gstin, source_period)
+        reparsed = parser.parse([Path(path) for path in file_paths])
+        reparsed.debug["auto_period_switch"] = {
+            "from": original_period,
+            "to": source_period,
+            "reason": "Source report period differs from the selected filing period.",
+        }
+        result = reparsed
+    elif (
         not result.transactions
         and detected_period
-        and detected_period != (batch.period or profile.return_period)
+        and detected_period != selected_period
     ):
-        original_period = batch.period or profile.return_period
+        original_period = selected_period
         batch.period = detected_period
         profile.return_period = detected_period
         parser = get_parser(batch.platform)(profile.gstin, detected_period)
@@ -1457,6 +1473,28 @@ def run_import_parser(
 
     if duplicate_rows:
         result.debug["aggregated_duplicate_rows"] = duplicate_rows
+
+    financial_fields = (
+        "taxable_value",
+        "gross_amount",
+        "igst",
+        "cgst",
+        "sgst",
+        "cess",
+    )
+    financial_rows = [
+        txn
+        for txn in aggregated_transactions.values()
+        if any(money(txn.get(field)) != 0 for field in financial_fields)
+    ]
+    if not financial_rows:
+        result.errors.append(
+            {
+                "error": "No financial transaction rows detected in the uploaded files.",
+                "hint": "Upload the marketplace sales/returns report, not only invoice metadata.",
+            }
+        )
+        aggregated_transactions.clear()
 
     replaced_rows = clear_platform_period_transactions(batch, db)
     if replaced_rows:
@@ -2727,6 +2765,9 @@ def save_upload(upload: UploadFile, base: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as handle:
         shutil.copyfileobj(upload.file, handle)
+    if path.stat().st_size <= 0:
+        path.unlink(missing_ok=True)
+        raise HTTPException(422, f"{upload.filename or 'Upload'} is empty")
     return path
 
 
