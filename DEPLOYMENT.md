@@ -11,7 +11,7 @@ DATABASE_URL=<Render PostgreSQL connection string>
 SECRET_KEY=<long random production secret>
 UPLOAD_DIR=/var/data/uploads
 EXPORT_DIR=/var/data/exports
-CORS_ORIGINS=https://<your-vercel-domain>,https://<your-custom-domain>
+CORS_ORIGINS=https://gst-red-ten.vercel.app,https://<your-custom-domain>
 ```
 
 `CORS_ORIGINS` must contain the exact deployed frontend origins, separated by commas. Do not leave only localhost origins in production.
@@ -22,7 +22,7 @@ In the Vercel project settings, add these environment variables for the Producti
 
 ```text
 NEXT_PUBLIC_API_BASE=https://gst-txbs.onrender.com
-NEXT_PUBLIC_SITE_URL=https://gst-kappa-five.vercel.app
+NEXT_PUBLIC_SITE_URL=https://gst-red-ten.vercel.app
 ```
 
 These values are embedded during the Next.js build, so changing them requires a new deployment.
