@@ -400,7 +400,10 @@ class FlipkartParser(MarketplaceParser):
                             f"{path.name}:{sheet_title}",
                         )
                         self._set_source_gross_amount(txn, row)
-                        if doc_type == "invoice":
+                        # Flipkart's cashback report already stores the GST
+                        # sign on each row. Do not invert positive credit-note
+                        # cashback or negative debit-note cashback values.
+                        if doc_type == "invoice" or "cash back report" in sheet_title.lower():
                             txn["_preserve_source_sign"] = True
                         txn["doc_type"] = doc_type
 

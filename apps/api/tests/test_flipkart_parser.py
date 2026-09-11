@@ -1,4 +1,5 @@
 from pathlib import Path
+from decimal import Decimal
 
 import pandas as pd
 
@@ -50,3 +51,49 @@ def test_reference_flipkart_report_parses_when_available():
     assert result.errors == []
     assert len(result.transactions) == 48
     assert result.transactions[0]["gross_amount"] == 91
+
+
+def test_flipkart_cashback_report_preserves_source_tax_signs(tmp_path: Path):
+    source = tmp_path / "flipkart.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "Seller GSTIN": GSTIN,
+                "Order ID": "OD-CB-1",
+                "Order Item ID": "ITEM-CB-1",
+                "Document Type": "Credit Note",
+                "Document Sub Type": "Sale",
+                "Credit Note ID/ Debit Note ID": "LYAA9U7270000001",
+                "Invoice Amount": 5.28,
+                "Invoice Date": "2026-07-10",
+                "Taxable Value": 5.13,
+                "IGST Rate": 3,
+                "IGST Amount": 0.15,
+            },
+            {
+                "Seller GSTIN": GSTIN,
+                "Order ID": "OD-CB-2",
+                "Order Item ID": "ITEM-CB-2",
+                "Document Type": "Debit Note",
+                "Document Sub Type": "Return",
+                "Credit Note ID/ Debit Note ID": "LZAA9B7270000001",
+                "Invoice Amount": -5.28,
+                "Invoice Date": "2026-07-11",
+                "Taxable Value": -5.13,
+                "IGST Rate": 3,
+                "IGST Amount": -0.15,
+            },
+        ]
+    ).to_excel(source, sheet_name="Cash Back Report", index=False)
+
+    result = FlipkartParser(GSTIN, "072026").parse([source])
+
+    assert result.errors == []
+    assert [row["taxable_value"] for row in result.transactions] == [
+        Decimal("5.13"),
+        Decimal("-5.13"),
+    ]
+    assert [row["igst"] for row in result.transactions] == [
+        Decimal("0.15"),
+        Decimal("-0.15"),
+    ]
