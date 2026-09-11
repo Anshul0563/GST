@@ -39,6 +39,17 @@ class PosResolverTests(unittest.TestCase):
         self.assertEqual(state_code_from_text("DNHDD"), "26")
         self.assertEqual(state_code_from_text("Pondicherry"), "34")
 
+    def test_chandigarh_and_chhattisgarh_do_not_collapse_to_punjab(self):
+        self.assertEqual(state_code_from_text("CH"), "04")
+        self.assertEqual(state_code_from_text("CG"), "22")
+
+        resolved = resolve_pos(
+            {"shipping pincode": "160017"},
+            {"gstin": "07ABCDE1234F1Z5", "igst": 10},
+            "custom",
+        )
+        self.assertEqual(resolved.buyer_state_code, "04")
+
     def test_cgst_sgst_same_state_fallback(self):
         resolved = resolve_pos({}, {"gstin": "07ABCDE1234F1Z5", "cgst": 5, "sgst": 5}, "custom")
         self.assertEqual(resolved.buyer_state_code, "07")

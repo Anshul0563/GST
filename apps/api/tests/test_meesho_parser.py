@@ -148,7 +148,10 @@ def test_real_meesho_august_reports_reconcile_when_available():
         for row in payload["b2cs"]
     ) == Decimal("1025.18")
     assert payload["nil"]["inv"] == [
-        {"sply_ty": "INTER", "nil_amt": 114.19, "expt_amt": 0, "ngsup_amt": 0}
+        {"sply_ty": "INTRB2B", "nil_amt": 0, "expt_amt": 0, "ngsup_amt": 0},
+        {"sply_ty": "INTRAB2B", "nil_amt": 0, "expt_amt": 0, "ngsup_amt": 0},
+        {"sply_ty": "INTRB2C", "nil_amt": 114.19, "expt_amt": 0, "ngsup_amt": 0},
+        {"sply_ty": "INTRAB2C", "nil_amt": 0, "expt_amt": 0, "ngsup_amt": 0},
     ]
     assert not any(row["rt"] == 0 for row in payload["b2cs"])
     assert len(payload["hsn"]["hsn_b2c"]) == 3

@@ -68,7 +68,12 @@ def test_sections_are_derived_from_pos_rate_nil_hsn_and_document_type():
     assert ("04", Decimal("3")) in b2cs_keys
     assert ("04", Decimal("18")) in b2cs_keys
     assert all(row["rt"] != 0 for row in payload["b2cs"])
-    assert payload["nil"]["inv"][0]["nil_amt"] == 10
+    assert payload["nil"]["inv"] == [
+        {"sply_ty": "INTRB2B", "nil_amt": 0, "expt_amt": 0, "ngsup_amt": 0},
+        {"sply_ty": "INTRAB2B", "nil_amt": 0, "expt_amt": 0, "ngsup_amt": 0},
+        {"sply_ty": "INTRB2C", "nil_amt": 10, "expt_amt": 0, "ngsup_amt": 0},
+        {"sply_ty": "INTRAB2C", "nil_amt": 0, "expt_amt": 0, "ngsup_amt": 0},
+    ]
     assert {row["hsn_sc"] for row in payload["hsn"]["hsn_b2c"]} == {"7117", "9983"}
     assert any(
         section["doc_num"] == 5

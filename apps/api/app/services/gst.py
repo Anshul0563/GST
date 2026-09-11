@@ -181,12 +181,8 @@ def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool
     )
     if rate == Decimal("0.00"):
         return False
-    if (
-        mode == GSTTOOL_COMPATIBLE
-        and taxable == Decimal("0.00")
-        and total_tax == Decimal("0.00")
-    ):
-        return rate == Decimal("3.00")
+    if taxable == Decimal("0.00") and total_tax == Decimal("0.00"):
+        return False
     if mode == GSTTOOL_COMPATIBLE:
         return True
     return not (taxable == Decimal("0.00") and total_tax == Decimal("0.00"))
@@ -229,21 +225,32 @@ def is_nil_supply(row: dict[str, Any]) -> bool:
     return rate == Decimal("0.00") and money(row.get("taxable_value")) != 0 and total_tax == 0
 
 
+NIL_SUPPLY_ORDER = ("INTRB2B", "INTRAB2B", "INTRB2C", "INTRAB2C")
+
+
+def nil_supply_bucket(row: dict[str, Any]) -> str:
+    gstin = str(row.get("gstin") or "")
+    supply_type = classify_supply(gstin, row.get("buyer_state_code"))
+    recipient_type = "B2B" if row.get("recipient_gstin") else "B2C"
+    prefix = "INTRA" if supply_type == "INTRA" else "INTR"
+    return f"{prefix}{recipient_type}"
+
+
 def build_nil(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[str, Decimal] = defaultdict(lambda: Decimal("0.00"))
     for row in rows:
         if valid_for_export(row) and is_nil_supply(row):
-            supply_type = classify_supply(str(row.get("gstin") or ""), row.get("buyer_state_code"))
-            groups[supply_type] += money(row.get("taxable_value"))
+            groups[nil_supply_bucket(row)] += money(row.get("taxable_value"))
+    if not groups:
+        return []
     return [
         {
-            "sply_ty": supply_type,
-            "nil_amt": json_amount(value),
+            "sply_ty": bucket,
+            "nil_amt": json_amount(groups[bucket]),
             "expt_amt": 0,
             "ngsup_amt": 0,
         }
-        for supply_type, value in sorted(groups.items())
-        if value != 0
+        for bucket in NIL_SUPPLY_ORDER
     ]
 
 

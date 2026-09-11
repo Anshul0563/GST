@@ -533,7 +533,7 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(ranges, [("IN-5", "IN-6", 2), ("IN-8", "IN-9", 2)])
         self.assertEqual(gstr1_generation_report(payload, rows)["errors"], [])
 
-    def test_gsttool_mode_preserves_zero_b2cs_rows(self):
+    def test_gsttool_mode_excludes_zero_b2cs_rows(self):
         row = finalize_transaction(
             {
                 "platform": "amazon",
@@ -555,19 +555,7 @@ class GstCalculationTests(unittest.TestCase):
             "07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL
         )
 
-        self.assertIn(
-            {
-                "sply_ty": "INTER",
-                "rt": 3,
-                "typ": "OE",
-                "pos": "18",
-                "txval": 0,
-                "iamt": 0,
-                "csamt": 0,
-            },
-            payload["b2cs"],
-        )
-        self.assertEqual({row["pos"] for row in payload["b2cs"]}, {"18"})
+        self.assertEqual(payload["b2cs"], [])
         self.assertEqual(clean_payload["b2cs"], [])
 
     def test_gsttool_mode_preserves_negative_b2cs_rows(self):
