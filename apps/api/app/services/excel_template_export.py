@@ -11,7 +11,9 @@ from openpyxl.worksheet.worksheet import Worksheet
 from app.services.excel.sections import SHEET_ORDER, build_sections
 
 
-DEFAULT_TEMPLATE_PATH = Path("/home/jarvis/Downloads/GSTR1_07TCRPS8655B1ZK_monthly_032026.xlsx")
+DEFAULT_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[1] / "templates" / "gstr1_template.xlsx"
+)
 
 
 def template_path() -> Path | None:
