@@ -113,6 +113,7 @@ class NormalizedTransaction(Base):
     platform: Mapped[str] = mapped_column(String(40), index=True)
     gstin: Mapped[str] = mapped_column(String(15), index=True)
     etin: Mapped[str | None] = mapped_column(String(15), index=True)
+    recipient_gstin: Mapped[str | None] = mapped_column(String(15), index=True)
     filing_period: Mapped[str] = mapped_column(String(6), index=True)
     order_id: Mapped[str | None] = mapped_column(String(120))
     order_item_id: Mapped[str | None] = mapped_column(String(120))

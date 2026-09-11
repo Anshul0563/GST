@@ -864,8 +864,8 @@ class GstCalculationTests(unittest.TestCase):
         gsttool_row = next(row for row in payload["b2cs"] if row.get("pos") == "07")
         self.assertEqual(gsttool_row["camt"], 1.49)
         self.assertEqual(gsttool_row["samt"], 1.5)
-        self.assertEqual(clean_payload["b2cs"][0]["camt"], 1.5)
-        self.assertEqual(clean_payload["b2cs"][0]["samt"], 1.49)
+        self.assertEqual(clean_payload["b2cs"][0]["camt"], 1.49)
+        self.assertEqual(clean_payload["b2cs"][0]["samt"], 1.5)
 
     def test_gsttool_mode_uses_flipkart_operator_level_supeco_rounding(self):
         row = {
@@ -901,7 +901,7 @@ class GstCalculationTests(unittest.TestCase):
             for row in clean_payload["supeco"]["clttx"]
             if row["etin"] == "07AACCF0683K1CU"
         )
-        self.assertEqual(gsttool_eco["cgst"], 1.49)
+        self.assertEqual(gsttool_eco["cgst"], 1.5)
         self.assertEqual(gsttool_eco["sgst"], 1.49)
         self.assertEqual(clean_eco["cgst"], 1.5)
         self.assertEqual(clean_eco["sgst"], 1.49)

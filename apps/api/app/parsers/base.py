@@ -109,6 +109,9 @@ class MarketplaceParser:
             "gstin": self.gstin,
             "etin": first_value(row, ["etin", "ecommerce gstin", "operator gstin"])
             or ETINS.get(self.platform),
+            "recipient_gstin": text(
+                first_value(row, ["recipient gstin", "buyer gstin", "customer gstin"])
+            ),
             "filing_period": self.filing_period,
             "order_id": text(
                 first_value(

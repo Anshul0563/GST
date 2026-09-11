@@ -127,6 +127,7 @@ class TransactionOut(BaseModel):
     platform: str
     gstin: str
     etin: str | None
+    recipient_gstin: str | None = None
     filing_period: str
     order_id: str | None
     order_item_id: str | None
@@ -137,6 +138,7 @@ class TransactionOut(BaseModel):
     buyer_state_code: str | None
     buyer_state_name: str | None
     hsn: str | None
+    uqc: str | None = None
     product_name: str | None
     sku: str | None
     qty: Decimal

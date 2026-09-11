@@ -149,6 +149,14 @@ def run_lightweight_migrations(engine) -> None:
                 connection.execute(
                     text("ALTER TABLE normalized_transactions ADD COLUMN uqc VARCHAR(20)")
                 )
+        if "recipient_gstin" not in transaction_columns:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "ALTER TABLE normalized_transactions "
+                        "ADD COLUMN recipient_gstin VARCHAR(15)"
+                    )
+                )
         with engine.begin() as connection:
             if "document_date" not in transaction_columns:
                 connection.execute(

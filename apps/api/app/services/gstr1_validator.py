@@ -68,6 +68,10 @@ def validate_gstr1_export(payload, export_mode=CLEAN_PORTAL):
                 )
 
     b2cs_txval = sum(money(x.get("txval")) for x in b2cs)
+    b2cs_txval += sum(
+        money(x.get("nil_amt"))
+        for x in payload.get("nil", {}).get("inv", [])
+    )
     eco_txval = sum(money(x.get("suppval")) for x in supeco)
 
     if mode == CLEAN_PORTAL and abs(b2cs_txval - eco_txval) > Decimal("0.01"):

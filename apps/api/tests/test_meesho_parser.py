@@ -140,14 +140,18 @@ def test_real_meesho_august_reports_reconcile_when_available():
     assert sum(row["buyer_state_code"] == "07" for row in financial if row["doc_type"] == "credit_note") == 5
 
     payload = build_gstr1_json("07TCRPS8655B1ZK", "082026", result.transactions)
-    assert sum(Decimal(str(row["txval"])) for row in payload["b2cs"]) == Decimal("33176.56")
+    assert sum(Decimal(str(row["txval"])) for row in payload["b2cs"]) == Decimal("33062.37")
     assert sum(
         Decimal(str(row.get("iamt", 0)))
         + Decimal(str(row.get("camt", 0)))
         + Decimal(str(row.get("samt", 0)))
         for row in payload["b2cs"]
     ) == Decimal("1025.18")
-    assert any(row["rt"] == 0 and row["txval"] == 114.19 for row in payload["b2cs"])
+    assert payload["nil"]["inv"] == [
+        {"sply_ty": "INTER", "nil_amt": 114.19, "expt_amt": 0, "ngsup_amt": 0}
+    ]
+    assert not any(row["rt"] == 0 for row in payload["b2cs"])
+    assert len(payload["hsn"]["hsn_b2c"]) == 3
     assert payload["supeco"]["clttx"][0]["suppval"] == 33176.56
     assert result.debug["meesho_source_breakdown"]["sales"]["taxable_value"] == "48269.47"
     assert result.debug["meesho_source_breakdown"]["returns"]["taxable_value"] == "15092.91"

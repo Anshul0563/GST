@@ -248,21 +248,33 @@ def build_nil(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def build_hsn(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    groups: dict[tuple[str, str, Decimal], dict[str, Decimal | str]] = defaultdict(
+    groups: dict[tuple[str, str, str, Decimal], dict[str, Decimal | str]] = defaultdict(
         lambda: {"qty": Decimal("0.00"), "val": Decimal("0.00"), "txval": Decimal("0.00"), "iamt": Decimal("0.00"), "camt": Decimal("0.00"), "samt": Decimal("0.00"), "csamt": Decimal("0.00")}
     )
     for row in rows:
         if not valid_for_export(row) or is_nil_supply(row) or not row.get("hsn"):
             continue
-        key = (str(row.get("hsn")).strip(), str(row.get("uqc") or "OTH").strip(), money(row.get("gst_rate")))
+        section = "hsn_b2b" if row.get("recipient_gstin") else "hsn_b2c"
+        key = (section, str(row.get("hsn")).strip(), str(row.get("uqc") or "OTH").strip(), money(row.get("gst_rate")))
         group = groups[key]
-        for field in ("qty", "gross_amount", "taxable_value", "igst", "cgst", "sgst", "cess"):
-            target = "val" if field == "gross_amount" else field.replace("gross_amount", "val")
+        targets = {
+            "qty": "qty",
+            "gross_amount": "val",
+            "taxable_value": "txval",
+            "igst": "iamt",
+            "cgst": "camt",
+            "sgst": "samt",
+            "cess": "csamt",
+        }
+        for field, target in targets.items():
             group[target] = money(group[target]) + money(row.get(field))
     records = []
-    for (hsn, uqc, rate), group in sorted(groups.items()):
-        records.append({"num": len(records) + 1, "hsn_sc": hsn, "desc": "", "uqc": uqc, "qty": json_amount(group["qty"]), "val": json_amount(group["val"]), "rt": json_amount(rate), "txval": json_amount(group["taxable_value"]), "iamt": json_amount(group["igst"]), "camt": json_amount(group["cgst"]), "samt": json_amount(group["sgst"]), "csamt": json_amount(group["cess"])})
-    return {"hsn_b2c": records, "hsn_b2b": []} if records else {}
+    output: dict[str, list[dict[str, Any]]] = {"hsn_b2b": [], "hsn_b2c": []}
+    for section, hsn, uqc, rate in sorted(groups):
+        group = groups[(section, hsn, uqc, rate)]
+        records = output[section]
+        records.append({"num": len(records) + 1, "hsn_sc": hsn, "desc": "", "uqc": uqc, "qty": json_amount(group["qty"]), "val": json_amount(group["val"]), "rt": json_amount(rate), "txval": json_amount(group["txval"]), "iamt": json_amount(group["iamt"]), "camt": json_amount(group["camt"]), "samt": json_amount(group["samt"]), "csamt": json_amount(group["csamt"])})
+    return output if any(output.values()) else {}
 
 
 def valid_for_doc_issue(row: dict[str, Any]) -> bool:
@@ -761,6 +773,7 @@ def gstr1_generation_report(
     )
     period_rows = [row for row in source_rows if row_belongs_to_period(row, period)]
     valid_rows = [row for row in period_rows if valid_for_b2cs(row)]
+    exportable_rows = [row for row in period_rows if valid_for_export(row)]
     valid_by_platform = {
         platform: sum(1 for row in valid_rows if row.get("platform") == platform)
         for platform in uploaded_platforms
@@ -781,6 +794,44 @@ def gstr1_generation_report(
                 warnings.append(
                     f"No valid {platform.title()} rows found for period {payload.get('fp')}"
                 )
+
+    marketplace_totals: dict[str, dict[str, Any]] = {}
+    for platform in uploaded_platforms:
+        platform_rows = [
+            row for row in exportable_rows if str(row.get("platform")) == platform
+        ]
+        marketplace_totals[platform] = {
+            "rows": len(platform_rows),
+            "taxable_value": json_amount(
+                sum((money(row.get("taxable_value")) for row in platform_rows), Decimal("0.00"))
+            ),
+            "igst": json_amount(
+                sum((money(row.get("igst")) for row in platform_rows), Decimal("0.00"))
+            ),
+            "cgst": json_amount(
+                sum((money(row.get("cgst")) for row in platform_rows), Decimal("0.00"))
+            ),
+            "sgst": json_amount(
+                sum((money(row.get("sgst")) for row in platform_rows), Decimal("0.00"))
+            ),
+            "cess": json_amount(
+                sum((money(row.get("cess")) for row in platform_rows), Decimal("0.00"))
+            ),
+        }
+
+    source_total = sum(
+        (money(row.get("taxable_value")) for row in exportable_rows), Decimal("0.00")
+    )
+    output_total = sum(
+        (money(row.get("txval")) for row in payload.get("b2cs", [])), Decimal("0.00")
+    ) + sum(
+        (money(row.get("nil_amt")) for row in payload.get("nil", {}).get("inv", [])),
+        Decimal("0.00"),
+    )
+    if source_total != output_total:
+        warnings.append(
+            f"Source/output taxable reconciliation differs by {source_total - output_total}"
+        )
 
     errors = validate_gstr1_schema(payload, mode)
     errors.extend(validate_doc_issue_ranges(payload.get("doc_issue", {})))
@@ -811,6 +862,8 @@ def gstr1_generation_report(
     return {
         "uploaded_platforms": uploaded_platforms,
         "valid_rows_per_platform": valid_by_platform,
+        "marketplace_totals": marketplace_totals,
+        "source_output_taxable_delta": json_amount(source_total - output_total),
         "period_filter": period_filter_debug(source_rows, period),
         "supeco_etins": supeco_etins,
         "warnings": warnings,
