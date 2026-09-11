@@ -23,67 +23,6 @@ DOC_TYP = {
     "debit_note": "Debit Note",
     "credit_note": "Credit Note",
 }
-GSTTOOL_B2CS_POS_ORDER = [
-    "35",
-    "37",
-    "18",
-    "10",
-    "04",
-    "22",
-    "26",
-    "07",
-    "24",
-    "06",
-    "02",
-    "01",
-    "20",
-    "29",
-    "32",
-    "23",
-    "27",
-    "17",
-    "15",
-    "21",
-    "34",
-    "03",
-    "08",
-    "33",
-    "36",
-    "16",
-    "09",
-    "05",
-    "19",
-]
-GSTTOOL_SUPECO_ORDER = {
-    "07AARCM9332R1CQ": 0,
-    "07AAICA3918J1CV": 1,
-    "07AACCF0683K1CU": 2,
-}
-GSTTOOL_B2CS_FIELD_ADJUSTMENTS = {
-    ("INTRA", Decimal("3.00"), "07", "txval"): Decimal("-0.01"),
-    ("INTER", Decimal("3.00"), "32", "txval"): Decimal("0.01"),
-    ("INTER", Decimal("3.00"), "03", "iamt"): Decimal("0.01"),
-}
-GSTTOOL_B2CS_PERIOD_FIELD_ADJUSTMENTS = {
-    "052026": {
-        ("INTER", Decimal("3.00"), "35", "txval"): Decimal("0.01"),
-        ("INTER", Decimal("3.00"), "37", "txval"): Decimal("0.01"),
-        ("INTER", Decimal("3.00"), "22", "iamt"): Decimal("0.01"),
-        ("INTRA", Decimal("3.00"), "07", "txval"): Decimal("0.02"),
-        ("INTRA", Decimal("3.00"), "07", "camt"): Decimal("-0.01"),
-        ("INTRA", Decimal("3.00"), "07", "samt"): Decimal("-0.01"),
-        ("INTER", Decimal("3.00"), "32", "txval"): Decimal("-0.01"),
-        ("INTER", Decimal("3.00"), "32", "iamt"): Decimal("0.01"),
-    },
-}
-GSTTOOL_SUPECO_PERIOD_FIELD_ADJUSTMENTS = {
-    "052026": {
-        ("07AARCM9332R1CQ", "suppval"): Decimal("-0.01"),
-        ("07AARCM9332R1CQ", "igst"): Decimal("0.01"),
-        ("07AARCM9332R1CQ", "cgst"): Decimal("-0.01"),
-        ("07AARCM9332R1CQ", "sgst"): Decimal("-0.01"),
-    },
-}
 
 
 def classify_supply(seller_gstin: str, pos: str | None) -> str:
@@ -204,11 +143,6 @@ def document_date_value(row: dict[str, Any]) -> date | None:
 def split_tax_evenly(total_tax: Decimal) -> tuple[Decimal, Decimal]:
     half = money(total_tax / Decimal("2"))
     return half, money(total_tax - half)
-
-
-def split_tax_gsttool(total_tax: Decimal) -> tuple[Decimal, Decimal]:
-    half = money(total_tax / Decimal("2"))
-    return half, half
 
 
 def normalize_export_mode(export_mode: str | None) -> str:
@@ -428,7 +362,6 @@ def build_b2cs(
     gstin: str, rows: list[dict[str, Any]], export_mode: str = CLEAN_PORTAL
 ) -> list[dict[str, Any]]:
     mode = normalize_export_mode(export_mode)
-    period = single_period(rows)
     groups: dict[tuple[str, Decimal, str, str], dict[str, Decimal]] = defaultdict(
         lambda: {
             "txval": Decimal("0.00"),
@@ -436,9 +369,6 @@ def build_b2cs(
             "camt": Decimal("0.00"),
             "samt": Decimal("0.00"),
             "csamt": Decimal("0.00"),
-            "gsttool_equal_split": Decimal("0.00"),
-            "gsttool_meesho_inter_gross": Decimal("0.00"),
-            "gsttool_pos04_remap": Decimal("0.00"),
         }
     )
     for row in rows:
@@ -489,7 +419,7 @@ def build_b2cs(
             base["iamt"] = json_amount(amounts["iamt"])
             base["csamt"] = json_amount(amounts["csamt"])
         else:
-            if amounts["camt"] or amounts["samt"]:
+            if mode == GSTTOOL_COMPATIBLE or amounts["camt"] or amounts["samt"]:
                 camt, samt = money(amounts["camt"]), money(amounts["samt"])
             else:
                 intra_tax = amounts["camt"] + amounts["samt"]
