@@ -1808,6 +1808,10 @@ def dashboard_summary(
     for row in rows:
         taxable = money(row.taxable_value)
         row_gst = money(row.igst) + money(row.cgst) + money(row.sgst) + money(row.cess)
+        # Nil-rated/exempt rows belong in the exempt supply section, not in
+        # the dashboard's taxable sales totals.
+        if money(row.gst_rate) == Decimal("0.00"):
+            continue
         total_taxable += taxable
         total_sales += taxable + row_gst
         igst += money(row.igst)
