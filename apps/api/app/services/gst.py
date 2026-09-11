@@ -38,7 +38,7 @@ def json_amount(value: Any) -> float:
 
 def source_amount(row: dict[str, Any], field: str, precise: bool = False) -> Decimal:
     """Read source precision when it is available, falling back to normalized data."""
-    if not precise:
+    if not precise or str(row.get("platform") or "").lower() != "meesho":
         return money(row.get(field))
     raw_value = row.get("raw_row_json")
     if not raw_value:
