@@ -281,9 +281,26 @@ export function ImportsPage() {
   const activePeriodHasBatches = timelineBatches.some(
     (batch) => batch.period === workspace.profile?.return_period,
   );
+  const activePeriodBatches = useMemo(
+    () =>
+      timelineBatches.filter(
+        (batch) => batch.period === workspace.profile?.return_period,
+      ),
+    [timelineBatches, workspace.profile?.return_period],
+  );
+  const latestBatchesByPlatform = useMemo(
+    () =>
+      activePeriodBatches.reduce<Record<string, BatchStatus>>((acc, batch) => {
+        if (!acc[batch.platform] || acc[batch.platform].id < batch.id) {
+          acc[batch.platform] = batch;
+        }
+        return acc;
+      }, {}),
+    [activePeriodBatches],
+  );
   const successfulBatchesByPlatform = useMemo(
     () =>
-      timelineBatches.reduce<Record<string, BatchStatus>>((acc, batch) => {
+      activePeriodBatches.reduce<Record<string, BatchStatus>>((acc, batch) => {
         if (
           batch.status === "completed" &&
           batch.error_rows === 0 &&
@@ -293,7 +310,7 @@ export function ImportsPage() {
         }
         return acc;
       }, {}),
-    [timelineBatches],
+    [activePeriodBatches],
   );
   const uploadFields = requiredFilesForPlatform(
     selected?.key,
@@ -493,6 +510,7 @@ export function ImportsPage() {
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {platformCards.map((item) => {
                   const active = item.key === selected?.key;
+                  const latestBatch = latestBatchesByPlatform[item.key];
                   const successfulBatch =
                     successfulBatchesByPlatform[item.key] ||
                     (activeBatch?.platform === item.key &&
@@ -510,15 +528,20 @@ export function ImportsPage() {
                         const previousFiles =
                           uploadedFilesByPlatform[item.key] || [];
                         const previousFileNames =
-                          successfulBatch?.uploaded_files ||
+                          latestBatch?.uploaded_files ||
                           previousFiles.map((file) => file.name);
                         setFiles(previousFiles);
                         setUploadedFileNames(previousFileNames);
                         setProgress("");
-                        setActiveBatch(null);
+                        setActiveBatch(latestBatch || null);
                         setErrors(null);
                         setFileUploadStatus(
-                          previousFileNames.length ? "success" : "idle",
+                          latestBatch?.status === "completed" &&
+                            latestBatch.error_rows === 0
+                            ? "success"
+                            : previousFileNames.length
+                              ? "selected"
+                              : "idle",
                         );
                         setUploadDialogOpen(true);
                       }}
