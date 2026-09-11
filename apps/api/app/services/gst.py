@@ -438,11 +438,14 @@ def build_b2cs(
             base["iamt"] = json_amount(amounts["iamt"])
             base["csamt"] = json_amount(amounts["csamt"])
         else:
-            if mode == GSTTOOL_COMPATIBLE or amounts["camt"] or amounts["samt"]:
-                camt, samt = money(amounts["camt"]), money(amounts["samt"])
-            else:
-                intra_tax = amounts["camt"] + amounts["samt"]
-                camt, samt = split_tax_evenly(intra_tax)
+            camt, samt = money(amounts["camt"]), money(amounts["samt"])
+            # Portal validation allows at most one paisa difference between
+            # CGST and SGST. Rebalance only malformed source splits while
+            # preserving the signed aggregate tax and normal source splits.
+            if abs(camt - samt) > Decimal("0.01"):
+                camt, samt = split_tax_evenly(camt + samt)
+            elif not camt and not samt:
+                camt, samt = split_tax_evenly(amounts["camt"] + amounts["samt"])
             base["camt"] = json_amount(camt)
             base["samt"] = json_amount(samt)
             base["csamt"] = json_amount(amounts["csamt"])
