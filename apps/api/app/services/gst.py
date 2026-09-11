@@ -922,15 +922,6 @@ def gstr1_generation_report(
         errors.append(
             f"Valid rows for {', '.join(platforms)} have ETIN {etin}, but SUPECO clttx is missing it"
         )
-    if (
-        "meesho" in uploaded_platforms
-        and valid_by_platform.get("meesho", 0) > 0
-        and "07AARCM9332R1CQ" not in supeco_etins
-    ):
-        errors.append(
-            "Uploaded Meesho rows are valid, but Meesho SUPECO summary is missing"
-        )
-
     return {
         "uploaded_platforms": uploaded_platforms,
         "valid_rows_per_platform": valid_by_platform,
