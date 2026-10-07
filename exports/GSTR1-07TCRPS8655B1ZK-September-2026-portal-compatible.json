@@ -396,13 +396,61 @@
           {
             "num": 2,
             "from": "6p5kc271054",
-            "to": "6p5kc271409",
-            "totnum": 356,
+            "to": "6p5kc271412",
+            "totnum": 359,
             "cancel": 0,
-            "net_issue": 356
+            "net_issue": 359
           },
           {
             "num": 3,
+            "from": "6p5kc271414",
+            "to": "6p5kc271414",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          },
+          {
+            "num": 4,
+            "from": "6p5kc271416",
+            "to": "6p5kc271416",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          },
+          {
+            "num": 5,
+            "from": "6p5kc271418",
+            "to": "6p5kc271420",
+            "totnum": 3,
+            "cancel": 0,
+            "net_issue": 3
+          },
+          {
+            "num": 6,
+            "from": "6p5kc271422",
+            "to": "6p5kc271424",
+            "totnum": 3,
+            "cancel": 0,
+            "net_issue": 3
+          },
+          {
+            "num": 7,
+            "from": "6p5kc271426",
+            "to": "6p5kc271426",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          },
+          {
+            "num": 8,
+            "from": "6p5kc271428",
+            "to": "6p5kc271430",
+            "totnum": 3,
+            "cancel": 0,
+            "net_issue": 3
+          },
+          {
+            "num": 9,
             "from": "LWABOG7270000092",
             "to": "LWABOG7270000097",
             "totnum": 6,
@@ -410,7 +458,7 @@
             "net_issue": 6
           },
           {
-            "num": 4,
+            "num": 10,
             "from": "NUA066C270000001",
             "to": "NUA066C270000002",
             "totnum": 2,
@@ -418,7 +466,7 @@
             "net_issue": 2
           },
           {
-            "num": 5,
+            "num": 11,
             "from": "NUA10MY270000001",
             "to": "NUA10MY270000001",
             "totnum": 1,
@@ -426,7 +474,7 @@
             "net_issue": 1
           },
           {
-            "num": 6,
+            "num": 12,
             "from": "NUA18PH270000001",
             "to": "NUA18PH270000001",
             "totnum": 1,
@@ -434,7 +482,7 @@
             "net_issue": 1
           },
           {
-            "num": 7,
+            "num": 13,
             "from": "NUATMHI270000001",
             "to": "NUATMHI270000002",
             "totnum": 2,
@@ -442,7 +490,7 @@
             "net_issue": 2
           },
           {
-            "num": 8,
+            "num": 14,
             "from": "NUAU0V4270000001",
             "to": "NUAU0V4270000004",
             "totnum": 4,
@@ -450,7 +498,7 @@
             "net_issue": 4
           },
           {
-            "num": 9,
+            "num": 15,
             "from": "NUAU0V5270000001",
             "to": "NUAU0V5270000003",
             "totnum": 3,
@@ -522,29 +570,85 @@
           {
             "num": 8,
             "from": "6p5kc27C330",
-            "to": "6p5kc27C378",
-            "totnum": 49,
+            "to": "6p5kc27C393",
+            "totnum": 64,
             "cancel": 0,
-            "net_issue": 49
+            "net_issue": 64
           },
           {
             "num": 9,
-            "from": "6p5kc27C380",
-            "to": "6p5kc27C391",
-            "totnum": 12,
+            "from": "6p5kc27C395",
+            "to": "6p5kc27C397",
+            "totnum": 3,
             "cancel": 0,
-            "net_issue": 12
+            "net_issue": 3
           },
           {
             "num": 10,
-            "from": "6p5kc27CM46",
-            "to": "6p5kc27CM46",
+            "from": "6p5kc27C399",
+            "to": "6p5kc27C402",
+            "totnum": 4,
+            "cancel": 0,
+            "net_issue": 4
+          },
+          {
+            "num": 11,
+            "from": "6p5kc27C404",
+            "to": "6p5kc27C405",
+            "totnum": 2,
+            "cancel": 0,
+            "net_issue": 2
+          },
+          {
+            "num": 12,
+            "from": "6p5kc27C408",
+            "to": "6p5kc27C408",
             "totnum": 1,
             "cancel": 0,
             "net_issue": 1
           },
           {
-            "num": 11,
+            "num": 13,
+            "from": "6p5kc27C410",
+            "to": "6p5kc27C412",
+            "totnum": 3,
+            "cancel": 0,
+            "net_issue": 3
+          },
+          {
+            "num": 14,
+            "from": "6p5kc27C415",
+            "to": "6p5kc27C415",
+            "totnum": 1,
+            "cancel": 0,
+            "net_issue": 1
+          },
+          {
+            "num": 15,
+            "from": "6p5kc27C417",
+            "to": "6p5kc27C418",
+            "totnum": 2,
+            "cancel": 0,
+            "net_issue": 2
+          },
+          {
+            "num": 16,
+            "from": "6p5kc27CC8",
+            "to": "6p5kc27CC12",
+            "totnum": 5,
+            "cancel": 0,
+            "net_issue": 5
+          },
+          {
+            "num": 17,
+            "from": "6p5kc27CM36",
+            "to": "6p5kc27CM46",
+            "totnum": 11,
+            "cancel": 0,
+            "net_issue": 11
+          },
+          {
+            "num": 18,
             "from": "LOAD18Q270000001",
             "to": "LOAD18Q270000001",
             "totnum": 1,
@@ -552,7 +656,7 @@
             "net_issue": 1
           },
           {
-            "num": 12,
+            "num": 19,
             "from": "MFABNVY270000037",
             "to": "MFABNVY270000043",
             "totnum": 7,
@@ -560,7 +664,7 @@
             "net_issue": 7
           },
           {
-            "num": 13,
+            "num": 20,
             "from": "LYAA9U7270000045",
             "to": "LYAA9U7270000049",
             "totnum": 5,
@@ -614,7 +718,112 @@
     ]
   },
   "hsn": {
-    "hsn_b2b": [],
+    "hsn_b2b": [
+      {
+        "num": 1,
+        "hsn_sc": "7018",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 1,
+        "rt": 3,
+        "txval": 187.38,
+        "iamt": 5.62,
+        "camt": 0,
+        "samt": 0,
+        "csamt": 0
+      },
+      {
+        "num": 2,
+        "hsn_sc": "71131110",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 3,
+        "rt": 3,
+        "txval": 265.05,
+        "iamt": 7.95,
+        "camt": 0,
+        "samt": 0,
+        "csamt": 0
+      },
+      {
+        "num": 3,
+        "hsn_sc": "71131130",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 2,
+        "rt": 3,
+        "txval": 186.4,
+        "iamt": 5.6,
+        "camt": 0,
+        "samt": 0,
+        "csamt": 0
+      },
+      {
+        "num": 4,
+        "hsn_sc": "7117",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 45,
+        "rt": 3,
+        "txval": 6172.79,
+        "iamt": 166.79,
+        "camt": 9.2,
+        "samt": 9.18,
+        "csamt": 0
+      },
+      {
+        "num": 5,
+        "hsn_sc": "7117",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 0,
+        "rt": 5,
+        "txval": 0,
+        "iamt": 0,
+        "camt": 0,
+        "samt": 0,
+        "csamt": 0
+      },
+      {
+        "num": 6,
+        "hsn_sc": "711790",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 212,
+        "rt": 3,
+        "txval": 29007.32,
+        "iamt": 833.82,
+        "camt": 18.24,
+        "samt": 18.2,
+        "csamt": 0
+      },
+      {
+        "num": 7,
+        "hsn_sc": "732394",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 14,
+        "rt": 18,
+        "txval": 2053.09,
+        "iamt": 369.55,
+        "camt": 0,
+        "samt": 0,
+        "csamt": 0
+      },
+      {
+        "num": 8,
+        "hsn_sc": "73239420",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 5,
+        "rt": 18,
+        "txval": 751.19,
+        "iamt": 135.22,
+        "camt": 0,
+        "samt": 0,
+        "csamt": 0
+      }
+    ],
     "hsn_b2c": [
       {
         "num": 1,
