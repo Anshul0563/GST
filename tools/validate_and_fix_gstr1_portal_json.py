@@ -55,6 +55,7 @@ HSN_ALLOWED_KEYS = {
 }
 HSN_REQUIRED_KEYS = {"num", "hsn_sc", "desc", "uqc", "qty", "rt", "txval"}
 TWO_PLACES = Decimal("0.01")
+DOC_SERIAL_RE = re.compile(r"^[A-Za-z0-9/-]{1,16}$")
 
 
 def money(value: Any) -> Decimal:
@@ -126,9 +127,25 @@ def fix_payload(payload: dict[str, Any]) -> dict[str, Any]:
     doc_issue = fixed.get("doc_issue", {})
     for section in doc_issue.get("doc_det", []) if isinstance(doc_issue, dict) else []:
         section["doc_num"] = numeric_string_to_int(section.get("doc_num"))
+        cleaned_docs = []
         for doc in section.get("docs", []):
+            doc_from = str(doc.get("from") or "").strip()
+            doc_to = str(doc.get("to") or "").strip()
+            if not DOC_SERIAL_RE.fullmatch(doc_from) or not DOC_SERIAL_RE.fullmatch(doc_to):
+                continue
             for field in ("num", "totnum", "cancel", "net_issue"):
                 doc[field] = numeric_string_to_int(doc.get(field))
+            cleaned_docs.append(doc)
+        for index, doc in enumerate(cleaned_docs, start=1):
+            doc["num"] = index
+        section["docs"] = cleaned_docs
+
+    hsn = fixed.get("hsn")
+    if isinstance(hsn, dict):
+        for section in ("hsn_b2b", "hsn_b2c"):
+            for row in hsn.get(section, []):
+                if isinstance(row, dict) and not str(row.get("desc") or "").strip():
+                    row["desc"] = "Goods"
 
     return fixed
 
@@ -212,6 +229,10 @@ def validate_payload(payload: dict[str, Any]) -> list[str]:
             if isinstance(doc.get("totnum"), int) and isinstance(doc.get("cancel"), int):
                 if doc.get("net_issue") != doc["totnum"] - doc["cancel"]:
                     errors.append(f"doc_issue net_issue mismatch for {doc.get('from')}")
+            for field in ("from", "to"):
+                value = str(doc.get(field) or "")
+                if not DOC_SERIAL_RE.fullmatch(value):
+                    errors.append(f"doc_issue {field} invalid serial: {value!r}")
 
     hsn = payload.get("hsn")
     if hsn is not None:
@@ -227,6 +248,8 @@ def validate_payload(payload: dict[str, Any]) -> list[str]:
                     errors.append(f"hsn.{section}[{index}] unsupported keys: {sorted(set(row) - HSN_ALLOWED_KEYS)}")
                 if not HSN_REQUIRED_KEYS.issubset(row):
                     errors.append(f"hsn.{section}[{index}] missing mandatory keys")
+                if not str(row.get("desc") or "").strip():
+                    errors.append(f"hsn.{section}[{index}] desc blank")
 
     expected_totals = {
         "taxable": Decimal("40950.68"),

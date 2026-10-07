@@ -456,22 +456,6 @@
             "totnum": 3,
             "cancel": 0,
             "net_issue": 3
-          },
-          {
-            "num": 10,
-            "from": "SNAPDEAL-7(A)(2)-3",
-            "to": "SNAPDEAL-7(A)(2)-3",
-            "totnum": 1,
-            "cancel": 0,
-            "net_issue": 1
-          },
-          {
-            "num": 11,
-            "from": "SNAPDEAL-7(B)(2)-3",
-            "to": "SNAPDEAL-7(B)(2)-10",
-            "totnum": 8,
-            "cancel": 0,
-            "net_issue": 8
           }
         ]
       },
@@ -635,7 +619,7 @@
       {
         "num": 1,
         "hsn_sc": "7018",
-        "desc": "",
+        "desc": "Goods",
         "uqc": "OTH",
         "qty": 1,
         "rt": 3,
@@ -648,7 +632,7 @@
       {
         "num": 2,
         "hsn_sc": "71131110",
-        "desc": "",
+        "desc": "Goods",
         "uqc": "OTH",
         "qty": 3,
         "rt": 3,
@@ -661,7 +645,7 @@
       {
         "num": 3,
         "hsn_sc": "71131130",
-        "desc": "",
+        "desc": "Goods",
         "uqc": "OTH",
         "qty": 2,
         "rt": 3,
@@ -674,7 +658,7 @@
       {
         "num": 4,
         "hsn_sc": "7117",
-        "desc": "",
+        "desc": "Goods",
         "uqc": "OTH",
         "qty": 45,
         "rt": 3,
@@ -687,7 +671,7 @@
       {
         "num": 5,
         "hsn_sc": "7117",
-        "desc": "",
+        "desc": "Goods",
         "uqc": "OTH",
         "qty": 0,
         "rt": 5,
@@ -700,7 +684,7 @@
       {
         "num": 6,
         "hsn_sc": "711790",
-        "desc": "",
+        "desc": "Goods",
         "uqc": "OTH",
         "qty": 212,
         "rt": 3,
@@ -713,7 +697,7 @@
       {
         "num": 7,
         "hsn_sc": "732394",
-        "desc": "",
+        "desc": "Goods",
         "uqc": "OTH",
         "qty": 14,
         "rt": 18,
@@ -726,7 +710,7 @@
       {
         "num": 8,
         "hsn_sc": "73239420",
-        "desc": "",
+        "desc": "Goods",
         "uqc": "OTH",
         "qty": 5,
         "rt": 18,

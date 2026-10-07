@@ -344,7 +344,7 @@ def build_hsn(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     for section, hsn, uqc, rate in sorted(groups):
         group = groups[(section, hsn, uqc, rate)]
         records = output[section]
-        records.append({"num": len(records) + 1, "hsn_sc": hsn, "desc": "", "uqc": uqc, "qty": json_amount(group["qty"]), "rt": json_amount(rate), "txval": json_amount(group["txval"]), "iamt": json_amount(group["iamt"]), "camt": json_amount(group["camt"]), "samt": json_amount(group["samt"]), "csamt": json_amount(group["csamt"])})
+        records.append({"num": len(records) + 1, "hsn_sc": hsn, "desc": "Goods", "uqc": uqc, "qty": json_amount(group["qty"]), "rt": json_amount(rate), "txval": json_amount(group["txval"]), "iamt": json_amount(group["iamt"]), "camt": json_amount(group["camt"]), "samt": json_amount(group["samt"]), "csamt": json_amount(group["csamt"])})
     return output if any(output.values()) else {}
 
 
