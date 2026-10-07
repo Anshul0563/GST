@@ -345,11 +345,16 @@ def build_hsn(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         }
         for field, target in targets.items():
             group[target] = money(group[target]) + money(row.get(field))
-    output: dict[str, list[dict[str, Any]]] = {"hsn_b2b": [], "hsn_b2c": []}
+    grouped_output: dict[str, list[dict[str, Any]]] = {"hsn_b2b": [], "hsn_b2c": []}
     for section, hsn, uqc, rate in sorted(groups):
         group = groups[(section, hsn, uqc, rate)]
-        records = output[section]
+        records = grouped_output[section]
         records.append({"num": len(records) + 1, "hsn_sc": hsn, "desc": "Goods", "uqc": uqc, "qty": json_amount(group["qty"]), "rt": json_amount(rate), "txval": json_amount(group["txval"]), "iamt": json_amount(group["iamt"]), "camt": json_amount(group["camt"]), "samt": json_amount(group["samt"]), "csamt": json_amount(group["csamt"])})
+    output = {
+        section: records
+        for section, records in grouped_output.items()
+        if records
+    }
     return output if any(output.values()) else {}
 
 
@@ -496,13 +501,6 @@ def build_b2cs(
         )
         if (
             mode == CLEAN_PORTAL
-            and amounts["txval"] == Decimal("0.00")
-            and total_tax == Decimal("0.00")
-        ):
-            continue
-        if (
-            mode == GSTTOOL_COMPATIBLE
-            and rate != Decimal("3.00")
             and amounts["txval"] == Decimal("0.00")
             and total_tax == Decimal("0.00")
         ):
@@ -835,8 +833,10 @@ def validate_gstr1_schema(
 
     hsn = payload.get("hsn")
     if hsn is not None:
-        if not isinstance(hsn, dict) or set(hsn.keys()) != {"hsn_b2b", "hsn_b2c"}:
+        if not isinstance(hsn, dict) or set(hsn.keys()) - {"hsn_b2b", "hsn_b2c"}:
             errors.append("HSN must contain only hsn_b2b and hsn_b2c")
+        elif not set(hsn.keys()):
+            errors.append("HSN must contain at least one populated section")
         else:
             allowed_hsn_keys = {
                 "num",
@@ -853,8 +853,8 @@ def validate_gstr1_schema(
                 "csamt",
             }
             required_hsn_keys = {"num", "hsn_sc", "desc", "uqc", "qty", "rt", "txval"}
-            for section in ("hsn_b2b", "hsn_b2c"):
-                if not isinstance(hsn.get(section), list):
+            for section in hsn:
+                if not isinstance(hsn[section], list):
                     errors.append(f"HSN {section} must be a list")
                     continue
                 for item in hsn[section]:
