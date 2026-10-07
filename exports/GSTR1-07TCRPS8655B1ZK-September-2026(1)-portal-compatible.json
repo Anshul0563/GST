@@ -718,112 +718,7 @@
     ]
   },
   "hsn": {
-    "hsn_b2b": [
-      {
-        "num": 1,
-        "hsn_sc": "7018",
-        "desc": "Goods",
-        "uqc": "OTH",
-        "qty": 1,
-        "rt": 3,
-        "txval": 187.38,
-        "iamt": 5.62,
-        "camt": 0,
-        "samt": 0,
-        "csamt": 0
-      },
-      {
-        "num": 2,
-        "hsn_sc": "71131110",
-        "desc": "Goods",
-        "uqc": "OTH",
-        "qty": 3,
-        "rt": 3,
-        "txval": 265.05,
-        "iamt": 7.95,
-        "camt": 0,
-        "samt": 0,
-        "csamt": 0
-      },
-      {
-        "num": 3,
-        "hsn_sc": "71131130",
-        "desc": "Goods",
-        "uqc": "OTH",
-        "qty": 2,
-        "rt": 3,
-        "txval": 186.4,
-        "iamt": 5.6,
-        "camt": 0,
-        "samt": 0,
-        "csamt": 0
-      },
-      {
-        "num": 4,
-        "hsn_sc": "7117",
-        "desc": "Goods",
-        "uqc": "OTH",
-        "qty": 45,
-        "rt": 3,
-        "txval": 6172.79,
-        "iamt": 166.79,
-        "camt": 9.2,
-        "samt": 9.18,
-        "csamt": 0
-      },
-      {
-        "num": 5,
-        "hsn_sc": "7117",
-        "desc": "Goods",
-        "uqc": "OTH",
-        "qty": 0,
-        "rt": 5,
-        "txval": 0,
-        "iamt": 0,
-        "camt": 0,
-        "samt": 0,
-        "csamt": 0
-      },
-      {
-        "num": 6,
-        "hsn_sc": "711790",
-        "desc": "Goods",
-        "uqc": "OTH",
-        "qty": 212,
-        "rt": 3,
-        "txval": 29007.32,
-        "iamt": 833.82,
-        "camt": 18.24,
-        "samt": 18.2,
-        "csamt": 0
-      },
-      {
-        "num": 7,
-        "hsn_sc": "732394",
-        "desc": "Goods",
-        "uqc": "OTH",
-        "qty": 14,
-        "rt": 18,
-        "txval": 2053.09,
-        "iamt": 369.55,
-        "camt": 0,
-        "samt": 0,
-        "csamt": 0
-      },
-      {
-        "num": 8,
-        "hsn_sc": "73239420",
-        "desc": "Goods",
-        "uqc": "OTH",
-        "qty": 5,
-        "rt": 18,
-        "txval": 751.19,
-        "iamt": 135.22,
-        "camt": 0,
-        "samt": 0,
-        "csamt": 0
-      }
-    ],
+    "hsn_b2b": [],
     "hsn_b2c": [
       {
         "num": 1,
@@ -845,8 +740,8 @@
         "uqc": "OTH",
         "qty": 3,
         "rt": 3,
-        "txval": 265.05,
-        "iamt": 7.95,
+        "txval": 279.62,
+        "iamt": 8.38,
         "camt": 0,
         "samt": 0,
         "csamt": 0
@@ -871,8 +766,8 @@
         "uqc": "OTH",
         "qty": 45,
         "rt": 3,
-        "txval": 6172.79,
-        "iamt": 166.79,
+        "txval": 6186.7,
+        "iamt": 167.2,
         "camt": 9.2,
         "samt": 9.18,
         "csamt": 0
@@ -892,6 +787,19 @@
       },
       {
         "num": 6,
+        "hsn_sc": "71171100",
+        "desc": "Goods",
+        "uqc": "OTH",
+        "qty": 13,
+        "rt": 3,
+        "txval": 2298.98,
+        "iamt": 63.86,
+        "camt": 2.58,
+        "samt": 2.58,
+        "csamt": 0
+      },
+      {
+        "num": 7,
         "hsn_sc": "711790",
         "desc": "Goods",
         "uqc": "OTH",
@@ -904,7 +812,7 @@
         "csamt": 0
       },
       {
-        "num": 7,
+        "num": 8,
         "hsn_sc": "732394",
         "desc": "Goods",
         "uqc": "OTH",
@@ -917,7 +825,7 @@
         "csamt": 0
       },
       {
-        "num": 8,
+        "num": 9,
         "hsn_sc": "73239420",
         "desc": "Goods",
         "uqc": "OTH",
