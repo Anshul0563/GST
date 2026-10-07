@@ -399,11 +399,14 @@ def split_document_ranges(values: list[str]) -> list[list[str]]:
     ordered = sorted(values, key=document_sort_key)
     ranges: list[list[str]] = []
     current = [ordered[0]]
+    previous_series = document_series_key(ordered[0])
     previous_number = document_number(ordered[0])
     for value in ordered[1:]:
+        current_series = document_series_key(value)
         current_number = document_number(value)
         if (
-            previous_number is not None
+            current_series == previous_series
+            and previous_number is not None
             and current_number is not None
             and current_number == previous_number + 1
         ):
@@ -411,6 +414,7 @@ def split_document_ranges(values: list[str]) -> list[list[str]]:
         else:
             ranges.append(current)
             current = [value]
+        previous_series = current_series
         previous_number = current_number
     ranges.append(current)
     return ranges
