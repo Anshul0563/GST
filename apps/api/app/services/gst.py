@@ -322,28 +322,25 @@ def build_hsn(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     for row in rows:
         if not valid_for_export(row) or is_nil_supply(row) or not row.get("hsn"):
             continue
-        sections = ["hsn_b2b"] if row.get("recipient_gstin") else ["hsn_b2c"]
-        if row.get("etin") and "hsn_b2b" not in sections:
-            sections.append("hsn_b2b")
-        for section in sections:
-            key = (
-                section,
-                str(row.get("hsn")).strip(),
-                str(row.get("uqc") or "OTH").strip(),
-                money(row.get("gst_rate")),
-            )
-            group = groups[key]
-            targets = {
-                "qty": "qty",
-                "gross_amount": "val",
-                "taxable_value": "txval",
-                "igst": "iamt",
-                "cgst": "camt",
-                "sgst": "samt",
-                "cess": "csamt",
-            }
-            for field, target in targets.items():
-                group[target] = money(group[target]) + money(row.get(field))
+        section = "hsn_b2b" if row.get("recipient_gstin") else "hsn_b2c"
+        key = (
+            section,
+            str(row.get("hsn")).strip(),
+            str(row.get("uqc") or "OTH").strip(),
+            money(row.get("gst_rate")),
+        )
+        group = groups[key]
+        targets = {
+            "qty": "qty",
+            "gross_amount": "val",
+            "taxable_value": "txval",
+            "igst": "iamt",
+            "cgst": "camt",
+            "sgst": "samt",
+            "cess": "csamt",
+        }
+        for field, target in targets.items():
+            group[target] = money(group[target]) + money(row.get(field))
     output: dict[str, list[dict[str, Any]]] = {"hsn_b2b": [], "hsn_b2c": []}
     for section, hsn, uqc, rate in sorted(groups):
         group = groups[(section, hsn, uqc, rate)]

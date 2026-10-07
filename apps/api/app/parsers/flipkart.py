@@ -286,6 +286,7 @@ class FlipkartParser(MarketplaceParser):
         }
 
         invoice_metadata_by_suborder: dict[str, dict[str, str]] = {}
+        item_metadata_by_order_item: dict[str, dict[str, str]] = {}
         source_period_counts: Counter[str] = Counter()
 
         # First pass: collect invoice metadata from Tax_invoice_details or similar metadata rows.
@@ -315,6 +316,37 @@ class FlipkartParser(MarketplaceParser):
 
                     for _, series in data.iterrows():
                         row = series.to_dict()
+                        order_item_id = text(
+                            first_value(
+                                row,
+                                [
+                                    "order item id",
+                                    "order_item_id",
+                                    "suborder no",
+                                    "sub order num",
+                                ],
+                            )
+                        )
+                        if order_item_id:
+                            hsn = text(first_value(row, ["hsn code", "hsn"]))
+                            product_name = text(
+                                first_value(
+                                    row,
+                                    [
+                                        "product title/description",
+                                        "product description",
+                                        "item description",
+                                    ],
+                                )
+                            )
+                            if hsn or product_name:
+                                metadata = item_metadata_by_order_item.setdefault(
+                                    order_item_id, {}
+                                )
+                                if hsn:
+                                    metadata["hsn"] = hsn
+                                if product_name:
+                                    metadata["product_name"] = product_name
                         if self._is_invoice_metadata_row(row):
                             suborder = text(
                                 first_value(
@@ -421,6 +453,16 @@ class FlipkartParser(MarketplaceParser):
                                 txn["invoice_no"] = metadata["invoice_no"]
                                 if txn.get("doc_type") == "invoice":
                                     txn["doc_type"] = metadata["doc_type"]
+                        if order_item_id:
+                            item_metadata = item_metadata_by_order_item.get(order_item_id)
+                            if item_metadata:
+                                if not txn.get("hsn") and item_metadata.get("hsn"):
+                                    txn["hsn"] = item_metadata["hsn"]
+                                if (
+                                    not txn.get("product_name")
+                                    and item_metadata.get("product_name")
+                                ):
+                                    txn["product_name"] = item_metadata["product_name"]
 
                         if has_explicit_tax_split(row):
                             txn["_preserve_source_tax_split"] = True
