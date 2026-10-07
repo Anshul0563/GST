@@ -185,6 +185,30 @@ def test_snapdeal_parser_deduplicates_repeated_invoice_rows(monkeypatch):
     assert len(result.debug["duplicate_rows"]) == 1
 
 
+def test_snapdeal_parser_accepts_report_tcs_id_and_state_name(monkeypatch):
+    workbook = _workbook_rows()
+    frame = workbook[SHEET_7B].copy()
+    tcs_column = list(frame.iloc[0]).index("tcs gstin of snapdeal")
+    state_column = list(frame.iloc[0]).index("delivered state")
+    frame.iloc[1, tcs_column] = "07AABCJ8820B1C7"
+    frame.iloc[1, state_column] = "01-Jammu and Kashmir"
+    workbook[SHEET_7B] = frame
+    monkeypatch.setattr(
+        "app.parsers.snapdeal.raw_frames",
+        lambda path: list(workbook.items()),
+    )
+
+    result = SnapdealParser(SELLER, "082026").parse([Path("snapdeal.xlsx")])
+
+    assert result.errors == []
+    state_one = next(
+        transaction
+        for transaction in result.transactions
+        if transaction["buyer_state_code"] == "01"
+    )
+    assert state_one["etin"] == "07AABCJ8820B1C7"
+
+
 def test_real_snapdeal_report_has_expected_structure_when_available():
     path = Path("/home/jarvis/Downloads/Sc8f1c_AUG_2026_92415421_432337.xlsx")
     if not path.exists():

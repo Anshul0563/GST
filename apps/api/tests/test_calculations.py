@@ -1320,6 +1320,10 @@ class GstCalculationTests(unittest.TestCase):
                     "taxable_value": 10,
                     "gst_rate": 3,
                     "igst": 0.3,
+                    "hsn": "7117",
+                    "uqc": "PCS",
+                    "qty": 1,
+                    "gross_amount": 10.3,
                 }
             ),
         ]
@@ -1327,11 +1331,12 @@ class GstCalculationTests(unittest.TestCase):
 
         self.assertEqual(
             list(payload.keys()),
-            ["gstin", "fp", "version", "hash", "b2cs", "supeco", "doc_issue"],
+            ["gstin", "fp", "version", "hash", "b2cs", "supeco", "doc_issue", "hsn"],
         )
         self.assertEqual(payload["hash"], "hash")
         self.assertEqual(set(payload["supeco"].keys()), {"clttx"})
         self.assertNotIn("supeco_det", payload["supeco"])
+        self.assertEqual(set(payload["hsn"].keys()), {"hsn_b2b", "hsn_b2c"})
         self.assertEqual(
             set(payload["b2cs"][0].keys()),
             {"sply_ty", "rt", "typ", "pos", "txval", "iamt", "csamt"},

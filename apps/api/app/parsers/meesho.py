@@ -331,7 +331,7 @@ class MeeshoParser(MarketplaceParser):
                     financial_source_files.add(path.name)
 
                 # First pass → metadata collect
-                for _, frame in frames:
+                for sheet_name, frame in frames:
                     for _, series in frame.iterrows():
                         row = series.to_dict()
 
@@ -712,7 +712,7 @@ class MeeshoParser(MarketplaceParser):
             }
             for category, totals in source_breakdown.items()
         }
-        result.debug["meesho_document_issue_rows"] = len(result.transactions)
+        result.debug["meesho_document_issue_rows"] = len(metadata_only_transactions)
         result.debug["meesho_source_periods"] = dict(source_period_counts)
         if source_period_counts:
             result.debug["meesho_dominant_period"] = source_period_counts.most_common(1)[0][0]

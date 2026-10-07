@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import Counter
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -160,6 +161,25 @@ def _gstin(
     return value.upper()
 
 
+def _snapdeal_etin(
+    row: dict[str, Any], field_names: list[str], sheet: str, row_number: int
+) -> str:
+    """Read Snapdeal's TCS identifier as reported, even when its GSTIN checksum is malformed."""
+    value = text(first_value(row, field_names))
+    if not value or not re.fullmatch(r"[0-9A-Za-z]{15}", value):
+        raise ValueError(f"Invalid Snapdeal TCS GSTIN in {sheet} at row {row_number}")
+    return value.upper()
+
+
+def _state_code(value: Any, sheet: str, row_number: int) -> str:
+    raw = text(value)
+    if raw:
+        match = re.match(r"^(\d{2})(?:\s*-|\s*:|\s+|$)", raw)
+        if match:
+            return match.group(1)
+    raise ValueError(f"Invalid delivered state in {sheet} at row {row_number}")
+
+
 def _rate(value: Any, field: str, row_number: int) -> Decimal:
     rate = _decimal(value, field, row_number)
     if rate < 0 or rate > 100:
@@ -316,12 +336,10 @@ class SnapdealParser(MarketplaceParser):
     ) -> dict[str, Any]:
         seller = _gstin(row, ["gstin of seller"], SHEET_5B, row_number)
         self._validate_seller(seller, SHEET_5B, row_number)
-        etin = _gstin(row, ["tcs gstin of snapdeal"], SHEET_5B, row_number)
-        pos = text(first_value(row, ["delivered state"]))
-        if not pos or not pos.isdigit() or len(pos) != 2:
-            raise ValueError(
-                f"Invalid delivered state in {SHEET_5B} at row {row_number}"
-            )
+        etin = _snapdeal_etin(
+            row, ["tcs gstin of snapdeal"], SHEET_5B, row_number
+        )
+        pos = _state_code(first_value(row, ["delivered state"]), SHEET_5B, row_number)
         invoice_no = text(first_value(row, ["invoice number"]))
         sub_order_no = text(first_value(row, ["sub order no", "suborder no"]))
         invoice_date = parse_date(first_value(row, ["order invoice date"]))
@@ -378,10 +396,14 @@ class SnapdealParser(MarketplaceParser):
     ) -> dict[str, Any]:
         seller = _gstin(row, ["gstin of seller"], sheet, row_number)
         self._validate_seller(seller, sheet, row_number)
-        etin = _gstin(row, ["tcs gstin of snapdeal"], sheet, row_number)
-        pos = seller[:2] if intra else text(first_value(row, ["delivered state"]))
-        if not pos or not pos.isdigit() or len(pos) != 2:
-            raise ValueError(f"Invalid delivered state in {sheet} at row {row_number}")
+        etin = _snapdeal_etin(
+            row, ["tcs gstin of snapdeal"], sheet, row_number
+        )
+        pos = (
+            seller[:2]
+            if intra
+            else _state_code(first_value(row, ["delivered state"]), sheet, row_number)
+        )
         net = _decimal(
             first_value(row, ["aggregate taxable value"]),
             "aggregate taxable value",
@@ -492,7 +514,9 @@ class SnapdealParser(MarketplaceParser):
     ) -> None:
         seller = _gstin(row, ["gstin of seller"], SHEET_GSTR8, row_number)
         self._validate_seller(seller, SHEET_GSTR8, row_number)
-        etin = _gstin(row, ["tcs gstin of snapdeal"], SHEET_GSTR8, row_number)
+        etin = _snapdeal_etin(
+            row, ["tcs gstin of snapdeal"], SHEET_GSTR8, row_number
+        )
         summary = result.debug.setdefault("gstr8_summary", [])
         summary.append(
             {

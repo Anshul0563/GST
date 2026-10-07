@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, WifiOff } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, WifiOff, XCircle } from "lucide-react";
 
 export function StatCard({ label, value, detail, tone = "blue" }: { label: string; value: string; detail?: string; tone?: "blue" | "green" | "saffron" | "red" }) {
   const tones = {
@@ -114,9 +114,10 @@ export function SkeletonGrid() {
 export function StatusPill({ status }: { status: string }) {
   const ok = ["completed", "generated", "downloaded", "Active"].includes(status);
   const warn = ["queued", "processing", "Beta"].includes(status);
+  const error = ["failed", "completed_with_errors", "error", "invalid"].includes(status);
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : warn ? "border-amber-200 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/10 dark:text-slate-300"}`}>
-      {warn ? <Loader2 className="size-3 animate-spin" /> : <CheckCircle2 className="size-3" />}
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold ${ok ? "border-emerald-200 bg-emerald-50 text-emerald-700" : warn ? "border-amber-200 bg-amber-50 text-amber-700" : error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/10 dark:text-slate-300"}`}>
+      {warn ? <Loader2 className="size-3 animate-spin" /> : error ? <XCircle className="size-3" /> : <CheckCircle2 className="size-3" />}
       {status}
     </span>
   );

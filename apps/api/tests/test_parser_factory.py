@@ -328,6 +328,11 @@ def test_run_import_parser_replaces_old_platform_period_rows_on_reupload(tmp_pat
         assert second_batch.parsed_rows == 1
         assert second_batch.error_rows == 0
         assert '"replaced_platform_period_rows": 1' in (second_batch.error_report_json or "")
+        remaining_batches = db.scalars(select(PlatformImportBatch)).all()
+        assert [item.id for item in remaining_batches] == [second_batch.id]
+        assert '"replaced_platform_period_batches": 1' in (
+            second_batch.error_report_json or ""
+        )
     finally:
         db.close()
 

@@ -1,5 +1,6 @@
 import json
 import shutil
+from calendar import month_name
 from collections import Counter
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -229,6 +230,12 @@ def require_valid_period(period: str | None) -> str:
     if not validate_period(normalized):
         raise HTTPException(422, "Invalid filing period")
     return normalized
+
+
+def gstr1_export_filename(gstin: str, period: str, extension: str) -> str:
+    month = int(period[:2])
+    year = period[2:]
+    return f"GSTR1-{gstin.upper()}-{month_name[month]}-{year}.{extension}"
 
 
 def normalize_profile_payload(payload: GSTProfileIn) -> tuple[str, str]:
@@ -790,6 +797,59 @@ def clear_platform_period_transactions(batch: PlatformImportBatch, db: Session) 
         db.delete(row)
     db.flush()
     return len(rows)
+
+
+def remove_previous_platform_period_batches(
+    batch: PlatformImportBatch, db: Session
+) -> int:
+    """Keep only the newest successful import for a platform and filing period."""
+    previous_batches = db.scalars(
+        select(PlatformImportBatch).where(
+            PlatformImportBatch.user_id == batch.user_id,
+            PlatformImportBatch.profile_id == batch.profile_id,
+            PlatformImportBatch.period == batch.period,
+            PlatformImportBatch.platform == batch.platform,
+            PlatformImportBatch.id != batch.id,
+        )
+    ).all()
+    removed = 0
+    stored_paths: list[str] = []
+    for previous in previous_batches:
+        if previous.status in {"queued", "processing"}:
+            continue
+        previous_transactions = db.scalars(
+            select(NormalizedTransaction).where(
+                NormalizedTransaction.batch_id == previous.id,
+                NormalizedTransaction.user_id == batch.user_id,
+            )
+        ).all()
+        for transaction in previous_transactions:
+            db.delete(transaction)
+        files = db.scalars(
+            select(UploadedFile).where(
+                UploadedFile.batch_id == previous.id,
+                UploadedFile.user_id == batch.user_id,
+            )
+        ).all()
+        stored_paths.extend(
+            uploaded.stored_path for uploaded in files if uploaded.stored_path
+        )
+        for uploaded in files:
+            db.delete(uploaded)
+        db.delete(previous)
+        removed += 1
+    db.flush()
+
+    for stored_path in stored_paths:
+        path = Path(stored_path)
+        try:
+            path.unlink(missing_ok=True)
+            parent = path.parent
+            if parent.exists() and not any(parent.iterdir()):
+                shutil.rmtree(parent, ignore_errors=True)
+        except OSError:
+            pass
+    return removed
 
 
 def clear_uploaded_files_for_profile_period(
@@ -1380,6 +1440,8 @@ async def upload_import(
     )
     db.add(batch)
     db.flush()
+    # A new upload replaces the previous import for this platform and period.
+    remove_previous_platform_period_batches(batch, db)
     stored_paths: list[Path] = []
     try:
         requested_slots = json.loads(file_slots) if file_slots else []
@@ -1539,7 +1601,7 @@ def run_import_parser(
         for txn in aggregated_transactions.values()
         if any(money(txn.get(field)) != 0 for field in financial_fields)
     ]
-    if not financial_rows:
+    if not financial_rows and not result.errors:
         result.errors.append(
             {
                 "error": "No financial transaction rows detected in the uploaded files.",
@@ -1548,9 +1610,13 @@ def run_import_parser(
         )
         aggregated_transactions.clear()
 
-    replaced_rows = clear_platform_period_transactions(batch, db)
-    if replaced_rows:
-        result.debug["replaced_platform_period_rows"] = replaced_rows
+    if not result.errors and financial_rows:
+        replaced_rows = clear_platform_period_transactions(batch, db)
+        if replaced_rows:
+            result.debug["replaced_platform_period_rows"] = replaced_rows
+        replaced_batches = remove_previous_platform_period_batches(batch, db)
+        if replaced_batches:
+            result.debug["replaced_platform_period_batches"] = replaced_batches
 
     inserted_rows = 0
     validation_error_rows = 0
@@ -1572,12 +1638,16 @@ def run_import_parser(
             existing = None
         if existing is not None:
             continue
+        persisted_fields = set(NormalizedTransaction.__table__.columns.keys())
+        persisted_txn = {
+            key: value for key, value in txn.items() if key in persisted_fields
+        }
         db.add(
             NormalizedTransaction(
                 user_id=batch.user_id,
                 profile_id=batch.profile_id,
                 batch_id=batch.id,
-                **txn,
+                **persisted_txn,
             )
         )
         inserted_rows += 1
@@ -2267,9 +2337,13 @@ def generate_gstr1(
     settings = get_settings()
     base = settings.export_dir / str(user.id) / profile.gstin / payload.period
     base.mkdir(parents=True, exist_ok=True)
-    json_path = base / "gstr1.json"
+    json_path = base / gstr1_export_filename(profile.gstin, payload.period, "json")
     json_path.write_text(json.dumps(gstr, indent=2), encoding="utf-8")
-    excel_path = write_gstr1_excel(base / "gstr1.xlsx", gstr, export_rows)
+    excel_path = write_gstr1_excel(
+        base / gstr1_export_filename(profile.gstin, payload.period, "xlsx"),
+        gstr,
+        export_rows,
+    )
     export = GSTR1JsonExport(
         user_id=user.id,
         profile_id=profile.id,
@@ -2369,7 +2443,11 @@ def gstr1_export_download(
                 )
             )
         db.commit()
-        return FileResponse(export.excel_path, filename=Path(export.excel_path).name)
+        profile = db.get(GSTProfile, export.profile_id)
+        filename = gstr1_export_filename(
+            profile.gstin if profile else "GSTIN", export.period, "xlsx"
+        )
+        return FileResponse(export.excel_path, filename=filename)
     if not export.json_path:
         raise HTTPException(404, "GSTR-1 JSON not found")
     uploaded_files_deleted = clear_uploaded_files_for_profile_period(
@@ -2392,14 +2470,18 @@ def gstr1_export_download(
             )
         )
     db.commit()
-    return FileResponse(export.json_path, filename=Path(export.json_path).name)
+    profile = db.get(GSTProfile, export.profile_id)
+    filename = gstr1_export_filename(
+        profile.gstin if profile else "GSTIN", export.period, "json"
+    )
+    return FileResponse(export.json_path, filename=filename)
 
 
 @router.get("/gstr1/preview/{period}")
 def preview_gstr1(
     period: str,
     profile_id: int,
-    export_mode: str = GSTTOOL_COMPATIBLE,
+    export_mode: str = CLEAN_PORTAL,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -2490,7 +2572,11 @@ def download_json(
     )
     export.status = "downloaded"
     db.commit()
-    return FileResponse(export.json_path, filename=f"gstr1-{period}.json")
+    profile = db.get(GSTProfile, profile_id)
+    filename = gstr1_export_filename(
+        profile.gstin if profile else "GSTIN", period, "json"
+    )
+    return FileResponse(export.json_path, filename=filename)
 
 
 @router.get("/gstr1/download-excel/{period}")
@@ -2520,7 +2606,11 @@ def download_excel(
     )
     export.status = "downloaded"
     db.commit()
-    return FileResponse(export.excel_path, filename=f"gstr1-{period}.xlsx")
+    profile = db.get(GSTProfile, profile_id)
+    filename = gstr1_export_filename(
+        profile.gstin if profile else "GSTIN", period, "xlsx"
+    )
+    return FileResponse(export.excel_path, filename=filename)
 
 
 @router.post("/tally/company")

@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   Trash2,
   UploadCloud,
+  XCircle,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -374,10 +375,14 @@ export function ImportsPage() {
         );
         if (TERMINAL_IMPORT_STATUSES.has(status.status)) break;
       }
-      const hasErrors = finalStatus.error_rows > 0;
-      if (hasErrors) {
+      const importSucceeded =
+        finalStatus.status === "completed" && finalStatus.error_rows === 0;
+      if (!importSucceeded) {
         setErrors(await getImportErrors(workspace.token, batch.id));
         setFileUploadStatus("error");
+        setProgress(
+          `Import failed: ${finalStatus.status}. Parsed ${finalStatus.parsed_rows}, errors ${finalStatus.error_rows}.`,
+        );
       } else {
         setFileUploadStatus("success");
         setUploadedFileNames(files.map((file) => file?.name || ""));
@@ -517,15 +522,29 @@ export function ImportsPage() {
                 {platformCards.map((item) => {
                   const active = item.key === selected?.key;
                   const latestBatch = latestBatchesByPlatform[item.key];
-                  const successfulBatch =
-                    successfulBatchesByPlatform[item.key] ||
-                    (activeBatch?.platform === item.key &&
-                    activeBatch.status === "completed" &&
-                    activeBatch.error_rows === 0
+                  const currentBatch =
+                    activeBatch?.platform === item.key &&
+                    (!latestBatch || activeBatch.id >= latestBatch.id)
                       ? activeBatch
-                      : undefined);
-                  const uploadSuccess =
-                    successfulPlatforms[item.key] || Boolean(successfulBatch);
+                      : latestBatch;
+                  const uploadSuccess = currentBatch
+                    ? currentBatch.status === "completed" &&
+                      currentBatch.error_rows === 0
+                    : Boolean(successfulPlatforms[item.key]);
+                  const uploadError = Boolean(
+                    currentBatch &&
+                      (currentBatch.error_rows > 0 ||
+                        ["failed", "completed_with_errors"].includes(
+                          currentBatch.status,
+                        )),
+                  );
+                  const deletableBatch =
+                    currentBatch &&
+                    ["completed", "completed_with_errors", "failed"].includes(
+                      currentBatch.status,
+                    )
+                      ? currentBatch
+                      : undefined;
                   return (
                     <div
                       key={item.key}
@@ -562,6 +581,8 @@ export function ImportsPage() {
                       className={`platform-card-shadow flex min-h-52 flex-col items-center justify-between rounded-lg border p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xl dark:bg-slate-950 ${
                         uploadSuccess
                           ? "border-emerald-400 bg-emerald-50/70 ring-2 ring-emerald-400/20 dark:border-emerald-500/50 dark:bg-emerald-950/20"
+                          : uploadError
+                            ? "border-rose-400 bg-rose-50/80 ring-2 ring-rose-400/20 dark:border-rose-500/50 dark:bg-rose-950/20"
                           : active
                             ? "border-[#1746A2] bg-white ring-2 ring-[#1746A2]/20 dark:bg-slate-950"
                             : "border-slate-200 bg-white dark:border-white/10 dark:bg-slate-950"
@@ -569,17 +590,17 @@ export function ImportsPage() {
                     >
                       <div className="relative grid w-full justify-items-center">
                         <PlatformLogo platform={item.key} name={item.name} />
-                        {successfulBatch && (
+                        {deletableBatch && (
                           <button
                             type="button"
                             title={`Delete ${item.name} import`}
                             aria-label={`Delete ${item.name} import`}
                             onClick={(event) => {
                               event.stopPropagation();
-                              void removeBatch(successfulBatch);
+                              void removeBatch(deletableBatch);
                             }}
                             className="absolute right-1 top-1 grid size-9 place-items-center rounded-full bg-white text-rose-600 shadow-md ring-1 ring-rose-100 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-900 dark:ring-rose-900/50"
-                            disabled={deletingId === successfulBatch.id}
+                            disabled={deletingId === deletableBatch.id}
                           >
                             <Trash2 className="size-4" />
                           </button>
@@ -590,6 +611,12 @@ export function ImportsPage() {
                             Successfully Imported
                           </div>
                         )}
+                        {uploadError && (
+                          <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-rose-100 px-3 py-1 text-xs font-black text-rose-700">
+                            <XCircle className="size-4" />
+                            Import Error
+                          </div>
+                        )}
                         <p className="mt-0.5 text-sm font-semibold text-slate-500">
                           {platformShortLabel(item.key)}
                         </p>
@@ -598,12 +625,18 @@ export function ImportsPage() {
                         className={`mt-5 rounded-full px-5 py-2 text-xs font-black uppercase tracking-wide ${
                           uploadSuccess
                             ? "bg-emerald-600 text-white"
+                            : uploadError
+                              ? "bg-rose-600 text-white"
                             : active
                               ? "bg-[#1746A2] text-white"
                               : "bg-slate-100 text-slate-900 dark:bg-white/10 dark:text-white"
                         }`}
                       >
-                        {uploadSuccess ? "✓ Import Successful" : "Import Data"}
+                        {uploadSuccess
+                          ? "✓ Import Successful"
+                          : uploadError
+                            ? "✕ Import Error"
+                            : "Import Data"}
                       </span>
                     </div>
                   );
@@ -750,6 +783,12 @@ export function ImportsPage() {
                   File uploaded successfully
                 </div>
               )}
+              {fileUploadStatus === "error" && (
+                <div className="mt-4 flex items-center gap-2 rounded-xl bg-rose-100 px-3 py-3 text-sm font-semibold text-rose-700">
+                  <XCircle className="size-4 shrink-0" />
+                  Import failed. Open the error report and fix the file before retrying.
+                </div>
+              )}
               <button
                 type="button"
                 onClick={startImport}
@@ -757,6 +796,8 @@ export function ImportsPage() {
                 className={`mt-5 inline-flex w-full items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold text-white transition sm:w-auto ${
                   fileUploadStatus === "success"
                     ? "bg-emerald-600"
+                    : fileUploadStatus === "error"
+                      ? "bg-rose-600"
                     : fileUploadStatus === "uploading"
                       ? "bg-slate-500"
                       : "bg-[#10244d] disabled:cursor-not-allowed disabled:opacity-50"
@@ -781,7 +822,7 @@ export function ImportsPage() {
                 )}
               </button>
               {progress && (
-                <div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
+                <div className={`mt-4 rounded-2xl p-4 text-sm font-semibold ${fileUploadStatus === "error" ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"}`}>
                   {progress}
                 </div>
               )}

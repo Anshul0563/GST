@@ -16,12 +16,17 @@ function periodLabel(period: string) {
   return `${label} ${year}`;
 }
 
+function exportFilename(gstin: string | undefined, period: string | undefined, extension: "json" | "xlsx") {
+  if (!gstin || !period) return `GSTR1-export.${extension}`;
+  return `GSTR1-${gstin}-${periodLabel(period).replace(/\s+/g, "-")}.${extension}`;
+}
+
 export function Gstr1Page() {
   const workspace = useWorkspace();
   const activeProfileId = workspace.profile?.id;
   const activeProfilePeriod = workspace.profile?.return_period;
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
-  const [exportMode, setExportMode] = useState<Gstr1ExportMode>("gsttool_compatible");
+  const [exportMode, setExportMode] = useState<Gstr1ExportMode>("clean_portal");
   const [modePreview, setModePreview] = useState<Gstr1Payload | null>(null);
   const [parityReport, setParityReport] = useState<Gstr1ParityReport>(null);
   const [downloads, setDownloads] = useState<{ download_json: string; download_excel: string } | null>(null);
@@ -128,7 +133,15 @@ export function Gstr1Page() {
       setParityReport(result.parity_report ?? null);
       await workspace.refresh();
       await loadHistory();
-      await downloadAuthenticatedFile(workspace.token, format === "json" ? result.download_json : result.download_excel, `gstr1-${workspace.profile.return_period}.${format === "json" ? "json" : "xlsx"}`);
+      await downloadAuthenticatedFile(
+        workspace.token,
+        format === "json" ? result.download_json : result.download_excel,
+        exportFilename(
+          workspace.profile.gstin,
+          workspace.profile.return_period,
+          format === "json" ? "json" : "xlsx",
+        ),
+      );
     } catch (exc) {
       setError(exc instanceof Error ? exc.message : `Could not export GSTR-1 ${format.toUpperCase()}`);
     } finally {
@@ -235,7 +248,7 @@ export function Gstr1Page() {
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <button onClick={generate} disabled={busy || !workspace.profile || Boolean(summary?.pending_errors)} className="rounded-2xl bg-[#10244d] px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{busy ? "Generating files..." : "Save to history"}</button>
-              {downloads && <><button onClick={() => downloadExport(downloads.download_json, `gstr1-${workspace.profile?.return_period || "export"}.json`)} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> JSON</button><button onClick={() => downloadExport(downloads.download_excel, `gstr1-${workspace.profile?.return_period || "export"}.xlsx`)} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Excel</button></>}
+              {downloads && <><button onClick={() => downloadExport(downloads.download_json, exportFilename(workspace.profile?.gstin, workspace.profile?.return_period, "json"))} className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white"><Download className="size-4" /> JSON</button><button onClick={() => downloadExport(downloads.download_excel, exportFilename(workspace.profile?.gstin, workspace.profile?.return_period, "xlsx"))} className="inline-flex items-center gap-2 rounded-2xl bg-[#1746A2] px-5 py-3 text-sm font-bold text-white"><FileSpreadsheet className="size-4" /> Excel</button></>}
             </div>
             {error && <div className="mt-5 rounded-2xl bg-rose-50 p-4 text-sm font-bold text-rose-700">{error}</div>}
           </Panel>
@@ -248,8 +261,8 @@ export function Gstr1Page() {
           {loadingHistory ? <EmptyState title="Loading exports" body="Fetching generated GSTR-1 files." /> : history.length ? <div className="space-y-3">{history.map((item) => <div key={item.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm dark:bg-white/5 md:grid-cols-[1fr_auto_auto_auto]">
             <div><b>Export #{item.id}</b><p className="text-xs text-slate-500">{item.period} / {new Date(item.created_at).toLocaleString()}</p></div>
             <StatusPill status={item.status} />
-            <button onClick={() => downloadExport(item.download_json, `gstr1-${item.period}.json`)} className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">JSON</button>
-            <button onClick={() => downloadExport(item.download_excel, `gstr1-${item.period}.xlsx`)} className="rounded-xl bg-[#1746A2] px-3 py-2 text-center text-xs font-bold text-white">Excel</button>
+            <button onClick={() => downloadExport(item.download_json, exportFilename(workspace.profile?.gstin, item.period, "json"))} className="rounded-xl bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white">JSON</button>
+            <button onClick={() => downloadExport(item.download_excel, exportFilename(workspace.profile?.gstin, item.period, "xlsx"))} className="rounded-xl bg-[#1746A2] px-3 py-2 text-center text-xs font-bold text-white">Excel</button>
           </div>)}</div> : <EmptyState title="No generated files" body="Generated JSON and Excel files will appear here." />}
         </Panel>
       </div>

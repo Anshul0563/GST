@@ -322,7 +322,12 @@ def build_hsn(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         if not valid_for_export(row) or is_nil_supply(row) or not row.get("hsn"):
             continue
         section = "hsn_b2b" if row.get("recipient_gstin") else "hsn_b2c"
-        key = (section, str(row.get("hsn")).strip(), str(row.get("uqc") or "OTH").strip(), money(row.get("gst_rate")))
+        key = (
+            section,
+            str(row.get("hsn")).strip(),
+            str(row.get("uqc") or "OTH").strip(),
+            money(row.get("gst_rate")),
+        )
         group = groups[key]
         targets = {
             "qty": "qty",
@@ -335,12 +340,11 @@ def build_hsn(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
         }
         for field, target in targets.items():
             group[target] = money(group[target]) + money(row.get(field))
-    records = []
     output: dict[str, list[dict[str, Any]]] = {"hsn_b2b": [], "hsn_b2c": []}
     for section, hsn, uqc, rate in sorted(groups):
         group = groups[(section, hsn, uqc, rate)]
         records = output[section]
-        records.append({"num": len(records) + 1, "hsn_sc": hsn, "desc": "", "uqc": uqc, "qty": json_amount(group["qty"]), "val": json_amount(group["val"]), "rt": json_amount(rate), "txval": json_amount(group["txval"]), "iamt": json_amount(group["iamt"]), "camt": json_amount(group["camt"]), "samt": json_amount(group["samt"]), "csamt": json_amount(group["csamt"])})
+        records.append({"num": len(records) + 1, "hsn_sc": hsn, "desc": "", "uqc": uqc, "qty": json_amount(group["qty"]), "rt": json_amount(rate), "txval": json_amount(group["txval"]), "iamt": json_amount(group["iamt"]), "camt": json_amount(group["camt"]), "samt": json_amount(group["samt"]), "csamt": json_amount(group["csamt"])})
     return output if any(output.values()) else {}
 
 
@@ -810,6 +814,38 @@ def validate_gstr1_schema(
                     errors.append(
                         f"doc_issue net_issue mismatch for {doc.get('from')} to {doc.get('to')}"
                     )
+
+    hsn = payload.get("hsn")
+    if hsn is not None:
+        if not isinstance(hsn, dict) or set(hsn.keys()) != {"hsn_b2b", "hsn_b2c"}:
+            errors.append("HSN must contain only hsn_b2b and hsn_b2c")
+        else:
+            allowed_hsn_keys = {
+                "num",
+                "hsn_sc",
+                "desc",
+                "user_desc",
+                "uqc",
+                "qty",
+                "rt",
+                "txval",
+                "iamt",
+                "camt",
+                "samt",
+                "csamt",
+            }
+            required_hsn_keys = {"num", "hsn_sc", "desc", "uqc", "qty", "rt", "txval"}
+            for section in ("hsn_b2b", "hsn_b2c"):
+                if not isinstance(hsn.get(section), list):
+                    errors.append(f"HSN {section} must be a list")
+                    continue
+                for item in hsn[section]:
+                    if set(item.keys()) - allowed_hsn_keys:
+                        errors.append(f"HSN key mismatch for {item.get('hsn_sc')}")
+                    if not required_hsn_keys.issubset(item.keys()):
+                        errors.append(f"HSN mandatory fields missing for {item.get('hsn_sc')}")
+                    if "val" in item:
+                        errors.append(f"HSN val is not allowed for {item.get('hsn_sc')}")
 
     b2cs_total = sum(money(x.get("txval")) for x in payload.get("b2cs", []))
     b2cs_total += sum(

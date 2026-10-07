@@ -52,6 +52,29 @@ def test_meesho_credit_conversion_is_included_in_document_issue_metadata(tmp_pat
     )
 
 
+def test_meesho_metadata_file_can_be_parsed_without_financial_files(tmp_path: Path):
+    invoice = tmp_path / "Tax_invoice_details.xlsx"
+    pd.DataFrame(
+        [
+            {
+                "Type": "INVOICE",
+                "Order Date": "2026-09-01",
+                "Suborder No.": "SO-METADATA-ONLY",
+                "Product Description": "Jewellery",
+                "HSN": "711790",
+                "Invoice No.": "INV-METADATA-ONLY",
+            }
+        ]
+    ).to_excel(invoice, sheet_name="Invoice_Info", index=False)
+
+    result = MeeshoParser("07TCRPS8655B1ZK", "092026").parse([invoice])
+
+    assert result.errors == []
+    assert len(result.transactions) == 1
+    assert result.transactions[0]["invoice_no"] == "INV-METADATA-ONLY"
+    assert result.transactions[0]["source_file"] == "Tax_invoice_details.xlsx:Invoice_Info"
+
+
 def test_meesho_report_month_includes_prior_month_adjustment(tmp_path: Path):
     sales = tmp_path / "tcs_sales.xlsx"
     pd.DataFrame(
