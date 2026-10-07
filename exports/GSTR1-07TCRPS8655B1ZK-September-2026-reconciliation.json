@@ -1,0 +1,74 @@
+{
+  "source_rows": 552,
+  "valid_non_zero_rows": 503,
+  "source_totals": {
+    "taxable_value": 41308.16,
+    "igst": 1589.25,
+    "cgst": 30.02,
+    "sgst": 29.96,
+    "cess": 0
+  },
+  "source_by_platform": {
+    "flipkart": {
+      "rows": 34,
+      "taxable_value": 1075.05,
+      "igst": 32.27,
+      "cgst": 0,
+      "sgst": 0,
+      "cess": 0
+    },
+    "meesho": {
+      "rows": 460,
+      "taxable_value": 37934.13,
+      "igst": 1493.12,
+      "cgst": 27.44,
+      "sgst": 27.38,
+      "cess": 0
+    },
+    "snapdeal": {
+      "rows": 9,
+      "taxable_value": 2298.98,
+      "igst": 63.86,
+      "cgst": 2.58,
+      "sgst": 2.58,
+      "cess": 0
+    }
+  },
+  "b2cs_rows": 40,
+  "b2cs_totals": {
+    "taxable_value": 40950.69,
+    "igst": 1589.21,
+    "cgst": 30,
+    "sgst": 30,
+    "cess": 0
+  },
+  "nil_taxable": 357.48,
+  "b2cs_plus_nil_taxable": 41308.17,
+  "supeco_rows": 3,
+  "supeco_totals": {
+    "taxable_value": 41308.18,
+    "igst": 1589.2,
+    "cgst": 29.99,
+    "sgst": 30.01,
+    "cess": 0
+  },
+  "b2cs_plus_nil_minus_supeco": -0.01,
+  "tax_deltas_b2cs_minus_supeco": {
+    "igst": 0.01,
+    "cgst": 0.01,
+    "sgst": -0.01,
+    "cess": 0
+  },
+  "hsn_sections": {
+    "hsn_b2c": 8
+  },
+  "has_b2b_transactions": false,
+  "validation": {
+    "valid": false,
+    "errors": [
+      "Document range 6p5kc271043 to 6p5kc271430 implies 388 documents but totnum is 372",
+      "Document range 6p5kc27C303 to 6p5kc27C418 implies 116 documents but totnum is 90"
+    ],
+    "warnings": []
+  }
+}
