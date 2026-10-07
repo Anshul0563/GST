@@ -24,6 +24,7 @@ DOC_TYP = {
     "debit_note": "Debit Note",
     "credit_note": "Credit Note",
 }
+DOC_ISSUE_SERIAL_RE = re.compile(r"^[A-Za-z0-9/-]{1,16}$")
 
 
 def classify_supply(seller_gstin: str, pos: str | None) -> str:
@@ -434,6 +435,9 @@ def valid_document_number_for_doc_issue(row: dict[str, Any], invoice_no: str) ->
     if not invoice:
         return False
 
+    if not DOC_ISSUE_SERIAL_RE.fullmatch(invoice):
+        return False
+
     # Never allow pure fallback/order/suborder ids in document issue
     if re.fullmatch(r"\d{10,}_\d+", invoice):
         return False
@@ -578,7 +582,7 @@ def build_doc_issue(
         if not invoice_no:
             continue
         valid_document_number = valid_document_number_for_doc_issue(row, invoice_no)
-        if not valid_document_number and mode != GSTTOOL_COMPATIBLE:
+        if not valid_document_number:
             continue
         platform = str(row.get("platform") or "unknown").lower()
         group_key = document_group_key(row, invoice_no)
