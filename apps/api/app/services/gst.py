@@ -13,6 +13,7 @@ from app.services.validation import (
     validate_gstin,
     validate_period,
 )
+from app.utils.states import STATE_CODES
 
 GST_VERSION = "GST3.1.6"
 GSTTOOL_COMPATIBLE = "gsttool_compatible"
@@ -39,7 +40,8 @@ def json_amount(value: Any) -> float:
 
 def source_amount(row: dict[str, Any], field: str, precise: bool = False) -> Decimal:
     """Read source precision when it is available, falling back to normalized data."""
-    if not precise or str(row.get("platform") or "").lower() != "meesho":
+    platform = str(row.get("platform") or "").lower()
+    if not precise or platform != "meesho":
         return money(row.get(field))
     raw_value = row.get("raw_row_json")
     if not raw_value:
@@ -50,8 +52,6 @@ def source_amount(row: dict[str, Any], field: str, precise: bool = False) -> Dec
         return money(row.get(field))
     if not isinstance(raw, dict):
         return money(row.get(field))
-
-    platform = str(row.get("platform") or "").lower()
     fields = {
         "amazon": {
             "taxable_value": "tax exclusive gross",
@@ -206,6 +206,10 @@ def split_tax_evenly(total_tax: Decimal) -> tuple[Decimal, Decimal]:
     return half, money(total_tax - half)
 
 
+def state_sort_name(pos: object) -> str:
+    return STATE_CODES.get(str(pos or "").zfill(2), str(pos or ""))
+
+
 def normalize_export_mode(export_mode: str | None) -> str:
     normalized = str(export_mode or CLEAN_PORTAL).strip().lower()
     aliases = {
@@ -242,10 +246,10 @@ def valid_for_b2cs(row: dict[str, Any], export_mode: str = CLEAN_PORTAL) -> bool
     )
     if rate == Decimal("0.00"):
         return False
-    if taxable == Decimal("0.00") and total_tax == Decimal("0.00"):
-        return False
     if mode == GSTTOOL_COMPATIBLE:
         return True
+    if taxable == Decimal("0.00") and total_tax == Decimal("0.00"):
+        return False
     return not (taxable == Decimal("0.00") and total_tax == Decimal("0.00"))
 
 
@@ -481,9 +485,12 @@ def build_b2cs(
         groups[key]["csamt"] += source_amount(row, "cess", precise)
 
     output: list[dict[str, Any]] = []
-    for (sply_ty, rate, pos, typ), amounts in sorted(
-        groups.items(), key=lambda item: (item[0][0], item[0][2], item[0][1])
-    ):
+    group_items = groups.items()
+    if mode != GSTTOOL_COMPATIBLE:
+        group_items = sorted(
+            group_items, key=lambda item: (item[0][0], item[0][2], item[0][1])
+        )
+    for (sply_ty, rate, pos, typ), amounts in group_items:
         total_tax = (
             amounts["iamt"] + amounts["camt"] + amounts["samt"] + amounts["csamt"]
         )
@@ -525,9 +532,9 @@ def build_b2cs(
         output.append(base)
     output.sort(
         key=lambda row: (
-            str(row.get("sply_ty")),
-            str(row.get("pos")),
-            money(row.get("rt")),
+            str(row.get("sply_ty")) if mode != GSTTOOL_COMPATIBLE else "",
+            state_sort_name(row.get("pos")),
+            money(row.get("rt")) if mode != GSTTOOL_COMPATIBLE else 0,
         )
     )
     return output
@@ -557,7 +564,10 @@ def build_supeco(
         groups[etin]["cess"] += source_amount(row, "cess", precise)
 
     output = []
-    for etin, amounts in sorted(groups.items()):
+    group_items = groups.items()
+    if normalize_export_mode(export_mode) != GSTTOOL_COMPATIBLE:
+        group_items = sorted(group_items)
+    for etin, amounts in group_items:
         row = {
             "etin": etin,
             "suppval": json_amount(amounts["suppval"]),
@@ -702,14 +712,14 @@ def validate_gstr1_schema(
         "version",
         "hash",
         "b2cs",
+        "nil",
+        "hsn",
         "supeco",
         "doc_issue",
     ]
 
     allowed_top_keys = {*expected_top_keys, "nil", "hsn"}
-    if list(payload.keys()) != [key for key in expected_top_keys if key in payload] + [
-        key for key in ("nil", "hsn") if key in payload
-    ]:
+    if list(payload.keys()) != [key for key in expected_top_keys if key in payload]:
         errors.append("GSTR-1 top-level JSON key order drifted from accepted contract")
     if set(payload) - allowed_top_keys:
         errors.append("GSTR-1 contains unsupported top-level sections")
@@ -1060,11 +1070,11 @@ def build_gstr1_json(
         "version": GST_VERSION,
         "hash": "hash",
         "b2cs": b2cs,
-        "supeco": {"clttx": supeco_rows},
-        "doc_issue": build_doc_issue(valid_rows, mode),
     }
     if nil_rows:
         payload["nil"] = {"inv": nil_rows}
     if hsn_rows:
         payload["hsn"] = hsn_rows
+    payload["supeco"] = {"clttx": supeco_rows}
+    payload["doc_issue"] = build_doc_issue(valid_rows, mode)
     return payload
