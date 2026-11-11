@@ -187,6 +187,23 @@ def _rate(value: Any, field: str, row_number: int) -> Decimal:
     return rate
 
 
+def _summary_rate(taxable: Decimal, *taxes: Decimal) -> Decimal:
+    if taxable == Decimal("0.00"):
+        return Decimal("0.00")
+    return money(sum(taxes, Decimal("0.00")) * Decimal("100") / taxable)
+
+
+def _series_doc_type(value: Any) -> str | None:
+    normalized = text(value).lower().replace("_", " ")
+    if "credit" in normalized:
+        return "credit_note"
+    if "debit" in normalized:
+        return "debit_note"
+    if "invoice" in normalized or normalized in {"b2c", "b2b"}:
+        return "invoice"
+    return None
+
+
 class SnapdealParser(MarketplaceParser):
     platform = "snapdeal"
 
@@ -315,17 +332,17 @@ class SnapdealParser(MarketplaceParser):
             )
 
     def _source_key(self, sheet: str, txn: dict[str, Any]) -> tuple[Any, ...]:
-        if sheet == SHEET_5B:
-            return (sheet, txn.get("invoice_no"))
+        # Monetary values are not identity.  In particular, one invoice can
+        # have multiple source lines and aggregate reports can legitimately
+        # contain identical rows.  Keep the source provenance in the key so
+        # rows are never discarded merely because their values happen to be
+        # equal.  A true duplicate export must be identified before parsing
+        # (or by an explicit source record id), not guessed from tax amounts.
         return (
             sheet,
-            txn.get("buyer_state_code"),
-            txn.get("taxable_value"),
-            txn.get("gst_rate"),
-            txn.get("igst"),
-            txn.get("cgst"),
-            txn.get("sgst"),
-            txn.get("cess"),
+            txn.get("source_file"),
+            txn.get("_snapdeal_source_sheet"),
+            txn.get("_snapdeal_source_row"),
         )
 
     def _parse_5b(
@@ -478,11 +495,22 @@ class SnapdealParser(MarketplaceParser):
         return txn
 
     def _parse_hsn(
-        self, row: dict[str, Any], row_number: int, result: ParseResult
+        self, row: dict[str, Any], row_number: int, source_file: str, result: ParseResult
     ) -> None:
         seller = _gstin(row, ["gstin of seller"], SHEET_12, row_number)
         self._validate_seller(seller, SHEET_12, row_number)
         hsn = text(first_value(row, ["hsn number"])) or ""
+        qty = _decimal(first_value(row, ["total quantity"]), "total quantity", row_number)
+        total_value = _decimal(first_value(row, ["total value"]), "total value", row_number)
+        taxable = _decimal(
+            first_value(row, ["total taxable value"]),
+            "total taxable value",
+            row_number,
+        )
+        igst = _decimal(first_value(row, ["igst amount"]), "igst amount", row_number)
+        cgst = _decimal(first_value(row, ["cgst amount"]), "cgst amount", row_number)
+        sgst = _decimal(first_value(row, ["sgst amount"]), "sgst amount", row_number)
+        cess = _decimal(first_value(row, ["cess amount"]), "cess amount", row_number)
         summary = result.debug.setdefault("hsn_summary", {})
         item = summary.setdefault(
             hsn,
@@ -508,6 +536,30 @@ class SnapdealParser(MarketplaceParser):
             "cess": ["cess amount"],
         }.items():
             item[key] += _decimal(first_value(row, names), names[0], row_number)
+        result.transactions.append(
+            {
+                "platform": self.platform,
+                "gstin": self.gstin,
+                "filing_period": self.filing_period,
+                "source_file": source_file,
+                "_gstr1_section": "hsn",
+                "_snapdeal_source_sheet": SHEET_12,
+                "_snapdeal_source_row": row_number,
+                "validation_status": "valid",
+                "validation_errors": None,
+                "hsn_section": "hsn_b2c",
+                "hsn": hsn,
+                "uqc": "PCS",
+                "qty": qty,
+                "gross_amount": total_value,
+                "taxable_value": taxable,
+                "gst_rate": _summary_rate(taxable, igst, cgst, sgst, cess),
+                "igst": igst,
+                "cgst": cgst,
+                "sgst": sgst,
+                "cess": cess,
+            }
+        )
 
     def _parse_gstr8(
         self, row: dict[str, Any], row_number: int, result: ParseResult
@@ -567,33 +619,82 @@ class SnapdealParser(MarketplaceParser):
         )
 
     def _parse_series(
-        self, row: dict[str, Any], row_number: int, result: ParseResult
+        self, row: dict[str, Any], row_number: int, source_file: str, result: ParseResult
     ) -> None:
         gstin = _gstin(row, ["gstin"], SHEET_SERIES, row_number)
         self._validate_seller(gstin, SHEET_SERIES, row_number)
+        trx_type = text(first_value(row, ["trx type"]))
+        doc_type = _series_doc_type(trx_type)
+        start = text(first_value(row, ["invoice series from"]))
+        end = text(first_value(row, ["invoice series to"]))
+        total = _decimal(
+            first_value(row, ["total number of invoices"]),
+            "total number of invoices",
+            row_number,
+        )
+        cancelled = _decimal(
+            first_value(row, ["cancelled if any"]),
+            "cancelled if any",
+            row_number,
+        )
+        net = _decimal(
+            first_value(row, ["net invoice issued"]),
+            "net invoice issued",
+            row_number,
+        )
         result.debug.setdefault("invoice_series", []).append(
             {
-                "trx_type": text(first_value(row, ["trx type"])),
+                "trx_type": trx_type,
                 "gstin": gstin,
-                "from": text(first_value(row, ["invoice series from"])),
-                "to": text(first_value(row, ["invoice series to"])),
-                "total": _decimal(
-                    first_value(row, ["total number of invoices"]),
-                    "total number of invoices",
-                    row_number,
-                ),
-                "cancelled": _decimal(
-                    first_value(row, ["cancelled if any"]),
-                    "cancelled if any",
-                    row_number,
-                ),
-                "net": _decimal(
-                    first_value(row, ["net invoice issued"]),
-                    "net invoice issued",
-                    row_number,
-                ),
+                "from": start,
+                "to": end,
+                "total": total,
+                "cancelled": cancelled,
+                "net": net,
             }
         )
+        if doc_type and start and end:
+            if total < 0 or cancelled < 0 or net < 0:
+                raise ValueError(
+                    f"Negative document counts in {SHEET_SERIES} at row {row_number}"
+                )
+            if cancelled > total:
+                raise ValueError(
+                    f"Cancelled documents exceed total documents in {SHEET_SERIES} at row {row_number}"
+                )
+            if net != total - cancelled:
+                result.debug.setdefault("warnings", []).append(
+                    {
+                        "sheet": SHEET_SERIES,
+                        "row": row_number,
+                        "type": "document_count_mismatch",
+                        "total": str(total),
+                        "cancelled": str(cancelled),
+                        "source_net": str(net),
+                        "calculated_net": str(total - cancelled),
+                    }
+                )
+            result.transactions.append(
+                {
+                    "platform": self.platform,
+                    "gstin": self.gstin,
+                    "filing_period": self.filing_period,
+                    "source_file": source_file,
+                    "_gstr1_section": "doc_issue",
+                    "_snapdeal_source_sheet": SHEET_SERIES,
+                    "_snapdeal_source_row": row_number,
+                    "validation_status": "valid",
+                    "validation_errors": None,
+                    "invoice_no": start,
+                    "doc_type": doc_type,
+                    "_doc_issue_from": start,
+                    "_doc_issue_to": end,
+                    "_doc_issue_total": total,
+                    "_doc_issue_cancel": cancelled,
+                    "_doc_issue_net": net,
+                    "_doc_issue_order": row_number,
+                }
+            )
 
     def parse(self, files: list[Path]) -> ParseResult:
         result = ParseResult(debug=new_pos_debug(self.platform))
@@ -645,28 +746,44 @@ class SnapdealParser(MarketplaceParser):
                             self._record_aggregate_source(
                                 result, sheet, row, row_number
                             )
-                            finalized = finalize_transaction(
-                                self._parse_aggregate(
-                                    row, row_number, sheet, True, path.name
-                                )
+                            parsed = self._parse_aggregate(
+                                row, row_number, sheet, True, path.name
                             )
+                            self._validate_tax_amount(
+                                result,
+                                sheet=sheet,
+                                row_number=row_number,
+                                taxable=parsed["taxable_value"],
+                                rate=parsed["gst_rate"],
+                                actual=parsed["cgst"] + parsed["sgst"],
+                                field="cgst + sgst amount",
+                            )
+                            finalized = finalize_transaction(parsed)
                         elif sheet == SHEET_7B:
                             self._record_aggregate_source(
                                 result, sheet, row, row_number
                             )
-                            finalized = finalize_transaction(
-                                self._parse_aggregate(
-                                    row, row_number, sheet, False, path.name
-                                )
+                            parsed = self._parse_aggregate(
+                                row, row_number, sheet, False, path.name
                             )
+                            self._validate_tax_amount(
+                                result,
+                                sheet=sheet,
+                                row_number=row_number,
+                                taxable=parsed["taxable_value"],
+                                rate=parsed["gst_rate"],
+                                actual=parsed["igst"],
+                                field="igst amount",
+                            )
+                            finalized = finalize_transaction(parsed)
                         elif sheet == SHEET_12:
-                            self._parse_hsn(row, row_number, result)
+                            self._parse_hsn(row, row_number, path.name, result)
                             continue
                         elif sheet == SHEET_GSTR8:
                             self._parse_gstr8(row, row_number, result)
                             continue
                         else:
-                            self._parse_series(row, row_number, result)
+                            self._parse_series(row, row_number, path.name, result)
                             continue
                         document_date = finalized.get("document_date")
                         if document_date is not None:

@@ -716,6 +716,11 @@ def batch_status_response(batch: PlatformImportBatch, db: Session) -> BatchStatu
             select(NormalizedTransaction.taxable_value).where(
                 NormalizedTransaction.batch_id == batch.id,
                 NormalizedTransaction.user_id == batch.user_id,
+                # Snapdeal keeps the Section 12 HSN summary as a parser row
+                # for GSTR-1 export. It has no invoice number and duplicates
+                # the Section 7(B)(2) financial aggregate, so it must not be
+                # included in the import-status net-sale display.
+                NormalizedTransaction.invoice_no.is_not(None),
             )
         ).all()),
         Decimal("0.00"),
@@ -1639,6 +1644,39 @@ def run_import_parser(
         if existing is not None:
             continue
         persisted_fields = set(NormalizedTransaction.__table__.columns.keys())
+        # Preserve parser-only export section metadata inside the source
+        # snapshot so it survives a database round-trip.
+        section = txn.get("_gstr1_section")
+        hsn_section = txn.get("hsn_section")
+        document_series_group = txn.get("_document_series_group")
+        doc_issue_metadata = {
+            key: txn.get(key)
+            for key in (
+                "_doc_issue_from",
+                "_doc_issue_to",
+                "_doc_issue_total",
+                "_doc_issue_cancel",
+                "_doc_issue_net",
+                "_doc_issue_order",
+                "_exclude_doc_issue",
+            )
+            if txn.get(key) is not None
+        }
+        if section or hsn_section or document_series_group or doc_issue_metadata:
+            try:
+                raw_payload = json.loads(txn.get("raw_row_json") or "{}")
+            except (TypeError, json.JSONDecodeError):
+                raw_payload = {}
+            if not isinstance(raw_payload, dict):
+                raw_payload = {"_source_rows": raw_payload}
+            if section:
+                raw_payload["_gstr1_section"] = section
+            if hsn_section:
+                raw_payload["hsn_section"] = hsn_section
+            if document_series_group:
+                raw_payload["_document_series_group"] = document_series_group
+            raw_payload.update(doc_issue_metadata)
+            txn["raw_row_json"] = json.dumps(raw_payload, default=str)
         persisted_txn = {
             key: value for key, value in txn.items() if key in persisted_fields
         }
@@ -1903,7 +1941,12 @@ def transactions(
     rows = usable_transaction_rows(db.scalars(stmt).all(), db)
     if period:
         rows = [row for row in rows if transaction_matches_period(row, period)]
-    return rows[:1000]
+    # The GSTR-1 page requests the profile-wide set to discover which filing
+    # periods contain imported rows. Truncating that set can hide newer periods
+    # when older imports occupy the first 1,000 rows. Period-scoped requests
+    # remain bounded for the transaction table; the profile-wide discovery
+    # request must see every period.
+    return rows if period is None else rows[:1000]
 
 
 @router.get("/dashboard/summary", response_model=DashboardSummary)
@@ -1928,6 +1971,14 @@ def dashboard_summary(
     sgst = money(0)
     pending_errors = 0
     for row in rows:
+        # Explicit HSN/doc-issue rows are export sections, not dashboard
+        # taxable sales. Keep dashboard totals aligned with GSTR-1 totals.
+        if (
+            str(row.platform or "").lower() == "snapdeal"
+            and not row.invoice_no
+            and row.hsn
+        ):
+            continue
         taxable = money(row.taxable_value)
         row_gst = money(row.igst) + money(row.cgst) + money(row.sgst) + money(row.cess)
         # Nil-rated/exempt rows belong in the exempt supply section, not in
@@ -1966,6 +2017,7 @@ def dashboard_summary(
         state_totals[state]["taxable_value"] += taxable
         state_totals[state]["gst"] += row_gst
         state_totals[state]["rows"] += 1
+
     uploaded_file_stmt = select(UploadedFile).where(UploadedFile.user_id == user.id)
     uploaded_files = len(db.scalars(uploaded_file_stmt).all())
     export_stmt = select(GSTR1JsonExport).where(GSTR1JsonExport.user_id == user.id)
@@ -2178,7 +2230,33 @@ def delete_transaction(
 
 
 def transaction_to_dict(row: NormalizedTransaction) -> dict:
-    return TransactionOut.model_validate(row).model_dump(mode="json")
+    transaction = TransactionOut.model_validate(row).model_dump(mode="json")
+    # Raw source snapshots are not part of the public transaction response,
+    # but they are required by the GSTR-1 generator for precise source-level
+    # aggregation (especially Meesho's sub-paise values).  Keep this internal
+    # field on the generator row instead of silently downgrading to rounded
+    # normalized amounts.
+    transaction["raw_row_json"] = row.raw_row_json
+    try:
+        raw_payload = json.loads(row.raw_row_json or "{}")
+    except (TypeError, json.JSONDecodeError):
+        raw_payload = {}
+    if isinstance(raw_payload, dict):
+        for key in (
+            "_gstr1_section",
+            "hsn_section",
+            "_document_series_group",
+            "_doc_issue_from",
+            "_doc_issue_to",
+            "_doc_issue_total",
+            "_doc_issue_cancel",
+            "_doc_issue_net",
+            "_doc_issue_order",
+            "_exclude_doc_issue",
+        ):
+            if raw_payload.get(key):
+                transaction[key] = raw_payload[key]
+    return transaction
 
 
 def apply_transaction_update(row: NormalizedTransaction, values: dict) -> None:
@@ -2234,6 +2312,57 @@ def transaction_dicts(
     ]
 
 
+def gstr1_preview_summary(rows: list[dict], period: str) -> dict[str, float]:
+    """Return audit totals for the preview cards, including nil-rated rows.
+
+    B2CS is a grouped portal section and intentionally excludes nil-rated
+    supplies. The UI cards are labelled as overall GSTR-1 totals, so they must
+    use the period's financial rows rather than summing only B2CS groups.
+    Parser-only HSN/GSTR-8/document-series rows are excluded by their section
+    metadata and are never counted as financial supplies.
+    """
+    period_rows = [row for row in rows if row_belongs_to_period(row, period)]
+    financial_rows = [
+        row
+        for row in period_rows
+        if row.get("_gstr1_section") is None
+        and row.get("invoice_no")
+        and row.get("validation_status") in {"valid", "skipped"}
+        and any(
+            money(row.get(field)) != Decimal("0.00")
+            for field in ("taxable_value", "igst", "cgst", "sgst", "cess")
+        )
+    ]
+
+    def total(field: str) -> float:
+        return float(
+            money(sum((money(row.get(field)) for row in financial_rows), Decimal("0.00")))
+        )
+
+    return {
+        "taxable": total("taxable_value"),
+        "igst": total("igst"),
+        "cgst": total("cgst"),
+        "sgst": total("sgst"),
+        "cess": total("cess"),
+        "total_gst": float(
+            money(
+                sum(
+                    (
+                        money(row.get("igst"))
+                        + money(row.get("cgst"))
+                        + money(row.get("sgst"))
+                        + money(row.get("cess"))
+                        for row in financial_rows
+                    ),
+                    Decimal("0.00"),
+                )
+            )
+        ),
+        "financial_rows": len(financial_rows),
+    }
+
+
 def validation_error_count(
     user_id: int, profile_id: int, period: str, db: Session
 ) -> int:
@@ -2251,6 +2380,8 @@ def validation_error_count(
 def load_reference_gstr1(gstin: str, period: str) -> dict | None:
     candidates = [
         Path(f"/home/jarvis/Downloads/GSTR1_returns_{gstin}_monthly_{period}.json"),
+        # User-supplied original GST portal export kept under Documents.
+        Path(f"/home/jarvis/Documents/GSTR1_returns_{gstin}_monthly_{period}.json"),
         Path(f"/home/jarvis/Downloads/gstr1-{period}.json"),
         Path(f"exports/gst_bharat_gstr1_{gstin}_{period}.json"),
     ]
@@ -2481,7 +2612,7 @@ def gstr1_export_download(
 def preview_gstr1(
     period: str,
     profile_id: int,
-    export_mode: str = CLEAN_PORTAL,
+    export_mode: str = GSTTOOL_COMPATIBLE,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -2515,6 +2646,7 @@ def preview_gstr1(
         rows,
         mode,
     )
+    preview_summary = gstr1_preview_summary(rows, period)
     reference = load_reference_gstr1(profile.gstin, period)
     parity_report = None
     if mode == GSTTOOL_COMPATIBLE and reference is not None:
@@ -2541,6 +2673,7 @@ def preview_gstr1(
         "validation_blockers": blockers,
         "export_mode": export_mode,
         "parity_report": parity_report,
+        "summary": preview_summary,
         "preview": preview,
     }
 

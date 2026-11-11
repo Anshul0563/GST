@@ -119,19 +119,34 @@ def test_snapdeal_parser_uses_sheet_specific_mapping_and_source_tax(monkeypatch)
     result = SnapdealParser(SELLER, "082026").parse([Path("snapdeal.xlsx")])
 
     assert result.errors == []
-    assert len(result.transactions) == 3
+    normal_rows = [
+        row for row in result.transactions if row.get("_gstr1_section") is None
+    ]
+    assert len(normal_rows) == 3
+    assert len([row for row in result.transactions if row.get("_gstr1_section") == "hsn"]) == 1
+    assert len([row for row in result.transactions if row.get("_gstr1_section") == "doc_issue"]) == 1
     assert SHEET_GSTR8 in result.debug["ignored_sheets"]
-    assert result.transactions[0]["taxable_value"] == Decimal("100.13")
-    assert result.transactions[0]["igst"] == Decimal("18.99")
-    assert result.transactions[0]["order_id"] == "SUB-1001"
-    assert result.transactions[0]["order_item_id"] == "SUB-1001"
-    assert result.transactions[1]["taxable_value"] == Decimal("190.00")
-    assert result.transactions[1]["buyer_state_code"] == "07"
-    assert result.transactions[2]["buyer_state_code"] == "29"
+    assert normal_rows[0]["taxable_value"] == Decimal("100.13")
+    assert normal_rows[0]["igst"] == Decimal("18.99")
+    assert normal_rows[0]["order_id"] == "SUB-1001"
+    assert normal_rows[0]["order_item_id"] == "SUB-1001"
+    assert normal_rows[1]["taxable_value"] == Decimal("190.00")
+    assert normal_rows[1]["buyer_state_code"] == "07"
+    assert normal_rows[2]["buyer_state_code"] == "29"
     assert result.debug["source_totals"][SHEET_5B]["igst"] == Decimal("18.99")
     assert result.debug["source_totals"][SHEET_7A]["taxable_value"] == Decimal("190.00")
     assert result.debug["hsn_summary"][0]["hsn"] == "9983"
     assert result.debug["invoice_series"][0]["net"] == Decimal("1.00")
+
+    series_row = next(
+        row
+        for row in result.transactions
+        if row.get("_gstr1_section") == "doc_issue"
+    )
+    assert series_row["_doc_issue_from"] == "SD-1001"
+    assert series_row["_doc_issue_to"] == "SD-1001"
+    assert series_row["_doc_issue_total"] == Decimal("1.00")
+    assert series_row["_doc_issue_cancel"] == Decimal("0.00")
 
     payload = build_gstr1_json(SELLER, "082026", result.transactions)
     assert sum(Decimal(str(item["txval"])) for item in payload["b2cs"]) == Decimal(
@@ -140,7 +155,9 @@ def test_snapdeal_parser_uses_sheet_specific_mapping_and_source_tax(monkeypatch)
     assert sum(
         Decimal(str(item.get("iamt", 0))) for item in payload["b2cs"]
     ) == Decimal("68.49")
-    assert payload["doc_issue"]["doc_det"] == []
+    assert payload["hsn"]["hsn_b2c"][0]["hsn_sc"] == "9983"
+    assert set(payload["hsn"]) == {"hsn_b2c"}
+    assert payload["doc_issue"]["doc_det"][0]["docs"][0]["from"] == "SD-1001"
 
 
 def test_snapdeal_parser_rejects_selected_profile_gstin_mismatch(monkeypatch):
@@ -169,7 +186,7 @@ def test_snapdeal_parser_rejects_missing_required_sheet(monkeypatch):
     assert "missing sheet" in result.errors[0]["error"]
 
 
-def test_snapdeal_parser_deduplicates_repeated_invoice_rows(monkeypatch):
+def test_snapdeal_parser_preserves_repeated_invoice_rows_with_source_provenance(monkeypatch):
     workbook = _workbook_rows()
     workbook[SHEET_5B] = pd.concat(
         [workbook[SHEET_5B], workbook[SHEET_5B].iloc[[1]]], ignore_index=True
@@ -181,8 +198,14 @@ def test_snapdeal_parser_deduplicates_repeated_invoice_rows(monkeypatch):
 
     result = SnapdealParser(SELLER, "082026").parse([Path("snapdeal.xlsx")])
 
-    assert len(result.transactions) == 3
-    assert len(result.debug["duplicate_rows"]) == 1
+    normal_rows = [row for row in result.transactions if row.get("_gstr1_section") is None]
+    five_b_rows = [
+        row for row in normal_rows if row["_snapdeal_source_sheet"] == SHEET_5B
+    ]
+    assert len(normal_rows) == 4
+    assert len(five_b_rows) == 2
+    assert len({row["_snapdeal_source_row"] for row in five_b_rows}) == 2
+    assert result.debug.get("duplicate_rows", []) == []
 
 
 def test_snapdeal_parser_accepts_report_tcs_id_and_state_name(monkeypatch):

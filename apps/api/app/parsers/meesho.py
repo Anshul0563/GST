@@ -70,7 +70,7 @@ def row_is_return(row: dict) -> bool:
         normalized = raw_type.lower()
         return any(marker in normalized for marker in ("return", "refund", "credit"))
     return False
-from app.services.validation import round_money, validate_transaction
+from app.services.validation import round_money
 from app.services.pos_resolver import (
     new_pos_debug,
     observe_pos_debug,
@@ -101,7 +101,15 @@ def has_financial_values(row: dict) -> bool:
         "invoice amount",
         "gross amount",
     ]
-    return any(money(first_value(row, [field])) != 0 for field in fields)
+    # Presence is checked here, not numeric value.  ``money()`` intentionally
+    # normalizes several generic inputs for downstream parsers; using it as a
+    # gate would silently drop a non-empty malformed source amount before the
+    # strict source reconciliation path can report it.
+    return any(
+        first_value(row, [field]) not in (None, "")
+        and text(first_value(row, [field])).lower() not in {"nan", "none", "null"}
+        for field in fields
+    )
 
 
 def is_empty(value: object) -> bool:
@@ -109,6 +117,33 @@ def is_empty(value: object) -> bool:
 
 
 def report_period_date(row: dict) -> object | None:
+    # Meesho's TCS export is a report-period ledger.  The order/manifest
+    # date can be in the previous month for an adjustment posted in the
+    # current report.  When FY/month columns are present they are the
+    # authoritative filing period for that row.
+    raw_year = text(first_value(row, ["financial year", "fy", "financial year name"]))
+    raw_month = text(first_value(row, ["month number", "month", "report month"]))
+    if raw_year and raw_month:
+        year_matches = re.findall(r"\d{4}", raw_year)
+        if year_matches:
+            month_number: int | None = None
+            if raw_month.isdigit():
+                month_number = int(raw_month)
+            else:
+                for pattern in ("%B", "%b"):
+                    try:
+                        month_number = datetime.strptime(raw_month.strip(), pattern).month
+                        break
+                    except ValueError:
+                        continue
+            if month_number is not None and 1 <= month_number <= 12:
+                financial_year = int(year_matches[0])
+                if len(year_matches) > 1 and month_number <= 3:
+                    financial_year = int(year_matches[1])
+                elif len(year_matches) == 1 and month_number <= 3 and raw_year != str(financial_year):
+                    financial_year += 1
+                return f"{financial_year:04d}-{month_number:02d}-01"
+
     report_date = first_value(
         row,
         [
@@ -199,6 +234,12 @@ SOURCE_TOTAL_FIELDS = {
 
 
 def precise_amount(value: object) -> Decimal:
+    """Parse source money without hiding malformed values.
+
+    Empty cells are a genuine zero in Meesho's exports.  A non-empty value
+    which is not numeric is different: it must fail loudly so reconciliation
+    cannot be made to look correct by silently treating it as zero.
+    """
     if value in (None, ""):
         return Decimal("0")
     cleaned = str(value).replace(",", "").replace("₹", "").replace("%", "").strip()
@@ -208,40 +249,24 @@ def precise_amount(value: object) -> Decimal:
     cleaned = cleaned.strip("()")
     try:
         amount = Decimal(cleaned)
-    except InvalidOperation:
-        return Decimal("0")
+    except InvalidOperation as exc:
+        raise ValueError(f"Invalid numeric source value {value!r}") from exc
     return -amount if negative else amount
 
 
 def signed_source_amount(row: dict, field: str, is_return: bool) -> Decimal:
-    amount = precise_amount(first_value(row, SOURCE_TOTAL_FIELDS[field]))
+    raw = first_value(row, SOURCE_TOTAL_FIELDS[field])
+    try:
+        amount = precise_amount(raw)
+    except ValueError as exc:
+        aliases = ", ".join(SOURCE_TOTAL_FIELDS[field])
+        raise ValueError(
+            f"Invalid {field} source amount; checked fields [{aliases}], value={raw!r}"
+        ) from exc
     return -abs(amount) if is_return else amount
 
 
-def refresh_validation(txn: dict) -> None:
-    errors = validate_transaction(txn)
-    zero_only = errors and all(
-        error in {"Zero amount row", "Zero rate and zero taxable row"}
-        for error in errors
-    )
-    txn["validation_status"] = "skipped" if zero_only else "invalid" if errors else "valid"
-    txn["validation_errors"] = "; ".join(errors) if errors else None
-
-
-def add_total_tax_delta(txn: dict, delta: Decimal) -> None:
-    if delta == Decimal("0.00"):
-        return
-    if money(txn.get("igst")) != Decimal("0.00"):
-        txn["igst"] = money(txn.get("igst")) + delta
-        return
-    half = round_money(delta / Decimal("2"))
-    txn["cgst"] = money(txn.get("cgst")) + half
-    txn["sgst"] = money(txn.get("sgst")) + (delta - half)
-
-
 def reconcile_source_totals(result: ParseResult, source_totals: dict[str, Decimal]) -> None:
-    if not result.transactions:
-        return
     actual_taxable = sum(
         (money(txn.get("taxable_value")) for txn in result.transactions),
         Decimal("0.00"),
@@ -266,36 +291,22 @@ def reconcile_source_totals(result: ParseResult, source_totals: dict[str, Decima
         "total_tax": expected["total_tax"] - actual_tax,
         "gross_amount": expected["gross_amount"] - actual_gross,
     }
-    if not any(deltas.values()):
-        return
-
-    adjustable = next(
-        (
-            txn
-            for txn in reversed(result.transactions)
-            if money(txn.get("taxable_value")) != Decimal("0.00")
-            or money(txn.get("igst")) + money(txn.get("cgst")) + money(txn.get("sgst"))
-            != Decimal("0.00")
-        ),
-        result.transactions[-1],
-    )
-    if abs(deltas["taxable_value"]) <= Decimal("1.00"):
-        adjustable["taxable_value"] = money(adjustable.get("taxable_value")) + deltas["taxable_value"]
-    if abs(deltas["total_tax"]) <= Decimal("1.00"):
-        add_total_tax_delta(adjustable, deltas["total_tax"])
-    if abs(deltas["gross_amount"]) <= Decimal("1.00"):
-        adjustable["gross_amount"] = money(adjustable.get("gross_amount")) + deltas["gross_amount"]
-    refresh_validation(adjustable)
     result.debug["source_total_reconciliation"] = {
         "expected": {key: str(value) for key, value in expected.items()},
-        "actual_before": {
+        "actual": {
             "taxable_value": str(actual_taxable),
             "total_tax": str(actual_tax),
             "gross_amount": str(actual_gross),
         },
-        "deltas_applied": {key: str(value) for key, value in deltas.items()},
-        "adjusted_invoice_no": adjustable.get("invoice_no"),
-        "adjusted_order_item_id": adjustable.get("order_item_id"),
+        "deltas": {key: str(value) for key, value in deltas.items()},
+        "status": "matched" if not any(deltas.values()) else "mismatch",
+        "mutated_transactions": False,
+        "diagnosis": (
+            "Source totals and normalized transaction totals differ; no residual "
+            "was assigned to an arbitrary transaction."
+            if any(deltas.values())
+            else "Source totals reconcile with normalized transactions."
+        ),
     }
 
 
@@ -483,6 +494,15 @@ class MeeshoParser(MarketplaceParser):
                 if not has_financial_values(row):
                     continue
 
+                # Keep financial values from the financial export immutable.
+                # The metadata workbook is joined below by sub-order and may
+                # fill descriptive fields, but it must never replace the
+                # source taxable/tax/gross amounts used for reconciliation.
+                source_financial_values = {
+                    key: first_value(row, aliases)
+                    for key, aliases in SOURCE_TOTAL_FIELDS.items()
+                }
+
                 suborder = suborder_key(row)
 
                 report_date = parse_date(report_period_date(row))
@@ -502,6 +522,10 @@ class MeeshoParser(MarketplaceParser):
                 # Fill missing metadata
                 for key, value in metadata.items():
                     if is_empty(row.get(key)):
+                        row[key] = value
+
+                for key, value in source_financial_values.items():
+                    if value not in (None, ""):
                         row[key] = value
 
                 # Invoice fallback
@@ -612,24 +636,28 @@ class MeeshoParser(MarketplaceParser):
                 if finalized is None:
                     continue
 
-                source_totals["taxable_value"] += signed_source_amount(
-                    row,
-                    "taxable_value",
-                    is_return,
-                )
-                source_totals["total_tax"] += signed_source_amount(
-                    row,
-                    "total_tax",
-                    is_return,
-                )
-                source_totals["gross_amount"] += signed_source_amount(
-                    row,
-                    "gross_amount",
-                    is_return,
-                )
+                try:
+                    source_amounts = {
+                        field: signed_source_amount(row, field, is_return)
+                        for field in source_totals
+                    }
+                except ValueError as exc:
+                    result.errors.append(
+                        {
+                            "file": path.name,
+                            "sheet": sheet_name,
+                            "row": int(index) + 2,
+                            "suborder": suborder,
+                            "error": str(exc),
+                            "reason": "invalid source amount; row excluded from reconciliation",
+                        }
+                    )
+                    continue
+
+                for field, amount in source_amounts.items():
+                    source_totals[field] += amount
                 breakdown = source_breakdown["returns" if is_return else "sales"]
-                for field in source_totals:
-                    source_value = signed_source_amount(row, field, is_return)
+                for field, source_value in source_amounts.items():
                     breakdown[field] += abs(source_value) if is_return else source_value
                 result.transactions.append(finalized)
 

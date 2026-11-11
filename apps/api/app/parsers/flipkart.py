@@ -1,6 +1,7 @@
 from datetime import date
 from collections import Counter
 from pathlib import Path
+import re
 
 import pandas as pd
 from app.parsers.base import (
@@ -16,13 +17,29 @@ from app.parsers.base import (
     text,
     unique_headers,
 )
-from app.services.pos_resolver import new_pos_debug, observe_pos_debug, resolve_pos
+from app.services.pos_resolver import (
+    PosResolution,
+    new_pos_debug,
+    observe_pos_debug,
+    resolve_pos,
+)
 from app.services.transaction_normalizer import finalize_transaction
 from app.services.validation import money
 
 
 class FlipkartParser(MarketplaceParser):
     platform = "flipkart"
+
+    @staticmethod
+    def _document_series_group(invoice_no: str) -> str:
+        """Return the stable alphanumeric series prefix for document ranges."""
+        value = str(invoice_no or "").strip()
+        match = re.search(r"(\d+)(?!.*\d)", value)
+        if match and match.start() > 0:
+            prefix = value[: match.start()].rstrip("-/_")
+            if prefix:
+                return prefix.upper()
+        return value.upper()
 
     def _period_bounds(self) -> tuple[date, date, date]:
         month = int(self.filing_period[:2])
@@ -138,10 +155,43 @@ class FlipkartParser(MarketplaceParser):
                 return "debit_note"
             return "credit_note"
 
+        # Flipkart's Sales Report labels both LOAD and MFAB documents as
+        # Return.  LOAD is a debit-note series in the GST document register,
+        # while MFAB is a credit-note series.  The document number is the
+        # authoritative distinction and also carries the correct source sign.
+        invoice_no = str(
+            first_value(
+                row,
+                [
+                    "buyer invoice id",
+                    "invoice no",
+                    "invoice number",
+                    "document number",
+                ],
+            )
+            or ""
+        ).strip().upper()
         raw_type = str(
             first_value(row, ["type", "document type", "doc type", "transaction type"])
             or ""
         ).lower()
+        if "return" in raw_type or "cancellation" in raw_type:
+            taxable_value = money(
+                first_value(
+                    row,
+                    [
+                        "taxable value (final invoice amount -taxes)",
+                    ],
+                )
+            )
+            if taxable_value > 0:
+                return "debit_note"
+            if taxable_value < 0:
+                return "credit_note"
+        if invoice_no.startswith(("LOAD", "LZAA")):
+            return "debit_note"
+        if invoice_no.startswith(("MFAB", "LYAA")):
+            return "credit_note"
         if "credit" in raw_type or "return" in raw_type or "cancellation" in raw_type:
             return "credit_note"
         if "debit" in raw_type:
@@ -287,6 +337,8 @@ class FlipkartParser(MarketplaceParser):
 
         invoice_metadata_by_suborder: dict[str, dict[str, str]] = {}
         item_metadata_by_order_item: dict[str, dict[str, str]] = {}
+        pos_by_order_item: dict[str, PosResolution] = {}
+        pos_by_order: dict[str, PosResolution] = {}
         source_period_counts: Counter[str] = Counter()
 
         # First pass: collect invoice metadata from Tax_invoice_details or similar metadata rows.
@@ -379,6 +431,30 @@ class FlipkartParser(MarketplaceParser):
                                         row, str(sheet_name)
                                     ),
                                 }
+                        if self._is_invoice_metadata_row(row):
+                            continue
+
+                        # Some Flipkart report sheets (notably Cash Back Report)
+                        # omit the buyer state. Reuse POS from a matching sales
+                        # row, preferring the item ID over the broader order ID.
+                        reference_txn = self.normalize_row(
+                            {**row, "doc_type": self._classify_doc_type(row, str(sheet_name))},
+                            f"{path.name}:{sheet_name}",
+                        )
+                        reference_resolution = resolve_pos(
+                            row, reference_txn, self.platform
+                        )
+                        if reference_resolution.buyer_state_code:
+                            reference_item_id = text(reference_txn.get("order_item_id"))
+                            reference_order_id = text(reference_txn.get("order_id"))
+                            if reference_item_id:
+                                pos_by_order_item.setdefault(
+                                    reference_item_id, reference_resolution
+                                )
+                            if reference_order_id:
+                                pos_by_order.setdefault(
+                                    reference_order_id, reference_resolution
+                                )
             except Exception:
                 continue
 
@@ -422,7 +498,7 @@ class FlipkartParser(MarketplaceParser):
 
                         doc_type = self._classify_doc_type(row, sheet_title)
 
-                        if self._is_return_row(path, sheet_title, row):
+                        if self._is_return_row(path, sheet_title, row) and doc_type == "invoice":
                             doc_type = "credit_note"
 
                         row_for_normalization = {**row, "doc_type": doc_type}
@@ -464,13 +540,34 @@ class FlipkartParser(MarketplaceParser):
                                 ):
                                     txn["product_name"] = item_metadata["product_name"]
 
+                        if txn.get("invoice_no"):
+                            txn["_document_series_group"] = self._document_series_group(
+                                txn["invoice_no"]
+                            )
+
                         if has_explicit_tax_split(row):
                             txn["_preserve_source_tax_split"] = True
+
+                        pos_resolution = resolve_pos(row, txn, self.platform)
+                        if not pos_resolution.buyer_state_code:
+                            pos_resolution = pos_by_order_item.get(
+                                order_item_id
+                            ) or pos_by_order.get(order_id) or pos_resolution
+                            if pos_resolution.buyer_state_code:
+                                txn["buyer_state_code"] = pos_resolution.buyer_state_code
+                                txn["buyer_state_name"] = pos_resolution.buyer_state_name
+                                pos_resolution = PosResolution(
+                                    pos_resolution.buyer_state_code,
+                                    pos_resolution.buyer_state_name,
+                                    "inferred_from_related_order",
+                                    pos_resolution.source_column,
+                                    "POS inferred from a matching Flipkart order row",
+                                )
 
                         observe_pos_debug(
                             result.debug,
                             int(index) + 1,
-                            resolve_pos(row, txn, self.platform),
+                            pos_resolution,
                             row,
                         )
 

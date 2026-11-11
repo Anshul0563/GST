@@ -8,6 +8,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.routes import dominant_excluded_period
 from app.api.routes import clear_uploaded_files_for_profile_period
+from app.api.routes import batch_status_response
 from app.api.routes import run_import_parser
 from app.parsers.base import ParseResult
 from app.parsers.factory import get_parser
@@ -238,6 +239,101 @@ def test_run_import_parser_aggregates_meesho_duplicate_financial_lines(tmp_path:
         assert rows[0].igst == Decimal("3.96")
         assert rows[0].gross_amount == Decimal("136.00")
         assert rows[0].validation_status == "valid"
+    finally:
+        db.close()
+
+
+def test_snapdeal_batch_net_sale_excludes_hsn_summary_row():
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    db = Session()
+    try:
+        user = User(
+            email="snapdeal-status@example.com",
+            password_hash="x",
+            role="user",
+            plan="admin_free",
+            subscription_status="active",
+        )
+        db.add(user)
+        db.flush()
+        profile = GSTProfile(
+            user_id=user.id,
+            gstin="07TCRPS8655B1ZK",
+            legal_name="Nayamo",
+            trade_name="Nayamo",
+            state_code="07",
+            filing_frequency="Monthly",
+            financial_year="2026-27",
+            return_period="102026",
+        )
+        db.add(profile)
+        db.flush()
+        batch = PlatformImportBatch(
+            user_id=user.id,
+            profile_id=profile.id,
+            period="102026",
+            platform="snapdeal",
+            status="completed",
+            parsed_rows=2,
+        )
+        db.add(batch)
+        db.flush()
+
+        common = {
+            "user_id": user.id,
+            "profile_id": profile.id,
+            "batch_id": batch.id,
+            "platform": "snapdeal",
+            "gstin": "07TCRPS8655B1ZK",
+            "etin": "07AABCJ8820B1C7",
+            "filing_period": "102026",
+            "doc_type": "invoice",
+            "buyer_state_code": "03",
+            "buyer_state_name": "Punjab",
+            "qty": 1,
+            "gst_rate": 3,
+            "igst": 11.77,
+            "cgst": 0,
+            "sgst": 0,
+            "cess": 0,
+            "tcs": 0,
+            "tds": 0,
+            "gross_amount": 392.23,
+            "discount_seller": 0,
+            "discount_platform": 0,
+            "settlement_amount": 0,
+            "validation_status": "valid",
+        }
+        db.add(
+            NormalizedTransaction(
+                **common,
+                invoice_no="SNAPDEAL-7B-1",
+                order_id="SO-1",
+                order_item_id="SO-1",
+                taxable_value=392.23,
+                source_file="snapdeal.xlsx:Section 7(B)(2) in GSTR-1",
+            )
+        )
+        db.add(
+            NormalizedTransaction(
+                **{**common, "invoice_no": None, "taxable_value": 3913.53, "igst": 117.47},
+                order_id=None,
+                order_item_id=None,
+                hsn="71171100",
+                source_file="snapdeal.xlsx:Section 12 in GSTR-1",
+            )
+        )
+        db.commit()
+
+        status = batch_status_response(batch, db)
+
+        assert status.net_sale == Decimal("392.23")
     finally:
         db.close()
 

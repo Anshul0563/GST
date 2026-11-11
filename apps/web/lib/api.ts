@@ -144,6 +144,15 @@ export type Gstr1PreviewResponse = {
   validation_blockers: number;
   export_mode?: Gstr1ExportMode;
   parity_report?: Gstr1ParityReport;
+  summary?: {
+    taxable: number;
+    igst: number;
+    cgst: number;
+    sgst: number;
+    cess: number;
+    total_gst: number;
+    financial_rows: number;
+  };
   preview: Gstr1Payload;
 };
 

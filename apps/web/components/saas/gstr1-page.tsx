@@ -5,14 +5,14 @@ import { Download, FileJson, FileSpreadsheet } from "lucide-react";
 import { AppShell } from "@/components/saas/app-shell";
 import { EmptyState, Panel, StatCard, StatusPill } from "@/components/saas/ui";
 import { money, useWorkspace } from "@/components/saas/workspace";
-import { Gstr1ExportItem, Gstr1ExportMode, Gstr1ParityReport, Gstr1Payload, Transaction, downloadAuthenticatedFile, generateGstr1, getGstr1History, getGstrPreviewResponse, getProfileTransactions } from "@/lib/api";
+import { Gstr1ExportItem, Gstr1ExportMode, Gstr1ParityReport, Gstr1Payload, Gstr1PreviewResponse, Transaction, downloadAuthenticatedFile, generateGstr1, getGstr1History, getGstrPreviewResponse, getProfileTransactions } from "@/lib/api";
 import { formatCurrency } from "@/lib/utils";
 
 function periodLabel(period: string) {
   if (!period || period.length !== 6) return period || "--";
   const month = Number(period.slice(0, 2));
   const year = period.slice(2);
-  const label = new Intl.DateTimeFormat("en-IN", { month: "long" }).format(new Date(2026, month - 1, 1));
+  const label = new Intl.DateTimeFormat("en-IN", { month: "long" }).format(new Date(Number(year), month - 1, 1));
   return `${label} ${year}`;
 }
 
@@ -26,8 +26,9 @@ export function Gstr1Page() {
   const activeProfileId = workspace.profile?.id;
   const activeProfilePeriod = workspace.profile?.return_period;
   const activeProfileKey = workspace.profile ? `${workspace.profile.id}:${workspace.profile.return_period}` : "";
-  const [exportMode, setExportMode] = useState<Gstr1ExportMode>("clean_portal");
+  const [exportMode, setExportMode] = useState<Gstr1ExportMode>("gsttool_compatible");
   const [modePreview, setModePreview] = useState<Gstr1Payload | null>(null);
+  const [previewSummary, setPreviewSummary] = useState<Gstr1PreviewResponse["summary"]>(undefined);
   const [parityReport, setParityReport] = useState<Gstr1ParityReport>(null);
   const [downloads, setDownloads] = useState<{ download_json: string; download_excel: string } | null>(null);
   const [history, setHistory] = useState<Gstr1ExportItem[]>([]);
@@ -59,6 +60,7 @@ export function Gstr1Page() {
   }, [loadHistory]);
   useEffect(() => {
     setModePreview(null);
+    setPreviewSummary(undefined);
     setParityReport(null);
     setDownloads(null);
     setError("");
@@ -89,16 +91,19 @@ export function Gstr1Page() {
     }
     let cancelled = false;
     setModePreview(null);
+    setPreviewSummary(undefined);
     setParityReport(null);
     getGstrPreviewResponse(workspace.token, workspace.profile, exportMode)
       .then((result) => {
         if (cancelled) return;
         setModePreview(result.preview);
+        setPreviewSummary(result.summary);
         setParityReport(result.parity_report ?? null);
       })
       .catch(() => {
         if (cancelled) return;
         setModePreview(null);
+        setPreviewSummary(undefined);
         setParityReport(null);
       });
     return () => {
@@ -169,14 +174,35 @@ export function Gstr1Page() {
     cess: total.cess + money(row.csamt)
   }), { taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 });
   const previewGst = previewTotals.igst + previewTotals.cgst + previewTotals.sgst + previewTotals.cess;
+  const cardTotals = previewSummary ?? {
+    taxable: previewTotals.taxable,
+    igst: previewTotals.igst,
+    cgst: previewTotals.cgst,
+    sgst: previewTotals.sgst,
+    cess: previewTotals.cess,
+    total_gst: previewGst,
+    financial_rows: 0,
+  };
   const supecoRows = activePreview?.supeco?.clttx || activePreview?.supeco?.supeco_det || [];
+  const ret00047B2cs = (activePreview?.b2cs || []).find(
+    (row) => row.sply_ty === "INTRA" && row.pos === "07" && row.rt === 18,
+  );
+  const ret00047Meesho = supecoRows.find(
+    (row) => row.etin === "07AARCM9332R1CQ",
+  );
+  const ret00047Resolved = Boolean(
+    ret00047B2cs && money(ret00047B2cs.camt) === money(ret00047B2cs.samt)
+      && ret00047Meesho
+      && money(ret00047Meesho.cgst) === money(ret00047Meesho.sgst),
+  );
   const zeroRows = (activePreview?.b2cs || []).filter((row) => !money(row.txval) && !money(row.iamt) && !money(row.camt) && !money(row.samt) && !money(row.csamt)).length;
   const checks = [
     ["GST profile selected", Boolean(workspace.profile)],
     ["Transactions imported", workspace.transactions.length > 0],
     ["No validation blockers", !summary?.pending_errors],
     ["B2CS preview generated", Boolean(activePreview?.b2cs.length)],
-    ["SUPECO preview generated", Boolean(supecoRows.length)]
+    ["SUPECO preview generated", Boolean(supecoRows.length)],
+    ["RET00047 tax split resolved", ret00047Resolved],
   ];
   const compatible = exportMode === "gsttool_compatible" || exportMode === "strict_gsttool_parity";
   const strictParity = exportMode === "strict_gsttool_parity";
@@ -199,11 +225,11 @@ export function Gstr1Page() {
           Active return period {periodLabel(workspace.profile.return_period)} has no imported rows. Rows exist in {alternatePeriods.map(([period, count]) => `${periodLabel(period)} (${count})`).join(", ")}. Change the GST Profile return period to preview that GSTR-1.
         </div> : null}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard label="Taxable value" value={formatCurrency(previewTotals.taxable)} tone="blue" />
-          <StatCard label="IGST" value={formatCurrency(previewTotals.igst)} tone="green" />
-          <StatCard label="CGST" value={formatCurrency(previewTotals.cgst)} tone="saffron" />
-          <StatCard label="SGST" value={formatCurrency(previewTotals.sgst)} tone="saffron" />
-          <StatCard label="Total GST" value={formatCurrency(previewGst)} tone="green" />
+          <StatCard label="Taxable value" value={formatCurrency(cardTotals.taxable)} tone="blue" />
+          <StatCard label="IGST" value={formatCurrency(cardTotals.igst)} tone="green" />
+          <StatCard label="CGST" value={formatCurrency(cardTotals.cgst)} tone="saffron" />
+          <StatCard label="SGST" value={formatCurrency(cardTotals.sgst)} tone="saffron" />
+          <StatCard label="Total GST" value={formatCurrency(cardTotals.total_gst)} tone="green" />
         </div>
         <Panel title="Export Mode" subtitle="GSTTool Compatible is default and follows the offline-tool JSON structure. Clean Portal Optimized is available for stricter portal validation.">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -244,6 +270,18 @@ export function Gstr1Page() {
                 <span>B2CS GST</span><b>{formatCurrency(previewGst)}</b>
                 <span>Dashboard taxable delta</span><b>{formatCurrency(money(summary?.total_taxable_value) - previewTotals.taxable)}</b>
                 <span>Dashboard GST delta</span><b>{formatCurrency(money(summary?.total_gst) - previewGst)}</b>
+              </div>
+            </div>
+            <div className={`mt-5 rounded-3xl border p-4 text-sm ${ret00047Resolved ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800"}`}>
+              <div className="flex items-center justify-between gap-3">
+                <b>GSTN RET00047 reconciliation</b>
+                <StatusPill status={ret00047Resolved ? "resolved" : "review required"} />
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <span>Meesho CGST</span><b>{formatCurrency(ret00047Meesho?.cgst ?? 0)}</b>
+                <span>Meesho SGST</span><b>{formatCurrency(ret00047Meesho?.sgst ?? 0)}</b>
+                <span>POS 07 CGST</span><b>{formatCurrency(ret00047B2cs?.camt ?? 0)}</b>
+                <span>POS 07 SGST</span><b>{formatCurrency(ret00047B2cs?.samt ?? 0)}</b>
               </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-3">

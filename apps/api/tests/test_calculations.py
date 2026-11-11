@@ -18,6 +18,7 @@ from app.services.gst import (
     is_strict_gsttool_parity_mode,
     normalize_export_mode,
     row_belongs_to_period,
+    source_amount,
 )
 from app.services.gsttool_parity_validator import compare_against_reference
 from app.services.official_calculator import calculate_marketplace_summary
@@ -27,6 +28,66 @@ from fastapi import HTTPException
 
 
 class GstCalculationTests(unittest.TestCase):
+    def test_meesho_source_precision_is_read_before_export_rounding(self):
+        row = {
+            "platform": "meesho",
+            "doc_type": "invoice",
+            "gstin": "07ABCDE1234F1Z5",
+            "buyer_state_code": "29",
+            "taxable_value": Decimal("100.12"),
+            "igst": Decimal("3.00"),
+            "raw_row_json": '{"total taxable sale value": "100.125", "tax amount": "3.003"}',
+        }
+        self.assertEqual(
+            source_amount(row, "taxable_value", precise=True), Decimal("100.125")
+        )
+        self.assertEqual(source_amount(row, "igst", precise=True), Decimal("3.003"))
+
+    def test_source_precision_fallback_is_traceable(self):
+        row = {
+            "platform": "meesho",
+            "taxable_value": Decimal("100.00"),
+            "raw_row_json": '{"total taxable sale value": "bad"}',
+        }
+        self.assertEqual(
+            source_amount(row, "taxable_value", precise=True), Decimal("100.00")
+        )
+        self.assertEqual(
+            row["_source_precision_warnings"][0]["reason"],
+            "source field 'total taxable sale value' is malformed; normalized value used",
+        )
+
+    def test_unknown_export_mode_is_rejected(self):
+        with self.assertRaises(ValueError):
+            normalize_export_mode("september_reference_mode")
+
+    def test_clean_mode_preserves_source_cgst_sgst_split(self):
+        row = {
+            "platform": "amazon",
+            "gstin": "07ABCDE1234F1Z5",
+            "etin": "07AAICA3918J1CV",
+            "filing_period": "042026",
+            "invoice_no": "IN-SPLIT",
+            "doc_type": "invoice",
+            "buyer_state_code": "07",
+            "taxable_value": 100,
+            "gst_rate": 3,
+            "cgst": 1.00,
+            "sgst": 2.00,
+            "igst": 0,
+            "cess": 0,
+            "validation_status": "valid",
+        }
+        payload = build_gstr1_json(
+            "07ABCDE1234F1Z5", "042026", [row], CLEAN_PORTAL
+        )
+        intra = payload["b2cs"][0]
+        self.assertEqual((intra["camt"], intra["samt"]), (1, 2))
+        report = gstr1_generation_report(payload, [row], CLEAN_PORTAL)
+        self.assertTrue(
+            any("CGST" in error and "SGST" in error for error in report["errors"])
+        )
+
     def test_require_valid_period_rejects_bad_periods(self):
         self.assertEqual(require_valid_period("042026"), "042026")
         with self.assertRaises(HTTPException):
@@ -1202,7 +1263,7 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(metadata_rows[0]["invoice_no"], "6p5kc26244")
         self.assertEqual(metadata_rows[0]["validation_status"], "skipped")
 
-    def test_meesho_parser_reconciles_sub_paise_source_totals(self):
+    def test_meesho_parser_reports_sub_paise_mismatch_without_mutating_invoice(self):
         with TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
             sales = base / "tcs_sales.xlsx"
@@ -1250,14 +1311,41 @@ class GstCalculationTests(unittest.TestCase):
             Decimal("0.00"),
         )
         self.assertEqual(result.errors, [])
-        self.assertEqual(taxable, Decimal("200.01"))
-        self.assertEqual(total_tax, Decimal("6.01"))
-        self.assertEqual(
-            result.debug["source_total_reconciliation"]["deltas_applied"][
-                "taxable_value"
-            ],
-            "-0.01",
-        )
+        self.assertEqual(taxable, Decimal("200.02"))
+        self.assertEqual(total_tax, Decimal("6.02"))
+        reconciliation = result.debug["source_total_reconciliation"]
+        self.assertEqual(reconciliation["status"], "mismatch")
+        self.assertFalse(reconciliation["mutated_transactions"])
+        self.assertEqual(reconciliation["deltas"]["taxable_value"], "-0.01")
+        self.assertNotIn("deltas_applied", reconciliation)
+
+    def test_meesho_parser_reports_malformed_source_amount_with_row_context(self):
+        with TemporaryDirectory() as temp_dir:
+            sales = Path(temp_dir) / "tcs_sales.xlsx"
+            pd.DataFrame(
+                [
+                    {
+                        "sub order num": "SO-BAD-AMOUNT",
+                        "order date": "2026-04-10",
+                        "invoice no.": "6p5kc27BAD",
+                        "hsn code": "711790",
+                        "quantity": 1,
+                        "gst rate": 3,
+                        "total taxable sale value": "not-a-number",
+                        "tax amount": "3.00",
+                        "total invoice value": "103.00",
+                        "end customer state new": "TELANGANA",
+                        "eco tcs gstin": "07AARCM9332R1CQ",
+                    }
+                ]
+            ).to_excel(sales, index=False)
+            result = MeeshoParser("07TCRPS8655B1ZK", "042026").parse([sales])
+
+        assert result.transactions == []
+        assert len(result.errors) == 1
+        assert result.errors[0]["sheet"] == "Sheet1"
+        assert result.errors[0]["row"] == 3
+        assert "taxable_value source amount" in result.errors[0]["error"]
 
     def test_meesho_parser_keeps_sales_manifested_in_return_period(self):
         with TemporaryDirectory() as temp_dir:
@@ -1336,7 +1424,7 @@ class GstCalculationTests(unittest.TestCase):
         self.assertEqual(payload["hash"], "hash")
         self.assertEqual(set(payload["supeco"].keys()), {"clttx"})
         self.assertNotIn("supeco_det", payload["supeco"])
-        self.assertEqual(set(payload["hsn"].keys()), {"hsn_b2b", "hsn_b2c"})
+        self.assertEqual(set(payload["hsn"].keys()), {"hsn_b2c"})
         self.assertEqual(
             set(payload["b2cs"][0].keys()),
             {"sply_ty", "rt", "typ", "pos", "txval", "iamt", "csamt"},
@@ -1403,7 +1491,7 @@ class GstCalculationTests(unittest.TestCase):
                 for error in report["errors"]
             )
         )
-        self.assertTrue(
+        self.assertFalse(
             any("implies 3 documents" in error for error in report["errors"])
         )
 

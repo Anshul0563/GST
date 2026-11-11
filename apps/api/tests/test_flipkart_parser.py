@@ -97,3 +97,49 @@ def test_flipkart_cashback_report_preserves_source_tax_signs(tmp_path: Path):
         Decimal("0.15"),
         Decimal("-0.15"),
     ]
+
+
+def test_flipkart_cashback_report_reuses_pos_from_matching_sales_row(tmp_path: Path):
+    source = tmp_path / "flipkart.xlsx"
+    sales = pd.DataFrame(
+        [
+            {
+                "Order ID": "OD-SHARED-1",
+                "Order Item ID": "ITEM-SHARED-1",
+                "Event Type": "Sale",
+                "Buyer Invoice ID": "LWABOG7270000001",
+                "Buyer Invoice Date": "2026-07-10",
+                "Final Invoice Amount (Price after discount+Shipping Charges)": 10.30,
+                "Taxable Value (Final Invoice Amount -Taxes)": 10.00,
+                "IGST Rate": 3,
+                "IGST Amount": 0.30,
+                "Customer's Delivery State": "Karnataka",
+            }
+        ]
+    )
+    cashback = pd.DataFrame(
+        [
+            {
+                "Order ID": "OD-SHARED-1",
+                "Order Item ID": "ITEM-SHARED-1",
+                "Document Type": "Credit Note",
+                "Credit Note ID/ Debit Note ID": "LYAA9U7270000001",
+                "Invoice Amount": 5.15,
+                "Invoice Date": "2026-07-11",
+                "Taxable Value": 5.00,
+                "IGST Rate": 3,
+                "IGST Amount": 0.15,
+            }
+        ]
+    )
+    with pd.ExcelWriter(source) as writer:
+        sales.to_excel(writer, sheet_name="Sales Report", index=False)
+        cashback.to_excel(writer, sheet_name="Cash Back Report", index=False)
+
+    result = FlipkartParser(GSTIN, "072026").parse([source])
+
+    assert result.errors == []
+    cashback_row = next(row for row in result.transactions if row["invoice_no"].startswith("LYAA"))
+    assert cashback_row["buyer_state_code"] == "29"
+    assert cashback_row["validation_status"] == "valid"
+    assert result.debug["unresolved_pos_count"] == 0
